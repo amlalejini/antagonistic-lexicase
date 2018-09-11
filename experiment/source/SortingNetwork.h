@@ -11,11 +11,9 @@ public:
   using network_t = emp::vector<op_t>;
 
 protected:
-  
   network_t network;
 
 public:
-
   SortingNetwork() 
     : network() { ; }
   
@@ -45,6 +43,11 @@ public:
   bool operator<(const SortingNetwork & in) const { return network < in.network; }
 
   op_t & operator[](size_t id) {
+    emp_assert(id < network.size());
+    return network[id];
+  }
+
+  const op_t & operator[](size_t id) const {
     emp_assert(id < network.size());
     return network[id];
   }
