@@ -10,6 +10,7 @@ antagonistic coevolution.
 - [Case study problems](#case-study-problems)
   - [Minimal Sorting Networks](#minimal-sorting-networks)
     - [Implementation issues/decisions to make](#implementation-issuesdecisions-to-make)
+    - [Experimental design](#experimental-design)
 - [Stretch goals](#stretch-goals)
 - [References](#references)
 
@@ -147,7 +148,23 @@ Project implementation
     be closer together in genotype-space? 1111 and 0111 are very different numbers.
     Bit flips don't uniformly affect the phenotype. Do we care? Should we move
     to a direct encoding?
-  
+
+#### Experimental design
+
+- Population structure
+  - Well mixed
+    - Varying cohort size
+  - Local (original setup)
+- Selection regimes
+  - No antagonism
+    - Original (cull 50%, use remaining to generate next population)
+    - Tournament
+    - Lexicase
+  - Antagonism (co-evolution)
+    - Original
+    - Tournament
+    - Lexicase
+
 ## Stretch goals
 
 - [ ] Sorting network visualization
