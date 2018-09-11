@@ -8,13 +8,16 @@
 #include "tools/Random.h"
 
 #include "SortingNetwork.h"
+#include "SortingTest.h"
 
 /*
 
 To test:
 
-- [ ] Validation function (handwrite some good/bad genomes)
-- [ ] Copy constructor/genome constructor
+- SortingNetwork
+  - [ ] Validation function (handwrite some good/bad genomes)
+- SortingTest
+  - [ ] Evaluate
 
 */
 
@@ -55,5 +58,80 @@ TEST_CASE("SortingNetwork", "[sorting_network]") {
   }
 
   random.Delete();
+
+}
+
+TEST_CASE("SortingTest", "[sorting_network]") {
+
+  using network_t = SortingNetwork;
+  using test_t = SortingTest;
+
+  constexpr int seed = 2;
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Network: [(0,1)]
+  network_t sorter_n2(1);
+  sorter_n2[0] = {0, 1};
+  std::cout << "n=2 sorting network: ";
+  sorter_n2.Print(); std::cout << std::endl;
+
+  // Test on all possible n=2 test vectors
+  test_t test_n2(2);
+  REQUIRE(test_n2.GetSize() == 2);
+  test_n2[0] = 0;
+  test_n2[1] = 0;
+  REQUIRE(test_n2.Evaluate(sorter_n2));
+  test_n2[0] = 0;
+  test_n2[1] = 1;
+  REQUIRE(test_n2.Evaluate(sorter_n2));
+  test_n2[0] = 1;
+  test_n2[1] = 0;
+  REQUIRE(test_n2.Evaluate(sorter_n2));
+  test_n2[0] = 1;
+  test_n2[1] = 1;
+  REQUIRE(test_n2.Evaluate(sorter_n2));
+  
+  
+  // Network: [(0,1), (1,2), (0,1)]
+  network_t sorter_n3(3);
+  sorter_n3[0] = {0,1};
+  sorter_n3[1] = {1,2};
+  sorter_n3[2] = {0,1};
+  std::cout << "n=3 sorting network: ";
+  sorter_n3.Print(); std::cout << std::endl;
+
+  // Create a test for n=3
+  test_t test_n3(3);
+  // Make sure evaluate returns false when sort is incomplete
+  test_n3[0] = 1;
+  test_n3[1] = 1;
+  test_n3[2] = 0;
+  REQUIRE(test_n3.Evaluate(sorter_n2) == false);
+
+  // Test n=3 test evaluator
+  for (size_t i = 0; i < 100; ++i) {
+    test_n3.RandomizeTest(*random);
+    REQUIRE(test_n3.Evaluate(sorter_n3));
+  }
+
+  // Network: [(0,1), (2,3), (0,3), (1,2), (0,1), (2,3)]
+  network_t sorter_n4(6);
+  sorter_n4[0] = {0,1};
+  sorter_n4[1] = {2,3};
+  sorter_n4[2] = {0,3};
+  sorter_n4[3] = {1,2};
+  sorter_n4[4] = {0,1};
+  sorter_n4[5] = {2,3};
+  std::cout << "n=4 sorting network: ";
+  sorter_n4.Print(); std::cout << std::endl;
+  
+  // Create a test for n=4
+  test_t test_n4(4);
+
+  // Test n=3 evaluator
+  for (size_t i = 0; i < 1000; ++i) {
+    test_n4.RandomizeTest(*random);
+    REQUIRE(test_n4.Evaluate(sorter_n4));      
+  }
 
 }
