@@ -9,6 +9,8 @@
 
 #include "SortingNetwork.h"
 #include "SortingTest.h"
+#include "SortingNetworkConfig.h"
+#include "SortingNetworkExperiment.h"
 
 /*
 
@@ -132,6 +134,32 @@ TEST_CASE("SortingTest", "[sorting_network]") {
   for (size_t i = 0; i < 1000; ++i) {
     test_n4.RandomizeTest(*random);
     REQUIRE(test_n4.Evaluate(sorter_n4));      
+  }
+
+}
+
+TEST_CASE("SortingNetworkExperiment", "[sorting_network]") {
+  SortingNetworkConfig config;
+
+  config.SEED(2);
+  config.NETWORK_POP_SIZE(10);
+  config.TEST_POP_SIZE(10);
+  config.SEQ_PER_TEST(2);
+
+  SortingNetworkExperiment exp;
+  exp.Setup(config);
+
+  auto & network_world = exp.GetNetworkWorld();
+  auto & test_world = exp.GetTestWorld();
+
+  std::cout << "== Network world population ===" << std::endl;
+  for (size_t i = 0; i < config.NETWORK_POP_SIZE(); ++i) {
+    network_world[i].Print(); std::cout << std::endl;
+  }
+
+  std::cout << "== Test world population ===" << std::endl;
+  for (size_t i = 0; i < config.TEST_POP_SIZE(); ++i) {
+    test_world[i].Print(); std::cout << std::endl;
   }
 
 }
