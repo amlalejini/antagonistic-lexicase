@@ -39,6 +39,7 @@ public:
 };
 
 void SortingNetworkOrg::Print(std::ostream & out) const {
+  out << "Network (size=" << genome.GetSize() << "): ";
   genome.Print(out);
 }
 
