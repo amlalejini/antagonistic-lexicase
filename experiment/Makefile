@@ -6,7 +6,7 @@ EMP_DIR := ../../Empirical/source
 CFLAGS_all := -Wall -Wno-unused-function -std=c++14 -I$(EMP_DIR)/
 
 # Native compiler information
-CXX_nat := g++
+CXX_nat := g++-7
 CFLAGS_nat := -O3 -DNDEBUG $(CFLAGS_all)
 CFLAGS_nat_debug := -g $(CFLAGS_all)
 
