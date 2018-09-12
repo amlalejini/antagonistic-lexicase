@@ -29,6 +29,9 @@ public:
   SortingTest(SortingTest &&) = default;
   SortingTest(const SortingTest &) = default;
 
+  SortingTest & operator=(const SortingTest &) = default;
+  SortingTest & operator=(SortingTest &&) = default;
+
   bool operator==(const SortingTest & in) const { return in.test == test; }
   bool operator!=(const SortingTest & in) const { return !(in == *this); }
   bool operator<(const SortingTest & in) const { return test < in.test; }
