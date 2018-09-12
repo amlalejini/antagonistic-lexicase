@@ -135,19 +135,25 @@ Project implementation
 
 #### Implementation issues/decisions to make
 
-- How should we promote small networks over large networks?
+- **Q:** How should we promote small networks over large networks?
   - Add cost to size
   - Break ties by size
-  - Add a size test case (smallest networks win)
-  - Give bonus for small size (fitness += (1 - # operators)/(max number of operations)
+  - **A:** Add a size test case (smallest networks win)
+  - **A:** Give bonus for small size (fitness += (1 - # operators)/(max number of operations)
     i.e., proportion of not-used operations)
   - Use a strange encoding that promotes small networks
-- How do we want to setup lexicase selection? (see options described above)
-- How do we want to encode sorting networks?
+- **Q:** How do we want to setup lexicase selection? (see options described above)
+- **Q:** How do we want to encode sorting networks?
   - Don't *really* want to use the original encoding. Should nearby indices
     be closer together in genotype-space? 1111 and 0111 are very different numbers.
     Bit flips don't uniformly affect the phenotype. Do we care? Should we move
     to a direct encoding?
+  - **A:** Directly
+- **Q:** Do we want to give network's partial sorting credit on single sequences?
+  - I.e., give them more credit for *mostly* sorting something than for not
+    sorting at all versus give 1/0 pass/fail?
+  - **A:** Start with pass fail; see how that goes.
+- **Q:** Do we want to seed the population as in Hillis, 1990?
 
 #### Experimental design
 
