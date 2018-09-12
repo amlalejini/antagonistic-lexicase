@@ -38,8 +38,8 @@ public:
 
 };
 
-
-
-
+void SortingNetworkOrg::Print(std::ostream & out) const {
+  genome.Print(out);
+}
 
 #endif
