@@ -31,33 +31,59 @@ public:
 
   };
 
+  struct Phenotype {
+    emp::vector<size_t> test_results; ///< Correspond to per-organism passes, not per-test passes!
+    size_t num_passes;
+
+    void Reset(size_t s=0) { 
+      test_results.clear(); 
+      test_results.resize(s, 0); 
+      num_passes = 0;
+    }
+  };
+
+  using phenotype_t = Phenotype;
   using genome_t = Genome;
 
 protected:
 
   genome_t genome;
+  phenotype_t phenotype;
 
 public:
 
   SortingTestOrg(size_t test_size, size_t num_tests=1) 
-    : genome(test_size, num_tests)
+    : genome(test_size, num_tests), phenotype()
   { ;  } 
 
   SortingTestOrg(emp::Random & rnd, size_t test_size, size_t num_tests=1)
-    : genome(rnd, test_size, num_tests)
+    : genome(rnd, test_size, num_tests), phenotype()
   { ; }
   
-  SortingTestOrg(const genome_t & _g) : genome(_g) { ; }
+  SortingTestOrg(const genome_t & _g) : genome(_g), phenotype() { ; }
 
   size_t GetNumTests() const { return genome.test_set.size(); }
   size_t GetTestSize() const { return genome.test_size; }
   emp::vector<SortingTest> & GetTestSet() { return genome.test_set; }
 
   genome_t & GetGenome() { return genome; }
-  
+  phenotype_t & GetPhenotype() { return phenotype; }
+
+  /// Evaluate SortingNetworkOrg against this SortingTestOrg,
+  /// return number of passes.
+  size_t Evaluate(const SortingNetworkOrg & network);
+
   void Print(std::ostream & out=std::cout) const;
 
 };
+
+size_t SortingTestOrg::Evaluate(const SortingNetworkOrg & network) {
+  size_t passes = 0;
+  for (size_t i = 0; i < GetNumTests(); ++i) {
+    passes += (size_t)(genome.test_set[i].Evaluate(network.GetGenome()));
+  }
+  return passes;
+}
 
 void SortingTestOrg::Print(std::ostream & out) const {
   std::cout << "TestOrg(seqsize=" << GetTestSize() << "," << "numtests=" << GetNumTests() << "):\n";
