@@ -52,7 +52,7 @@ public:
   void RandomizeTest(emp::Random & rnd, size_t test_size, int min_val=0, int max_val=1);
   void RandomizeTest(emp::Random & rnd, int min_val=0, int max_val=1);
 
-  bool Evaluate(const SortingNetwork & network);
+  bool Evaluate(const SortingNetwork & network) const;
 
   void Print(std::ostream & out=std::cout) const;
 
@@ -67,7 +67,7 @@ void SortingTest::RandomizeTest(emp::Random & rnd, int min_val, int max_val) {
   for (size_t i = 0; i < test.size(); ++i) test[i] = rnd.GetInt(min_val, max_val+1);
 }
 
-bool SortingTest::Evaluate(const SortingNetwork & network) {
+bool SortingTest::Evaluate(const SortingNetwork & network) const {
   emp_assert(network.Validate(test.size()));
   // Make copy of test to be sorted.
   test_t eval_test(test);

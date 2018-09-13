@@ -67,30 +67,20 @@ public:
   emp::vector<SortingTest> & GetTestSet() { return genome.test_set; }
 
   genome_t & GetGenome() { return genome; }
+  const genome_t & GetGenome() const { return genome; }
+  
   phenotype_t & GetPhenotype() { return phenotype; }
-
-  /// Evaluate SortingNetworkOrg against this SortingTestOrg,
-  /// return number of passes.
-  size_t Evaluate(const SortingNetworkOrg & network);
 
   void Print(std::ostream & out=std::cout) const;
 
 };
 
-size_t SortingTestOrg::Evaluate(const SortingNetworkOrg & network) {
-  size_t passes = 0;
-  for (size_t i = 0; i < GetNumTests(); ++i) {
-    passes += (size_t)(genome.test_set[i].Evaluate(network.GetGenome()));
-  }
-  return passes;
-}
-
 void SortingTestOrg::Print(std::ostream & out) const {
-  std::cout << "TestOrg(seqsize=" << GetTestSize() << "," << "numtests=" << GetNumTests() << "):\n";
+  out << "TestOrg(seqsize=" << GetTestSize() << "," << "numtests=" << GetNumTests() << "):\n";
   for (size_t i = 0; i < GetNumTests(); ++i) {
-    std::cout << "  Test[" << i << "]: "; 
+    out << "  Test[" << i << "]: "; 
     genome.test_set[i].Print();
-    std::cout << "\n";
+    out << "\n";
   }
 }
 

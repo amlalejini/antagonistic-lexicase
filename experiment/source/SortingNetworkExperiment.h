@@ -70,7 +70,7 @@ public:
   using test_world_t = emp::World<test_org_t>;
 
   // Experiment toggles
-  enum EVALUATION_METHODS { RANDOM_COHORT=0, WELL_MIXED=1 };
+  enum EVALUATION_METHODS { WELL_MIXED=0, RANDOM_COHORT=1 };
   
 protected:
 
@@ -124,12 +124,14 @@ protected:
     }
 
     void Randomize(emp::Random & rnd) {
+      std::cout << "Randomize cohorts!" << std::endl;
       // Shuffle population ids
       emp::Shuffle(rnd, population_ids);
       // Reassign cohorts
       for (size_t cID = 0; cID < cohorts.size(); ++cID) {
-        cohorts.emplace_back(cohort_size);
-        for (size_t i = 0; i < cohorts[cID].size(); ++i) cohorts[cID][i] = population_ids[GetOrgID(cID, i)];
+        for (size_t i = 0; i < cohorts[cID].size(); ++i) {
+          cohorts[cID][i] = population_ids[GetOrgID(cID, i)];
+        }
       }
     }
 
@@ -156,6 +158,10 @@ protected:
 
   void InitNetworkPop_Random();
   void InitTestPop_Random();
+
+  /// Evaluate SortingNetworkOrg network against SortingTestOrg test,
+  /// return number of passes.
+  size_t EvaluateNetworkOrg(const SortingNetworkOrg & network, const SortingTestOrg & test) const;
 
 public:
 
@@ -231,7 +237,7 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
             for (size_t tID = 0; tID < COHORT_SIZE; ++tID) {
               test_org_t & test = test_world->GetOrg(cohorts.GetOrgID(cID, tID));
               // Evaluate network, nID, 
-              const size_t passes = test.Evaluate(network);
+              const size_t passes = EvaluateNetworkOrg(network, test);
               network.GetPhenotype().test_results[tID] = passes;
               test.GetPhenotype().test_results[nID] = passes;
             }
@@ -248,6 +254,8 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
       exit(-1);
     }
   }
+
+  // Setup selection
 
   // Initialize populations
   InitNetworkPop_Random();
@@ -295,5 +303,15 @@ void SortingNetworkExperiment::InitTestPop_Random() {
   }
   std::cout << " Done." << std::endl;
 }
+
+size_t SortingNetworkExperiment::EvaluateNetworkOrg(const SortingNetworkOrg & network,
+                                                    const SortingTestOrg & test) const {
+  size_t passes = 0;
+  for (size_t i = 0; i < test.GetNumTests(); ++i) {
+    passes += (size_t)(test.GetGenome().test_set[i].Evaluate(network.GetGenome()));
+  }
+  return passes;                                                    
+}
+
 
 #endif
