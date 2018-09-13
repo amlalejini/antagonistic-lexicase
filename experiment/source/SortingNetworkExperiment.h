@@ -22,6 +22,7 @@
 #include "SortingNetworkConfig.h"
 #include "SortingNetworkOrg.h"
 #include "SortingTestOrg.h"
+#include "Selection.h"
 
 /*
 
@@ -56,6 +57,19 @@ Experiment execution flow:
 
 */
 
+////////////////////////////////////////////////////////////////////////////////
+// TODOS
+// - [ ] Make experiment Setup safe to call twice
+// - [ ] Unlink network and test cohorts - independently assign cohorts
+// - [ ] Setup 'absolute accuracy' (evaluate against all)
+// - [ ] Setup 'approximate accuracy' (evaluate against randomly sampled)
+// - [ ] Setup fitness function [](){return num_passes}
+//  - [ ] Calculate num passes post-evaluation (sum of test results)
+// - [ ] Setup network testing
+// - [ ] Setup data collection
+////////////////////////////////////////////////////////////////////////////////
+
+
 class SortingNetworkExperiment {
 public:
 
@@ -70,20 +84,30 @@ public:
   using test_world_t = emp::World<test_org_t>;
 
   // Experiment toggles
-  enum EVALUATION_METHODS { WELL_MIXED=0, RANDOM_COHORT=1 };
+  // enum EVALUATION_METHODS { WELL_MIXED=0, RANDOM_COHORT=1 };
+  enum SELECTION_METHODS { COHORT_LEXICASE=0, LEXICASE=1, TOURNAMENT=2 };
+  enum TEST_MODE { COEVOLVE=0, STATIC=1, RANDOM=2 };
   
 protected:
 
   // Localized experiment parameters
   int SEED;
-  size_t MAX_NETWORK_SIZE;
-  size_t MIN_NETWORK_SIZE;
-  size_t TEST_SEQ_SIZE;
-  size_t SEQ_PER_TEST;
+  
   size_t NETWORK_POP_SIZE;
   size_t TEST_POP_SIZE;
-  size_t EVALUATION_METHOD;
+  size_t TEST_MODE;
   size_t COHORT_SIZE;
+
+  size_t SELECTION_MODE;
+  size_t LEX_MAX_FUNS;
+  size_t COHORTLEX_MAX_FUNS;
+  size_t TOURNAMENT_SIZE;
+
+  size_t MAX_NETWORK_SIZE;
+  size_t MIN_NETWORK_SIZE;
+
+  size_t SORT_SIZE;
+  size_t SORTS_PER_TEST;
 
   // Experiment variables
   bool setup; ///< Has setup been run?
@@ -99,8 +123,16 @@ protected:
 
     size_t cohort_size;
 
-    size_t GetOrgID(size_t cohortID, size_t memberID) {
+    /// Used internally to access population_ids
+    size_t GetOrgID(size_t cohortID, size_t memberID) const {
       return (cohortID * cohort_size) + memberID;
+    }
+
+    /// Used to get world ID of organism #memberID belonging to given cohortID
+    size_t GetWorldID(size_t cohortID, size_t memberID) const {
+      emp_assert(cohortID < cohorts.size());
+      emp_assert(memberID < cohorts[cohortID].size());
+      return cohorts[cohortID][memberID];
     }
 
     size_t GetNumCohorts() const { return cohorts.size(); }
@@ -149,6 +181,9 @@ protected:
 
   } cohorts;
 
+  emp::vector<std::function<double(network_org_t &)>> lexicase_network_fit_set;
+  emp::vector<std::function<double(test_org_t &)>> lexicase_test_fit_set;
+
   // Experiment signals
   emp::Signal<void(void)> do_evaluation_sig;  ///< Trigger network/test evaluations.
   emp::Signal<void(void)> do_selection_sig;   ///< Trigger selection
@@ -158,6 +193,10 @@ protected:
 
   void InitNetworkPop_Random();
   void InitTestPop_Random();
+
+  void SetupEvaluation();
+  void SetupNetworkSelection();
+  void SetupNetworkTesting();
 
   /// Evaluate SortingNetworkOrg network against SortingTestOrg test,
   /// return number of passes.
@@ -210,58 +249,136 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
   } else {
     network_world->Reset();
     test_world->Reset();
+    // TODO: clear all of the things that need to be cleared! (signals, fit sets, etc)
   }
 
-  // Setup population evaluation
-  switch (EVALUATION_METHOD) {
-    case (size_t)EVALUATION_METHODS::RANDOM_COHORT: {
-      // Make sure settings abide by expectations.
-      emp_assert(NETWORK_POP_SIZE == TEST_POP_SIZE, "Network and test population sizes must match in random cohort evaluation mode.");
-      emp_assert(NETWORK_POP_SIZE % COHORT_SIZE == 0, "Population sizes must be evenly divisible by cohort size in random cohort evaluation mode.");
-      // Setup cohorts
-      cohorts.Init(NETWORK_POP_SIZE, COHORT_SIZE);
-      std::cout << "=== Cohorts after initialization ===" << std::endl;
-      cohorts.Print();
-      std::cout << "\n=========" << std::endl;
-      // Setup world to reset phenotypes on organism placement      
-      network_world->OnPlacement([this](size_t pos){ network_world->GetOrg(pos).GetPhenotype().Reset(COHORT_SIZE); });
-      test_world->OnPlacement([this](size_t pos){ test_world->GetOrg(pos).GetPhenotype().Reset(COHORT_SIZE); });
-      // What should happen on evaluation?
-      do_evaluation_sig.AddAction([this]() {
-        // Randomize the cohorts.
-        cohorts.Randomize(*random);
-        // For each cohort, evaluate all networks in cohort against all tests in cohort.
-        for (size_t cID = 0; cID < cohorts.GetNumCohorts(); ++cID) {
-          for (size_t nID = 0; nID < COHORT_SIZE; ++nID) {
-            network_org_t & network = network_world->GetOrg(cohorts.GetOrgID(cID, nID));
-            for (size_t tID = 0; tID < COHORT_SIZE; ++tID) {
-              test_org_t & test = test_world->GetOrg(cohorts.GetOrgID(cID, tID));
-              // Evaluate network, nID, 
-              const size_t passes = EvaluateNetworkOrg(network, test);
-              network.GetPhenotype().test_results[tID] = passes;
-              test.GetPhenotype().test_results[nID] = passes;
-            }
-          }
-        }
-      });
-      break;
-    }
-    case (size_t)EVALUATION_METHODS::WELL_MIXED: {
-      break;
-    }
-    default: {
-      std::cout << "Unrecognized EVALUATION_METHOD (" << EVALUATION_METHOD << "). Exiting..." << std::endl;
-      exit(-1);
-    }
-  }
+  SetupEvaluation();       // Setup population evaluation
+  SetupNetworkSelection(); // Setup network selection
+  SetupNetworkTesting();   // Setup testing mode  
 
-  // Setup selection
 
   // Initialize populations
   InitNetworkPop_Random();
   InitTestPop_Random();
 
+
   setup = true;
+}
+
+void SortingNetworkExperiment::SetupEvaluation() {
+  // Setup population evaluation.
+  const bool cohort_eval = SELECTION_MODE == SELECTION_METHODS::COHORT_LEXICASE;
+  if (cohort_eval) {  // We're evaluating networks with tests in cohorts.
+    // Make sure settings abide by expectations.
+    emp_assert(NETWORK_POP_SIZE == TEST_POP_SIZE, "Network and test population sizes must match in random cohort evaluation mode.");
+    emp_assert(NETWORK_POP_SIZE % COHORT_SIZE == 0, "Population sizes must be evenly divisible by cohort size in random cohort evaluation mode.");
+    // Setup cohorts
+    cohorts.Init(NETWORK_POP_SIZE, COHORT_SIZE);
+    std::cout << "=== Cohorts after initialization ===" << std::endl;
+    cohorts.Print();
+    std::cout << "\n=========" << std::endl;
+    // Setup world to reset phenotypes on organism placement      
+    network_world->OnPlacement([this](size_t pos){ network_world->GetOrg(pos).GetPhenotype().Reset(COHORT_SIZE); });
+    test_world->OnPlacement([this](size_t pos){ test_world->GetOrg(pos).GetPhenotype().Reset(COHORT_SIZE); });
+    // What should happen on evaluation?
+    do_evaluation_sig.AddAction([this]() {
+      // Randomize the cohorts.
+      cohorts.Randomize(*random);
+      // For each cohort, evaluate all networks in cohort against all tests in cohort.
+      for (size_t cID = 0; cID < cohorts.GetNumCohorts(); ++cID) {
+        for (size_t nID = 0; nID < COHORT_SIZE; ++nID) {
+          network_org_t & network = network_world->GetOrg(cohorts.GetWorldID(cID, nID));
+          for (size_t tID = 0; tID < COHORT_SIZE; ++tID) {
+            test_org_t & test = test_world->GetOrg(cohorts.GetWorldID(cID, tID));
+            // Evaluate network, nID, on test, tID.
+            const size_t passes = EvaluateNetworkOrg(network, test);
+            network.GetPhenotype().test_results[tID] = passes;
+            test.GetPhenotype().test_results[nID] = passes;
+          }
+        }
+      }
+    });
+  } else { // Evaluate all networks on all tests.
+    // Setup world to reset phenotypes on organism placement (each phenotype will need spots to store scores against antagonist's pop size)
+    network_world->OnPlacement([this](size_t pos){ network_world->GetOrg(pos).GetPhenotype().Reset(TEST_POP_SIZE); });
+    test_world->OnPlacement([this](size_t pos){ test_world->GetOrg(pos).GetPhenotype().Reset(NETWORK_POP_SIZE); });
+    // What should happen on evaluation?
+    do_evaluation_sig.AddAction([this]() {
+      for (size_t nID = 0; nID < network_world->GetSize(); ++nID) {
+        network_org_t & network = network_world->GetOrg(nID);
+        for (size_t tID = 0; tID < test_world->GetSize(); ++tID) {
+          test_org_t & test = test_world->GetOrg(tID);
+          // Evaluate network, nID, on test, tID.
+          const size_t passes = EvaluateNetworkOrg(network, test);
+          network.GetPhenotype().test_results[tID] = passes;
+          test.GetPhenotype().test_results[nID] = passes;
+        }
+      }
+    });
+  }
+}
+
+void SortingNetworkExperiment::SetupNetworkSelection() {
+  // Configure network selection.
+  switch (SELECTION_MODE) {
+    
+    case (size_t)SELECTION_METHODS::COHORT_LEXICASE: {
+      // Setup network fit funs
+      // - 1 function for every cohort member
+      for (size_t i = 0; i < COHORT_SIZE; ++i) {
+        lexicase_network_fit_set.push_back([this, i](network_org_t & network) {
+          return network.GetPhenotype().test_results[i];
+        });
+      }
+      // Add selection action
+      emp_assert(COHORT_SIZE * cohorts.GetNumCohorts() == NETWORK_POP_SIZE);
+      do_selection_sig.AddAction([this]() {
+        // For each cohort, run selection
+        for (size_t cID = 0; cID < cohorts.GetNumCohorts(); ++cID) {
+          emp::CohortLexicaseSelect(*network_world, 
+                                    lexicase_network_fit_set,
+                                    cohorts.GetCohort(cID),
+                                    COHORT_SIZE,
+                                    COHORTLEX_MAX_FUNS);
+        }
+      });
+      break;
+    }
+    
+    case (size_t)SELECTION_METHODS::LEXICASE: {
+      // For lexicase selection, one function for every test organism.
+      for (size_t i = 0; i < TEST_POP_SIZE; ++i) {
+        lexicase_network_fit_set.push_back([this, i](network_org_t & network) {
+          return network.GetPhenotype().test_results[i];
+        });
+      }
+      do_selection_sig.AddAction([this]() {
+        emp::LexicaseSelect(*network_world,
+                            lexicase_network_fit_set,
+                            NETWORK_POP_SIZE,
+                            LEX_MAX_FUNS
+                            );
+      });
+      break;
+    }
+    
+    case (size_t)SELECTION_METHODS::TOURNAMENT: {
+      do_selection_sig.AddAction([this]() {
+        emp::TournamentSelect(*network_world, TOURNAMENT_SIZE, NETWORK_POP_SIZE);
+      });
+      break;
+    }
+
+    default: {
+      std::cout << "Unrecognized SELECTION_MODE(" << SELECTION_MODE << "). Exiting..." << std::endl;
+      exit(-1);
+    }
+
+  }
+}
+
+void SortingNetworkExperiment::SetupNetworkTesting() {
+
 }
 
 void SortingNetworkExperiment::Run() {
@@ -277,21 +394,26 @@ void SortingNetworkExperiment::RunStep() {
 void SortingNetworkExperiment::InitConfigs(const SortingNetworkConfig & config) {
   // Default group
   SEED = config.SEED();
-  MAX_NETWORK_SIZE = config.MAX_NETWORK_SIZE();
-  MIN_NETWORK_SIZE = config.MIN_NETWORK_SIZE();
-  TEST_SEQ_SIZE = config.TEST_SEQ_SIZE();
-  SEQ_PER_TEST = config.SEQ_PER_TEST();
   NETWORK_POP_SIZE = config.NETWORK_POP_SIZE();
   TEST_POP_SIZE = config.TEST_POP_SIZE();
-  EVALUATION_METHOD = config.EVALUATION_METHOD();
+  TEST_MODE = config.TEST_MODE();
   COHORT_SIZE = config.COHORT_SIZE();
+  SELECTION_MODE = config.SELECTION_MODE();
+  LEX_MAX_FUNS = config.LEX_MAX_FUNS();
+  COHORTLEX_MAX_FUNS = config.COHORTLEX_MAX_FUNS();
+  TOURNAMENT_SIZE = config.TOURNAMENT_SIZE();
+  MAX_NETWORK_SIZE = config.MAX_NETWORK_SIZE();
+  MIN_NETWORK_SIZE = config.MIN_NETWORK_SIZE();
+  SORT_SIZE = config.SORT_SIZE();
+  SORTS_PER_TEST = config.SORTS_PER_TEST();
+
 }
 
 void SortingNetworkExperiment::InitNetworkPop_Random() {
   std::cout << "Randomly initializing sorting network population...";
   // Inject random networks into network world up to population size.
   for (size_t i = 0; i < NETWORK_POP_SIZE; ++i) {
-    network_world->Inject(network_genome_t(*random, TEST_SEQ_SIZE, MIN_NETWORK_SIZE, MAX_NETWORK_SIZE), 1);
+    network_world->Inject(network_genome_t(*random, SORT_SIZE, MIN_NETWORK_SIZE, MAX_NETWORK_SIZE), 1);
   }
   std::cout << " Done." << std::endl;
 }
@@ -299,7 +421,7 @@ void SortingNetworkExperiment::InitNetworkPop_Random() {
 void SortingNetworkExperiment::InitTestPop_Random() {
   std::cout << "Random initializing sorting test population...";
   for (size_t i = 0; i < TEST_POP_SIZE; ++i) {
-    test_world->Inject(test_genome_t(*random, TEST_SEQ_SIZE, SEQ_PER_TEST), 1);
+    test_world->Inject(test_genome_t(*random, SORT_SIZE, SORTS_PER_TEST), 1);
   }
   std::cout << " Done." << std::endl;
 }
