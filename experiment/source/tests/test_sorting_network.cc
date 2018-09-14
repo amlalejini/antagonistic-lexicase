@@ -7,6 +7,7 @@
 #include "base/vector.h"
 #include "tools/Random.h"
 
+#include "Mutators.h"
 #include "SortingNetwork.h"
 #include "SortingTest.h"
 #include "SortingNetworkConfig.h"
@@ -23,6 +24,7 @@ To test:
 
 */
 
+/*
 TEST_CASE("SortingNetwork", "[sorting_network]") {
  
   using network_t = SortingNetwork;
@@ -137,14 +139,19 @@ TEST_CASE("SortingTest", "[sorting_network]") {
   }
 
 }
+*/
 
 TEST_CASE("SortingNetworkExperiment", "[sorting_network]") {
   SortingNetworkConfig config;
 
   config.SEED(2);
-  config.NETWORK_POP_SIZE(10);
-  config.TEST_POP_SIZE(10);
-  config.SEQ_PER_TEST(2);
+  config.NETWORK_POP_SIZE(16);
+  config.TEST_POP_SIZE(16);
+  config.SORT_SIZE(8);
+  config.SORTS_PER_TEST(1);
+  config.MAX_NETWORK_SIZE(24);
+  config.MIN_NETWORK_SIZE(1);
+  config.GENERATIONS(100);
 
   SortingNetworkExperiment exp;
   exp.Setup(config);
@@ -162,4 +169,129 @@ TEST_CASE("SortingNetworkExperiment", "[sorting_network]") {
     test_world[i].Print(); std::cout << std::endl;
   }
 
+  exp.Run();
+
+  std::cout << "== Network world population ===" << std::endl;
+  for (size_t i = 0; i < config.NETWORK_POP_SIZE(); ++i) {
+    network_world[i].Print(); std::cout << std::endl;
+  }
+
+  std::cout << "== Test world population ===" << std::endl;
+  for (size_t i = 0; i < config.TEST_POP_SIZE(); ++i) {
+    test_world[i].Print(); std::cout << std::endl;
+  }
+
 }
+
+/*
+TEST_CASE("SortingNetworkMutator", "[sorting_network]") {
+  using network_t = SortingNetwork;
+  SortingNetworkMutator mutator;
+  
+  constexpr size_t SEED = 2;
+
+  constexpr size_t INPUT_SIZE = 16;
+  constexpr size_t MIN_NETWORK_SIZE = 8;
+  constexpr size_t MAX_NETWORK_SIZE = 16;
+
+  emp::Random rand(SEED);
+
+  mutator.MAX_NETWORK_SIZE = MAX_NETWORK_SIZE;
+  mutator.MIN_NETWORK_SIZE = MIN_NETWORK_SIZE;
+  mutator.SORT_SEQ_SIZE = INPUT_SIZE;
+  mutator.PER_INDEX_SUB = 0.0;
+  mutator.PER_PAIR_DUP = 0.0;
+  mutator.PER_PAIR_INS = 0.0;
+  mutator.PER_PAIR_DEL = 0.0;
+  mutator.PER_PAIR_SWAP = 0.0;
+
+  // Make sure 0'd out mutator does nothing.
+  network_t empty_network(12);
+  for (size_t i = 0; i < 100; ++i) {
+    network_t mutable_network(empty_network);
+    mutator.Mutate(rand, mutable_network);
+    REQUIRE(mutable_network == empty_network);  
+  }
+  // TODO: Have actual REQUIREs here for real tests
+  // TODO: make sure mutator produces valid networks
+  // TODO: setup index substitution such that it cannot (playing with min/max values) produce same vector
+  mutator.PER_INDEX_SUB = 1.0;
+  network_t mutable_network(empty_network);
+  std::cout << "Pre-mutations:" << std::endl;
+  mutable_network.Print(); std::cout << std::endl;
+  mutator.Mutate(rand, mutable_network);
+  std::cout << "Post-mutations (index subs):" << std::endl;
+  mutable_network.Print(); std::cout << std::endl;
+  mutator.PER_INDEX_SUB = 0.0;
+
+  mutator.PER_PAIR_INS = 1.0;
+  mutator.Mutate(rand, mutable_network);
+  std::cout << "Post-mutations (ins):" << std::endl;
+  mutable_network.Print(); std::cout << std::endl;
+  mutator.PER_PAIR_INS = 0.0;
+
+  mutator.PER_PAIR_DEL = 1.0;
+  mutator.Mutate(rand, mutable_network);
+  std::cout << "Post-mutations (dels):" << std::endl;
+  mutable_network.Print(); std::cout << std::endl;
+  mutator.PER_PAIR_DEL = 0.0;
+
+  mutator.PER_PAIR_DUP = 1.0;
+  mutator.Mutate(rand, mutable_network);
+  std::cout << "Post-mutations (dels):" << std::endl;
+  mutable_network.Print(); std::cout << std::endl;
+  mutator.PER_PAIR_DUP = 0.0;
+
+  mutator.PER_PAIR_SWAP = 1.0;
+  mutator.Mutate(rand, mutable_network);
+  std::cout << "Post-mutations (dels):" << std::endl;
+  mutable_network.Print(); std::cout << std::endl;
+  mutator.PER_PAIR_SWAP = 0.0;
+}
+
+// TODO: make this an actual test..
+TEST_CASE("SortingTestMutator", "[sorting_network]") {
+  using genome_t = SortingTestOrg::genome_t;
+
+  constexpr size_t SEED = 2;
+  constexpr size_t TEST_SIZE = 16;
+  constexpr size_t NUM_TESTS = 4;
+  
+  emp::Random rand(SEED);
+  
+  SortingTestMutator mutator;
+
+  mutator.bit_mode = true;
+  mutator.MAX_VALUE = 1;
+  mutator.MIN_VALUE = 0;
+  mutator.PER_SITE_SUB = 0.0;
+  mutator.PER_SEQ_INVERSION = 0.0;
+
+  genome_t tests_genome(TEST_SIZE, NUM_TESTS);
+  SortingTestOrg org(tests_genome);
+  std::cout << "Pre-mutations:" << std::endl;
+  org.Print();
+
+
+  mutator.PER_SITE_SUB = 1.0;
+  mutator.Mutate(rand, org.GetGenome());
+  std::cout << "Post-mutations (subs):" << std::endl;
+  org.Print();
+  mutator.PER_SITE_SUB = 0.0;
+
+
+  mutator.PER_SITE_SUB = 0.5;
+  mutator.Mutate(rand, org.GetGenome());
+  std::cout << "Post-mutations (subs):" << std::endl;
+  org.Print();
+  mutator.PER_SITE_SUB = 0.0;
+
+  mutator.PER_SEQ_INVERSION = 1.0;
+  mutator.Mutate(rand, org.GetGenome());
+  std::cout << "Post-mutations (invs):" << std::endl;
+  org.Print();
+  mutator.PER_SEQ_INVERSION = 0.0;
+
+
+}
+*/
