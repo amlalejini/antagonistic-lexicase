@@ -34,11 +34,13 @@ public:
   struct Phenotype {
     emp::vector<size_t> test_results; ///< Correspond to per-organism passes, not per-test passes!
     size_t num_passes;
+    size_t num_fails;
 
     void Reset(size_t s=0) { 
       test_results.clear(); 
       test_results.resize(s, 0); 
       num_passes = 0;
+      num_fails = 0;
     }
   };
 

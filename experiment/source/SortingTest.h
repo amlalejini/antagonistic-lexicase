@@ -24,7 +24,7 @@ public:
   SortingTest(emp::Random & rnd, size_t test_size, int min_val=0, int max_val=1)
     : test(test_size) { RandomizeTest(rnd, test_size, min_val, max_val); }
 
-  SortingTest(size_t test_size) : test(test_size) { ; }
+  SortingTest(size_t test_size) : test(test_size, 0) { ; }
 
   SortingTest(SortingTest &&) = default;
   SortingTest(const SortingTest &) = default;

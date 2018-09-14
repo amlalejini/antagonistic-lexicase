@@ -23,6 +23,7 @@
 #include "SortingNetworkOrg.h"
 #include "SortingTestOrg.h"
 #include "Selection.h"
+#include "Mutators.h"
 
 /*
 
@@ -60,13 +61,15 @@ Experiment execution flow:
 ////////////////////////////////////////////////////////////////////////////////
 // TODOS
 // - [ ] Make experiment Setup safe to call twice
-// - [ ] Unlink network and test cohorts - independently assign cohorts
 // - [ ] Setup 'absolute accuracy' (evaluate against all)
 // - [ ] Setup 'approximate accuracy' (evaluate against randomly sampled)
-// - [ ] Setup fitness function [](){return num_passes}
-//  - [ ] Calculate num passes post-evaluation (sum of test results)
 // - [ ] Setup network testing
 // - [ ] Setup data collection
+// - [ ] Implement network crossover (as a separate function in mutator - Crossover(p0, p1))
+// - [ ] Add selective pressure for being short
+// - [ ] Implement 'print network pop'
+// - [ ] Implement 'print test pop'
+// - [x] Fix test scores; add more information to phenotype
 ////////////////////////////////////////////////////////////////////////////////
 
 
@@ -85,14 +88,14 @@ public:
 
   // Experiment toggles
   // enum EVALUATION_METHODS { WELL_MIXED=0, RANDOM_COHORT=1 };
-  enum SELECTION_METHODS { COHORT_LEXICASE=0, LEXICASE=1, TOURNAMENT=2 };
+  enum SELECTION_METHODS { LEXICASE=0, COHORT_LEXICASE=1, TOURNAMENT=2 };
   enum TEST_MODE { COEVOLVE=0, STATIC=1, RANDOM=2 };
   
 protected:
 
   // Localized experiment parameters
   int SEED;
-  
+  size_t GENERATIONS;
   size_t NETWORK_POP_SIZE;
   size_t TEST_POP_SIZE;
   size_t TEST_MODE;
@@ -106,11 +109,20 @@ protected:
   size_t MAX_NETWORK_SIZE;
   size_t MIN_NETWORK_SIZE;
 
+  double PER_INDEX_SUB;
+  double PER_PAIR_DUP;
+  double PER_PAIR_INS;
+  double PER_PAIR_DEL;
+  double PER_PAIR_SWAP;
+
   size_t SORT_SIZE;
   size_t SORTS_PER_TEST;
 
   // Experiment variables
   bool setup; ///< Has setup been run?
+  size_t update;
+  size_t dominant_network_id;
+  size_t dominant_test_id;
 
   emp::Ptr<emp::Random> random;
 
@@ -156,7 +168,6 @@ protected:
     }
 
     void Randomize(emp::Random & rnd) {
-      std::cout << "Randomize cohorts!" << std::endl;
       // Shuffle population ids
       emp::Shuffle(rnd, population_ids);
       // Reassign cohorts
@@ -179,10 +190,17 @@ protected:
       }
     }
 
-  } cohorts;
+  };
+
+  Cohorts network_cohorts;
+  Cohorts test_cohorts;
 
   emp::vector<std::function<double(network_org_t &)>> lexicase_network_fit_set;
   emp::vector<std::function<double(test_org_t &)>> lexicase_test_fit_set;
+
+  // Mutators
+  SortingNetworkMutator network_mutator;
+  SortingTestMutator test_mutator;
 
   // Experiment signals
   emp::Signal<void(void)> do_evaluation_sig;  ///< Trigger network/test evaluations.
@@ -196,6 +214,7 @@ protected:
 
   void SetupEvaluation();
   void SetupNetworkSelection();
+  void SetupNetworkMutation();
   void SetupNetworkTesting();
 
   /// Evaluate SortingNetworkOrg network against SortingTestOrg test,
@@ -204,7 +223,11 @@ protected:
 
 public:
 
-  SortingNetworkExperiment() : setup(false), cohorts() { ; }
+  SortingNetworkExperiment() 
+    : setup(false), update(0), 
+      network_cohorts(), test_cohorts(),
+      network_mutator(), test_mutator() 
+    { ; }
 
   ~SortingNetworkExperiment() {
     if (setup) {
@@ -252,15 +275,39 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
     // TODO: clear all of the things that need to be cleared! (signals, fit sets, etc)
   }
 
+  network_world->SetPopStruct_Mixed(true);
+  test_world->SetPopStruct_Mixed(true);
+  
   SetupEvaluation();       // Setup population evaluation
   SetupNetworkSelection(); // Setup network selection
+  SetupNetworkMutation();  // Setup network mutations
   SetupNetworkTesting();   // Setup testing mode  
 
+  // Setup fitness function
+  network_world->SetFitFun([](network_org_t & network) {
+    return (double)network.GetPhenotype().num_passes;
+  });
+
+  test_world->SetFitFun([](test_org_t & test) {
+    return (double)test.GetPhenotype().num_fails;
+  });
 
   // Initialize populations
   InitNetworkPop_Random();
   InitTestPop_Random();
 
+  network_world->SetAutoMutate(); // After we've initialized populations, turn auto-mutate on.
+  // Add network world updates
+  do_update_sig.AddAction([this]() {
+    std::cout << "Update: " << update << ", ";
+    std::cout << "best-network (size="<<network_world->GetOrg(dominant_network_id).GetSize()<<"): " << network_world->CalcFitnessID(dominant_network_id) << ", ";
+    std::cout << "best-test: " << test_world->CalcFitnessID(dominant_test_id) << std::endl;
+    network_world->Update();
+    network_world->ClearCache();
+    // test_world->ClearCache();
+  });
+
+  // RunStep();
 
   setup = true;
 }
@@ -273,23 +320,22 @@ void SortingNetworkExperiment::SetupEvaluation() {
     emp_assert(NETWORK_POP_SIZE == TEST_POP_SIZE, "Network and test population sizes must match in random cohort evaluation mode.");
     emp_assert(NETWORK_POP_SIZE % COHORT_SIZE == 0, "Population sizes must be evenly divisible by cohort size in random cohort evaluation mode.");
     // Setup cohorts
-    cohorts.Init(NETWORK_POP_SIZE, COHORT_SIZE);
-    std::cout << "=== Cohorts after initialization ===" << std::endl;
-    cohorts.Print();
-    std::cout << "\n=========" << std::endl;
+    network_cohorts.Init(NETWORK_POP_SIZE, COHORT_SIZE);
+    test_cohorts.Init(TEST_POP_SIZE, COHORT_SIZE);
     // Setup world to reset phenotypes on organism placement      
     network_world->OnPlacement([this](size_t pos){ network_world->GetOrg(pos).GetPhenotype().Reset(COHORT_SIZE); });
     test_world->OnPlacement([this](size_t pos){ test_world->GetOrg(pos).GetPhenotype().Reset(COHORT_SIZE); });
     // What should happen on evaluation?
     do_evaluation_sig.AddAction([this]() {
       // Randomize the cohorts.
-      cohorts.Randomize(*random);
+      network_cohorts.Randomize(*random);
+      test_cohorts.Randomize(*random);
       // For each cohort, evaluate all networks in cohort against all tests in cohort.
-      for (size_t cID = 0; cID < cohorts.GetNumCohorts(); ++cID) {
+      for (size_t cID = 0; cID < network_cohorts.GetNumCohorts(); ++cID) {
         for (size_t nID = 0; nID < COHORT_SIZE; ++nID) {
-          network_org_t & network = network_world->GetOrg(cohorts.GetWorldID(cID, nID));
+          network_org_t & network = network_world->GetOrg(network_cohorts.GetWorldID(cID, nID));
           for (size_t tID = 0; tID < COHORT_SIZE; ++tID) {
-            test_org_t & test = test_world->GetOrg(cohorts.GetWorldID(cID, tID));
+            test_org_t & test = test_world->GetOrg(test_cohorts.GetWorldID(cID, tID));
             // Evaluate network, nID, on test, tID.
             const size_t passes = EvaluateNetworkOrg(network, test);
             network.GetPhenotype().test_results[tID] = passes;
@@ -316,6 +362,39 @@ void SortingNetworkExperiment::SetupEvaluation() {
       }
     });
   }
+
+  // Add evaluation action to calculate num_passes for tests and networks.
+  do_evaluation_sig.AddAction([this]() {
+    // Sum pass totals for networks.
+    dominant_network_id = 0;
+    double cur_best = 0;
+    for (size_t nID = 0; nID < network_world->GetSize(); ++nID) {
+      if (!network_world->IsOccupied(nID)) continue;
+      network_org_t & network = network_world->GetOrg(nID);
+      const size_t pass_total = emp::Sum(network.GetPhenotype().test_results);
+      network.GetPhenotype().num_passes = pass_total;
+      if (pass_total > cur_best || nID == 0) {
+        dominant_network_id = nID;
+        cur_best = pass_total;
+      } 
+    }
+    // Sum pass totals for tests.
+    dominant_test_id = 0;
+    cur_best = 0;
+    for (size_t tID = 0; tID < test_world->GetSize(); ++tID) {
+      if (!test_world->IsOccupied(tID)) continue;
+      test_org_t & test = test_world->GetOrg(tID);
+      const size_t pass_total = emp::Sum(test.GetPhenotype().test_results);
+      const size_t fail_total = (test.GetPhenotype().test_results.size() * SORTS_PER_TEST) - pass_total;
+      test.GetPhenotype().num_passes = pass_total;
+      test.GetPhenotype().num_fails = fail_total;
+      if (fail_total > cur_best || tID == 0) { 
+        dominant_test_id = tID;
+        cur_best = fail_total;
+      }
+    }
+  });
+
 }
 
 void SortingNetworkExperiment::SetupNetworkSelection() {
@@ -326,18 +405,18 @@ void SortingNetworkExperiment::SetupNetworkSelection() {
       // Setup network fit funs
       // - 1 function for every cohort member
       for (size_t i = 0; i < COHORT_SIZE; ++i) {
-        lexicase_network_fit_set.push_back([this, i](network_org_t & network) {
+        lexicase_network_fit_set.push_back([i](network_org_t & network) {
           return network.GetPhenotype().test_results[i];
         });
       }
       // Add selection action
-      emp_assert(COHORT_SIZE * cohorts.GetNumCohorts() == NETWORK_POP_SIZE);
+      emp_assert(COHORT_SIZE * network_cohorts.GetNumCohorts() == NETWORK_POP_SIZE);
       do_selection_sig.AddAction([this]() {
         // For each cohort, run selection
-        for (size_t cID = 0; cID < cohorts.GetNumCohorts(); ++cID) {
+        for (size_t cID = 0; cID < network_cohorts.GetNumCohorts(); ++cID) {
           emp::CohortLexicaseSelect(*network_world, 
                                     lexicase_network_fit_set,
-                                    cohorts.GetCohort(cID),
+                                    network_cohorts.GetCohort(cID),
                                     COHORT_SIZE,
                                     COHORTLEX_MAX_FUNS);
         }
@@ -348,7 +427,7 @@ void SortingNetworkExperiment::SetupNetworkSelection() {
     case (size_t)SELECTION_METHODS::LEXICASE: {
       // For lexicase selection, one function for every test organism.
       for (size_t i = 0; i < TEST_POP_SIZE; ++i) {
-        lexicase_network_fit_set.push_back([this, i](network_org_t & network) {
+        lexicase_network_fit_set.push_back([i](network_org_t & network) {
           return network.GetPhenotype().test_results[i];
         });
       }
@@ -381,8 +460,25 @@ void SortingNetworkExperiment::SetupNetworkTesting() {
 
 }
 
-void SortingNetworkExperiment::Run() {
+void SortingNetworkExperiment::SetupNetworkMutation() {
+  // Setup network mutation functions
+  network_mutator.MAX_NETWORK_SIZE = MAX_NETWORK_SIZE;
+  network_mutator.MIN_NETWORK_SIZE = MIN_NETWORK_SIZE;
+  network_mutator.SORT_SEQ_SIZE = SORT_SIZE;
+  network_mutator.PER_INDEX_SUB = PER_INDEX_SUB;
+  network_mutator.PER_PAIR_DUP = PER_PAIR_DUP;
+  network_mutator.PER_PAIR_INS = PER_PAIR_INS;
+  network_mutator.PER_PAIR_DEL = PER_PAIR_DEL;
+  network_mutator.PER_PAIR_SWAP = PER_PAIR_SWAP;
+  network_world->SetMutFun([this](network_org_t & network, emp::Random & rnd) {
+    return network_mutator.Mutate(rnd, network.GetGenome());
+  });
+}
 
+void SortingNetworkExperiment::Run() {
+  for (update = 0; update <= GENERATIONS; ++update) {
+    RunStep();
+  }
 }
 
 void SortingNetworkExperiment::RunStep() {
@@ -394,16 +490,26 @@ void SortingNetworkExperiment::RunStep() {
 void SortingNetworkExperiment::InitConfigs(const SortingNetworkConfig & config) {
   // Default group
   SEED = config.SEED();
+  GENERATIONS = config.GENERATIONS();
   NETWORK_POP_SIZE = config.NETWORK_POP_SIZE();
   TEST_POP_SIZE = config.TEST_POP_SIZE();
   TEST_MODE = config.TEST_MODE();
   COHORT_SIZE = config.COHORT_SIZE();
+
   SELECTION_MODE = config.SELECTION_MODE();
   LEX_MAX_FUNS = config.LEX_MAX_FUNS();
   COHORTLEX_MAX_FUNS = config.COHORTLEX_MAX_FUNS();
   TOURNAMENT_SIZE = config.TOURNAMENT_SIZE();
+  
   MAX_NETWORK_SIZE = config.MAX_NETWORK_SIZE();
   MIN_NETWORK_SIZE = config.MIN_NETWORK_SIZE();
+
+  PER_INDEX_SUB = config.PER_INDEX_SUB();
+  PER_PAIR_DUP = config.PER_PAIR_DUP();
+  PER_PAIR_INS = config.PER_PAIR_INS();
+  PER_PAIR_DEL = config.PER_PAIR_DEL();
+  PER_PAIR_SWAP = config.PER_PAIR_SWAP();
+
   SORT_SIZE = config.SORT_SIZE();
   SORTS_PER_TEST = config.SORTS_PER_TEST();
 
