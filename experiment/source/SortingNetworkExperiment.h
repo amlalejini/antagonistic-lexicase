@@ -64,7 +64,13 @@ Experiment execution flow:
 // - [ ] Setup 'absolute accuracy' (evaluate against all)
 // - [ ] Setup 'approximate accuracy' (evaluate against randomly sampled)
 // - [ ] Setup data collection
-//  - [ ] Depth for lexicase
+//  - Data files:
+//    - Lexicase
+//      - Depth
+//    - Network snapshot
+//    - Test snapshot
+//    - Network dominant
+//    - Test dominant
 // - [ ] Implement network crossover (as a separate function in mutator - Crossover(p0, p1))
 // - [x] Add selective pressure for being short
 // - [ ] Implement 'print network pop'
@@ -122,8 +128,11 @@ protected:
   double PER_SITE_SUB;
   double PER_SEQ_INVERSION;
 
+  std::string DATA_DIRECTORY;
+  size_t SNAPSHOT_INTERVAL;
+
   // Experiment variables
-  bool setup; ///< Has setup been run?
+  bool setup;                 ///< Has setup been run?
   size_t update;
   size_t dominant_network_id;
   size_t dominant_test_id;
@@ -211,12 +220,14 @@ protected:
   emp::Signal<void(void)> do_selection_sig;   ///< Trigger selection
   emp::Signal<void(void)> do_update_sig;      ///< Trigger world updates
 
+  emp::Signal<void(void)> do_pop_snapshot_sig; ///< Trigger population snapshot
+
   emp::Signal<void(void)> end_setup_sig;    ///< Triggered at beginning of a run.
 
   void InitConfigs(const SortingNetworkConfig & config);  ///< Initialize (localize) configuration settings.
 
   void InitNetworkPop_Random(); ///< Randomly initialize network population.
-  void InitTestPop_Random();    ///< Randomly initialize testing population
+  void InitTestPop_Random();    ///< Randomly initialize testing population.
 
   void SetupEvaluation();         ///< Setup evaluation for networks and tests.
   void SetupNetworkSelection();   ///< Configure network selection.
@@ -224,6 +235,10 @@ protected:
   void SetupNetworkTesting();     ///< Configure sorting network testing (coevolving vs. static vs. random)
   void SetupTestSelection();      ///< Configure selection for sorting network tests. Only called if co-evolving tests.
   void SetupTestMutation();       ///< Configure mutation for sorting network tests. Only called if coevolving tests.
+  void SetupDataCollection();
+
+  void SnapshotNetworks();  ///< Output a snapshot of network population.
+  void SnapshotTests();     ///< Output a snapshot of test population.
 
   /// Evaluate SortingNetworkOrg network against SortingTestOrg test,
   /// return number of passes.
@@ -291,6 +306,7 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
     std::cout << "Update: " << update << ", ";
     std::cout << "best-network (size=" << network_world->GetOrg(dominant_network_id).GetSize()<<"): " << network_world->CalcFitnessID(dominant_network_id) << ", ";
     std::cout << "best-test: " << test_world->CalcFitnessID(dominant_test_id) << std::endl;
+    if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger();
     network_world->Update();
     network_world->ClearCache();
   });
@@ -304,7 +320,10 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
   SetupEvaluation();       // Setup population evaluation
   SetupNetworkSelection(); // Setup network selection
   SetupNetworkMutation();  // Setup network mutations
-  SetupNetworkTesting();   // Setup testing mode  
+  SetupNetworkTesting();   // Setup testing mode 
+  #ifndef EMSCRIPTEN
+  SetupDataCollection();
+  #endif 
 
   // Setup fitness function
   network_world->SetFitFun([this](network_org_t & network) {
@@ -317,6 +336,18 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
   
   end_setup_sig.Trigger();
   setup = true;
+}
+
+void SortingNetworkExperiment::SetupDataCollection() {
+  // Make a data directory
+  mkdir(DATA_DIRECTORY.c_str(), ACCESSPERMS);
+  if (DATA_DIRECTORY.back() != '/') DATA_DIRECTORY += '/';  
+  // -- bookmark --
+  // Setup network/test snapshots
+  do_pop_snapshot_sig.AddAction([this]() { 
+    SnapshotNetworks(); 
+    SnapshotTests();
+  });
 }
 
 void SortingNetworkExperiment::SetupEvaluation() {
@@ -596,7 +627,6 @@ void SortingNetworkExperiment::SetupTestMutation() {
   });
 }
 
-
 void SortingNetworkExperiment::Run() {
   for (update = 0; update <= GENERATIONS; ++update) {
     RunStep();
@@ -638,6 +668,9 @@ void SortingNetworkExperiment::InitConfigs(const SortingNetworkConfig & config) 
   PER_SITE_SUB = config.PER_SITE_SUB();
   PER_SEQ_INVERSION = config.PER_SEQ_INVERSION();
 
+  DATA_DIRECTORY = config.DATA_DIRECTORY();
+  SNAPSHOT_INTERVAL = config.SNAPSHOT_INTERVAL();
+
 }
 
 void SortingNetworkExperiment::InitNetworkPop_Random() {
@@ -656,6 +689,37 @@ void SortingNetworkExperiment::InitTestPop_Random() {
   }
   std::cout << " Done." << std::endl;
 }
+
+void SortingNetworkExperiment::SnapshotNetworks() {
+  std::string snapshot_dir = DATA_DIRECTORY + "pop_" + emp::to_string(network_world->GetUpdate());
+  mkdir(snapshot_dir.c_str(), ACCESSPERMS);
+  
+  emp::DataFile file(snapshot_dir + "/network_pop_" + emp::to_string((int)network_world->GetUpdate()) + ".csv");
+
+  size_t networkID = 0;
+
+  // Add functions to data file
+  // - networkID
+  std::function<size_t(void)> getNetworkID = [this, &networkID]() { return networkID; };
+  file.AddFun(getNetworkID, "network_id", "Network ID");
+  // - Fitness
+  // - pass total
+  // - antagonists
+  // - tests_per_antagonist
+  // - network size
+  // - network
+  file.PrintHeaderKeys();
+  // For each network in the population, dump the network and anything we want to know about it.
+  for (networkID = 0; networkID < network_world->GetSize(); ++networkID) {
+    if (!network_world->IsOccupied(networkID)) continue;
+    file.Update();
+  }
+}
+
+void SortingNetworkExperiment::SnapshotTests() {
+  // TODO
+}
+
 
 size_t SortingNetworkExperiment::EvaluateNetworkOrg(const SortingNetworkOrg & network,
                                                     const SortingTestOrg & test) const {

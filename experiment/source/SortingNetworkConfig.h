@@ -35,7 +35,13 @@ EMP_BUILD_CONFIG(SortingNetworkConfig,
 
   GROUP(TEST_MUTATION, "Settings specific to mutating sorting tests."),
   VALUE(PER_SITE_SUB, double, 0.001, "Per-site substitution (bit flip) rate."),
-  VALUE(PER_SEQ_INVERSION, double, 0.01, "Per-sequence inversion rate.")
+  VALUE(PER_SEQ_INVERSION, double, 0.01, "Per-sequence inversion rate."),
+
+  GROUP(DATA_COLLECTION, "Settings specific to data collection"),
+  VALUE(DATA_DIRECTORY, std::string, "./output", "Where to dump experiment data files"),
+  VALUE(SNAPSHOT_INTERVAL, size_t, 100, "Interval to take snapshots")
+
+
 
 )
 
