@@ -27,5 +27,6 @@ int main(int argc, char* argv[])
 
   SortingNetworkExperiment e;
   e.Setup(config);
+  e.Run();
 
 }

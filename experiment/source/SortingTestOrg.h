@@ -29,6 +29,12 @@ public:
     bool operator!=(const Genome & in) const { return !(in == *this); }
     bool operator<(const Genome & in) const { return test_set < in.test_set; }
 
+    void Randomize(emp::Random & rnd) {
+      for (size_t i = 0; i < test_set.size(); ++i) {
+        test_set[i].RandomizeTest(rnd);
+      }
+    }
+
   };
 
   struct Phenotype {

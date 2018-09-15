@@ -150,8 +150,6 @@ struct SortingTestMutator {
       }
 
     }
-
-
     return mut_cnt;
   }
 

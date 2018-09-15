@@ -31,7 +31,12 @@ EMP_BUILD_CONFIG(SortingNetworkConfig,
   
   GROUP(SORTING_TESTS, "Sorting test settings"),
   VALUE(SORT_SIZE, size_t, 16, "Size of sequences being sorted by sorting networks"),
-  VALUE(SORTS_PER_TEST, size_t, 1, "How many test sequences are there per test [org]?")
+  VALUE(SORTS_PER_TEST, size_t, 1, "How many test sequences are there per test [org]?"),
+
+  GROUP(TEST_MUTATION, "Settings specific to mutating sorting tests."),
+  VALUE(PER_SITE_SUB, double, 0.001, "Per-site substitution (bit flip) rate."),
+  VALUE(PER_SEQ_INVERSION, double, 0.01, "Per-sequence inversion rate.")
+
 )
 
 #endif
