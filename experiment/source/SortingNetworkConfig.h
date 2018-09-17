@@ -39,8 +39,8 @@ EMP_BUILD_CONFIG(SortingNetworkConfig,
 
   GROUP(DATA_COLLECTION, "Settings specific to data collection"),
   VALUE(DATA_DIRECTORY, std::string, "./output", "Where to dump experiment data files"),
-  VALUE(SNAPSHOT_INTERVAL, size_t, 100, "Interval to take snapshots")
-
+  VALUE(SNAPSHOT_INTERVAL, size_t, 100, "Interval to take snapshots"),
+  VALUE(DOMINANT_STATS_INTERVAL, size_t, 100, "Interval to output stats about dominant organism")
 
 
 )

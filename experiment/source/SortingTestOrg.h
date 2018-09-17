@@ -80,6 +80,7 @@ public:
   phenotype_t & GetPhenotype() { return phenotype; }
 
   void Print(std::ostream & out=std::cout) const;
+  void PrintMin(std::ostream & out=std::cout) const;
 
 };
 
@@ -91,5 +92,16 @@ void SortingTestOrg::Print(std::ostream & out) const {
     out << "\n";
   }
 }
+
+void SortingTestOrg::PrintMin(std::ostream & out) const {
+  out << "[";
+  for (size_t i = 0; i < GetNumTests(); ++i) {
+    if (i) out << ",";
+    genome.test_set[i].Print(out);
+  }
+  out << "]";
+}
+
+// todo - flat print
 
 #endif

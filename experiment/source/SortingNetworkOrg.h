@@ -51,7 +51,7 @@ public:
   void RandomizeGenome(emp::Random & rnd, size_t input_size, size_t min_network_size, size_t max_network_size) { genome.RandomizeNetwork(rnd, input_size, min_network_size, max_network_size); };
 
   void Print(std::ostream & out=std::cout) const;
-
+  
 };
 
 void SortingNetworkOrg::Print(std::ostream & out) const {

@@ -67,14 +67,10 @@ Experiment execution flow:
 //  - Data files:
 //    - Lexicase
 //      - Depth
-//    - Network snapshot
-//    - Test snapshot
-//    - Network dominant
-//    - Test dominant
 // - [ ] Implement network crossover (as a separate function in mutator - Crossover(p0, p1))
 // - [x] Add selective pressure for being short
-// - [ ] Implement 'print network pop'
-// - [ ] Implement 'print test pop'
+// - [x] Implement 'print network pop' => snapshot
+// - [x] Implement 'print test pop' => snapshot
 // - [x] Fix test scores; add more information to phenotype
 // - [x] Setup network testing (e.g., coevolution, static, random)
 ////////////////////////////////////////////////////////////////////////////////
@@ -130,6 +126,7 @@ protected:
 
   std::string DATA_DIRECTORY;
   size_t SNAPSHOT_INTERVAL;
+  size_t DOMINANT_STATS_INTERVAL;
 
   // Experiment variables
   bool setup;                 ///< Has setup been run?
@@ -215,6 +212,35 @@ protected:
   SortingNetworkMutator network_mutator;
   SortingTestMutator test_mutator;
 
+  struct StatID {
+    size_t networkID;
+    size_t testID;
+    StatID(size_t nID=0, size_t tID=0) : networkID(nID), testID(tID) { ; }
+  } curIDs;
+
+  // Network stats
+  std::function<size_t(void)> get_networkID;
+  std::function<double(void)> get_network_fitness;
+  std::function<size_t(void)> get_network_pass_total;
+  std::function<size_t(void)> get_network_size;
+  std::function<size_t(void)> get_network_antagonist_cnt;
+  std::function<size_t(void)> get_network_sorts_per_antagonist;
+  std::function<std::string(void)> get_network_passes_by_antagonist;
+  std::function<std::string(void)> get_network;
+  // Test stats
+  std::function<size_t(void)> get_testID;
+  std::function<double(void)> get_test_fitness;
+  std::function<size_t(void)> get_test_pass_total;
+  std::function<size_t(void)> get_test_fail_total;
+  std::function<size_t(void)> get_test_size;
+  std::function<std::string(void)> get_test_passes_by_antagonist;
+  std::function<size_t(void)> get_test_sorts_per_antagonist;
+  std::function<std::string(void)> get_test;
+
+  // Data files
+  emp::Ptr<emp::DataFile> dom_network_file; 
+  emp::Ptr<emp::DataFile> dom_test_file; 
+
   // Experiment signals
   emp::Signal<void(void)> do_evaluation_sig;  ///< Trigger network/test evaluations.
   emp::Signal<void(void)> do_selection_sig;   ///< Trigger selection
@@ -237,8 +263,14 @@ protected:
   void SetupTestMutation();       ///< Configure mutation for sorting network tests. Only called if coevolving tests.
   void SetupDataCollection();
 
+  void SetupNetworkStats();
+  void SetupTestStats();
+
   void SnapshotNetworks();  ///< Output a snapshot of network population.
   void SnapshotTests();     ///< Output a snapshot of test population.
+
+  void SetupDominantNetworkFile();
+  void SetupDominantTestFile();
 
   /// Evaluate SortingNetworkOrg network against SortingTestOrg test,
   /// return number of passes.
@@ -249,11 +281,14 @@ public:
   SortingNetworkExperiment() 
     : setup(false), update(0), 
       network_cohorts(), test_cohorts(),
-      network_mutator(), test_mutator() 
+      network_mutator(), test_mutator(),
+      curIDs(0, 0)
     { ; }
 
   ~SortingNetworkExperiment() {
     if (setup) {
+      dom_network_file.Delete();
+      dom_test_file.Delete();
       network_world.Delete();
       test_world.Delete();
       random.Delete();
@@ -306,9 +341,20 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
     std::cout << "Update: " << update << ", ";
     std::cout << "best-network (size=" << network_world->GetOrg(dominant_network_id).GetSize()<<"): " << network_world->CalcFitnessID(dominant_network_id) << ", ";
     std::cout << "best-test: " << test_world->CalcFitnessID(dominant_test_id) << std::endl;
+    
     if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger();
+    
+    curIDs.networkID = dominant_network_id;
+    curIDs.testID = dominant_test_id;
+    dom_network_file->Update(update);
+    dom_test_file->Update(update);
+    
     network_world->Update();
     network_world->ClearCache();
+
+    test_world->Update();
+    test_world->ClearCache();
+
   });
 
   end_setup_sig.AddAction([this]() {
@@ -336,18 +382,117 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
   
   end_setup_sig.Trigger();
   setup = true;
+  std::cout << "Done with experiment setup." << std::endl;
 }
 
 void SortingNetworkExperiment::SetupDataCollection() {
+  std::cout << "Setting up data collection!" << std::endl;
   // Make a data directory
   mkdir(DATA_DIRECTORY.c_str(), ACCESSPERMS);
   if (DATA_DIRECTORY.back() != '/') DATA_DIRECTORY += '/';  
-  // -- bookmark --
+  
+  // Setup stats getters
+  SetupNetworkStats();
+  SetupTestStats();
+
+  // Setup dominant data file
+  SetupDominantNetworkFile();
+  SetupDominantTestFile();
+
+  // Setup fitness files
+  // SetupFitnessFile
+  
+  // Setup systematics file
+  // SetupSystematicsFile
+
+  // Setup population file
+  // SetupPopulationFile
+
   // Setup network/test snapshots
   do_pop_snapshot_sig.AddAction([this]() { 
     SnapshotNetworks(); 
     SnapshotTests();
   });
+}
+
+void SortingNetworkExperiment::SetupNetworkStats() {
+  
+  get_networkID = [this]() { return curIDs.networkID; };
+  
+  get_network_fitness = [this]() { return network_world->CalcFitnessID(curIDs.networkID); };
+  
+  get_network_pass_total = [this]() { 
+    return network_world->GetOrg(curIDs.networkID).GetPhenotype().num_passes; 
+  };
+  
+  get_network_size = [this]() {
+    return network_world->GetOrg(curIDs.networkID).GetSize();
+  };
+  
+  get_network_antagonist_cnt = [this]() {
+    return network_world->GetOrg(curIDs.networkID).GetPhenotype().test_results.size();
+  };
+  
+  get_network_sorts_per_antagonist = [this]() {
+    return SORTS_PER_TEST;
+  };
+  
+  get_network_passes_by_antagonist = [this]() {
+    network_org_t & network = network_world->GetOrg(curIDs.networkID);
+    std::string scores = "\"[";
+    for (size_t i = 0; i < network.GetPhenotype().test_results.size(); ++i) {
+      if (i) scores += ",";
+      scores += emp::to_string(network.GetPhenotype().test_results[i]);
+    }
+    scores += "]\"";
+    return scores;
+  };
+  
+  get_network = [this]() {
+    std::ostringstream stream;
+    stream << "\"";
+    network_world->GetOrg(curIDs.networkID).GetGenome().Print(stream, ",");
+    stream << "\"";
+    return stream.str();
+  };
+}
+
+void SortingNetworkExperiment::SetupTestStats() {
+  get_testID = [this]() {
+    return curIDs.testID;
+  };
+  get_test_fitness = [this]() {
+    return test_world->CalcFitnessID(curIDs.testID);
+  };
+  get_test_pass_total = [this]() {
+    return test_world->GetOrg(curIDs.testID).GetPhenotype().num_passes;
+  };
+  get_test_fail_total = [this]() {
+    return test_world->GetOrg(curIDs.testID).GetPhenotype().num_fails;
+  };
+  get_test_size = [this]() {
+    return test_world->GetOrg(curIDs.testID).GetTestSize();
+  };
+  get_test_passes_by_antagonist = [this]() {
+    test_org_t & test = test_world->GetOrg(curIDs.testID);
+    std::string scores = "\"[";
+    for (size_t i = 0; i < test.GetPhenotype().test_results.size(); ++i) {
+      if (i) scores += ",";
+      scores += emp::to_string(test.GetPhenotype().test_results[i]);
+    }
+    scores += "]\"";
+    return scores;
+  };
+  get_test_sorts_per_antagonist = [this]() {
+    return test_world->GetOrg(curIDs.testID).GetNumTests();
+  };
+  get_test = [this]() {
+    std::ostringstream stream;
+    stream << "\"";
+    test_world->GetOrg(curIDs.testID).PrintMin(stream);
+    stream << "\"";
+    return stream.str();
+  };
 }
 
 void SortingNetworkExperiment::SetupEvaluation() {
@@ -448,10 +593,10 @@ void SortingNetworkExperiment::SetupNetworkSelection() {
         });
       }
       // - 1 test case for being small
-      lexicase_network_fit_set.push_back([this](network_org_t & network) {
-        if (network.GetPhenotype().num_passes) return (double)MAX_NETWORK_SIZE - (double)network.GetSize();
-        return 0.0;
-      });
+      // lexicase_network_fit_set.push_back([this](network_org_t & network) {
+      //   if (network.GetPhenotype().num_passes) return (double)MAX_NETWORK_SIZE - (double)network.GetSize();
+      //   return 0.0;
+      // });
       // Add selection action
       emp_assert(COHORT_SIZE * network_cohorts.GetNumCohorts() == NETWORK_POP_SIZE);
       do_selection_sig.AddAction([this]() {
@@ -475,7 +620,7 @@ void SortingNetworkExperiment::SetupNetworkSelection() {
         });
       }
       lexicase_network_fit_set.push_back([this](network_org_t & network) {
-        if (network.GetPhenotype().num_passes) return (double)MAX_NETWORK_SIZE - (double)network.GetSize();
+        if (network.GetPhenotype().num_passes >= TEST_POP_SIZE) return (double)MAX_NETWORK_SIZE - (double)network.GetSize();
         return 0.0;
       });
       do_selection_sig.AddAction([this]() {
@@ -513,19 +658,18 @@ void SortingNetworkExperiment::SetupNetworkTesting() {
       // - Setup selection
       SetupTestSelection();
       SetupTestMutation();
-      do_update_sig.AddAction([this]() {
-        test_world->Update();
-      });
       break;
     }
     case (size_t)TEST_MODES::STATIC: {
       std::cout << "Setting up network testing - STATIC MODE" << std::endl;
       // Sorting tests are static over time.
+      test_world->SetPopStruct_Mixed(false);
       // ... do nothing ...
       break;
     }
     case (size_t)TEST_MODES::RANDOM: {
       std::cout << "Setting up network testing - RANDOM MODE" << std::endl;
+      test_world->SetPopStruct_Mixed(false);
       // On world update, randomize test cases.
       do_update_sig.AddAction([this]() {
         for (size_t tID = 0; tID < test_world->GetSize(); ++tID) {
@@ -540,9 +684,6 @@ void SortingNetworkExperiment::SetupNetworkTesting() {
       exit(-1);
     }
   }
-  do_update_sig.AddAction([this]() {
-    test_world->ClearCache();
-  });
 }
 
 void SortingNetworkExperiment::SetupNetworkMutation() {
@@ -564,6 +705,7 @@ void SortingNetworkExperiment::SetupNetworkMutation() {
 }
 
 void SortingNetworkExperiment::SetupTestSelection() {
+  std::cout << "Setting up test selection!" << std::endl;
   // Configure test selection scheme (will match network selection mode).
   switch (SELECTION_MODE) {
     case (size_t)SELECTION_METHODS::COHORT_LEXICASE: {
@@ -571,7 +713,7 @@ void SortingNetworkExperiment::SetupTestSelection() {
       // - 1 function for every cohort member
       for (size_t i = 0; i < COHORT_SIZE; ++i) {
         lexicase_test_fit_set.push_back([i](test_org_t & test) {
-          return test.GetPhenotype().test_results[i];
+          return test.GetNumTests() - test.GetPhenotype().test_results[i];
         });
       }
       // Add selection action.
@@ -592,7 +734,7 @@ void SortingNetworkExperiment::SetupTestSelection() {
       // For lexicase selection, one function for every network organism.
       for (size_t i = 0; i < NETWORK_POP_SIZE; ++i) {
         lexicase_test_fit_set.push_back([i](test_org_t & test) {
-          return test.GetPhenotype().test_results[i];
+          return test.GetNumTests() - test.GetPhenotype().test_results[i]; // Incorrect!
         });
       }
       do_selection_sig.AddAction([this]() {
@@ -614,6 +756,7 @@ void SortingNetworkExperiment::SetupTestSelection() {
 }
 
 void SortingNetworkExperiment::SetupTestMutation() {
+  std::cout << "Setting up test mutation!" << std::endl;
   test_mutator.bit_mode = true;
   test_mutator.MAX_VALUE = 1;
   test_mutator.MIN_VALUE = 0;
@@ -670,6 +813,7 @@ void SortingNetworkExperiment::InitConfigs(const SortingNetworkConfig & config) 
 
   DATA_DIRECTORY = config.DATA_DIRECTORY();
   SNAPSHOT_INTERVAL = config.SNAPSHOT_INTERVAL();
+  DOMINANT_STATS_INTERVAL = config.DOMINANT_STATS_INTERVAL();
 
 }
 
@@ -696,29 +840,100 @@ void SortingNetworkExperiment::SnapshotNetworks() {
   
   emp::DataFile file(snapshot_dir + "/network_pop_" + emp::to_string((int)network_world->GetUpdate()) + ".csv");
 
-  size_t networkID = 0;
-
   // Add functions to data file
   // - networkID
-  std::function<size_t(void)> getNetworkID = [this, &networkID]() { return networkID; };
-  file.AddFun(getNetworkID, "network_id", "Network ID");
+  file.AddFun(get_networkID, "network_id", "Network ID");
   // - Fitness
+  file.AddFun(get_network_fitness, "fitness", "");
   // - pass total
-  // - antagonists
-  // - tests_per_antagonist
+  file.AddFun(get_network_pass_total, "pass_total", "");
   // - network size
+  file.AddFun(get_network_size, "network_size");
+  // - num_antagonists
+  file.AddFun(get_network_antagonist_cnt, "num_antagonists");
+  // - tests per antagonist
+  file.AddFun(get_network_sorts_per_antagonist, "sorts_per_antagonist");
+  // - antagonist scores]
+  file.AddFun(get_network_passes_by_antagonist, "scores_by_antagonist");
   // - network
+  file.AddFun(get_network, "network");
+
+  // Output file headers
   file.PrintHeaderKeys();
+
   // For each network in the population, dump the network and anything we want to know about it.
-  for (networkID = 0; networkID < network_world->GetSize(); ++networkID) {
-    if (!network_world->IsOccupied(networkID)) continue;
+  for (curIDs.networkID = 0; curIDs.networkID < network_world->GetSize(); ++curIDs.networkID) {
+    if (!network_world->IsOccupied(curIDs.networkID)) continue;
     file.Update();
   }
 }
 
 void SortingNetworkExperiment::SnapshotTests() {
-  // TODO
+  std::string snapshot_dir = DATA_DIRECTORY + "pop_" + emp::to_string(test_world->GetUpdate());
+  mkdir(snapshot_dir.c_str(), ACCESSPERMS);
+
+  emp::DataFile file(snapshot_dir + "/test_pop_" + emp::to_string((int)test_world->GetUpdate()) + ".csv");  
+
+  file.AddFun(get_testID, "test_id");
+  file.AddFun(get_test_fitness, "fitness");
+  file.AddFun(get_test_pass_total, "pass_total");
+  file.AddFun(get_test_fail_total, "fail_total");
+  file.AddFun(get_test_sorts_per_antagonist, "sorts_per_antagonist");
+  file.AddFun(get_test_passes_by_antagonist, "passes_by_antagonist");
+  file.AddFun(get_test_size, "test_size");
+  file.AddFun(get_test, "test");
+
+  // Output file headers
+  file.PrintHeaderKeys();
+
+  // For each test in the population, dump the test and anything we want to know about it.
+  for (curIDs.testID = 0; curIDs.testID < test_world->GetSize(); ++curIDs.testID) {
+    if (!test_world->IsOccupied(curIDs.testID)) continue;
+    file.Update();
+  }
 }
+
+void SortingNetworkExperiment::SetupDominantNetworkFile() {
+  
+  dom_network_file = emp::NewPtr<emp::DataFile>(DATA_DIRECTORY + "/dominant_network.csv"); 
+  dom_network_file->SetTimingRepeat(DOMINANT_STATS_INTERVAL);
+
+  // - Network id
+  dom_network_file->AddFun(get_networkID, "network_id", "Network ID");
+  // - Fitness
+  dom_network_file->AddFun(get_network_fitness, "fitness", "");
+  // - pass total
+  dom_network_file->AddFun(get_network_pass_total, "pass_total", "");
+  // - network size
+  dom_network_file->AddFun(get_network_size, "network_size");
+  // - num_antagonists
+  dom_network_file->AddFun(get_network_antagonist_cnt, "num_antagonists");
+  // - tests per antagonist
+  dom_network_file->AddFun(get_network_sorts_per_antagonist, "sorts_per_antagonist");
+  // - antagonist scores]
+  dom_network_file->AddFun(get_network_passes_by_antagonist, "scores_by_antagonist");
+  // - network
+  dom_network_file->AddFun(get_network, "network");
+
+  dom_network_file->PrintHeaderKeys();
+}
+
+void SortingNetworkExperiment::SetupDominantTestFile() {
+  dom_test_file = emp::NewPtr<emp::DataFile>(DATA_DIRECTORY + "/dominant_test.csv"); 
+  dom_test_file->SetTimingRepeat(DOMINANT_STATS_INTERVAL);
+
+  dom_test_file->AddFun(get_testID, "test_id");
+  dom_test_file->AddFun(get_test_fitness, "fitness");
+  dom_test_file->AddFun(get_test_pass_total, "pass_total");
+  dom_test_file->AddFun(get_test_fail_total, "fail_total");
+  dom_test_file->AddFun(get_test_sorts_per_antagonist, "sorts_per_antagonist");
+  dom_test_file->AddFun(get_test_passes_by_antagonist, "passes_by_antagonist");
+  dom_test_file->AddFun(get_test_size, "test_size");
+  dom_test_file->AddFun(get_test, "test");
+
+  dom_test_file->PrintHeaderKeys();
+}
+
 
 
 size_t SortingNetworkExperiment::EvaluateNetworkOrg(const SortingNetworkOrg & network,

@@ -89,7 +89,7 @@ bool SortingTest::Evaluate(const SortingNetwork & network) const {
 void SortingTest::Print(std::ostream & out) const {
   out << "[";
   for (size_t i = 0; i < test.size(); ++i) {
-    if (i) out << ", ";
+    if (i) out << ",";
     out << test[i];
   }
   out << "]";

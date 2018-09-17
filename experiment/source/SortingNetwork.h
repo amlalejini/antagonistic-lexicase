@@ -60,7 +60,7 @@ public:
 
   bool Validate(size_t input_size, size_t min_network_size=0, size_t max_network_size=(size_t)-1) const;
 
-  void Print(std::ostream & out=std::cout) const;
+  void Print(std::ostream & out=std::cout, std::string op_sep="=>") const;
   void PrintVert(std::ostream & out=std::cout) const;
 
 };
@@ -89,11 +89,11 @@ bool SortingNetwork::Validate(size_t input_size, size_t min_network_size,
   return true;
 }
 
-void SortingNetwork::Print(std::ostream & out) const {
+void SortingNetwork::Print(std::ostream & out, std::string op_sep) const {
   out << "[";
   for (size_t i=0; i < network.size(); ++i) {
-    if (i) out << ", ";
-    out << "(" << network[i][0] << "=>" << network[i][1] << ")";
+    if (i) out << ",";
+    out << "(" << network[i][0] << op_sep << network[i][1] << ")";
   }
   out << "]";
 }
