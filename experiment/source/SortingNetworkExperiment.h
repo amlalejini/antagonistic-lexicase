@@ -8,6 +8,7 @@
 #include <string>
 #include <sys/stat.h>
 #include <utility>
+#include <unordered_set>
 
 #include "base/Ptr.h"
 #include "base/vector.h"
@@ -78,7 +79,6 @@ Experiment execution flow:
 //  - [ ] Cohort lexicase selects from appropriate cohort
 ////////////////////////////////////////////////////////////////////////////////
 
-
 class SortingNetworkExperiment {
 public:
 
@@ -133,6 +133,7 @@ protected:
   std::string DATA_DIRECTORY;
   size_t SNAPSHOT_INTERVAL;
   size_t DOMINANT_STATS_INTERVAL;
+  size_t AGGREGATE_STATS_INTERVAL;
 
   // Experiment variables
   bool setup;                 ///< Has setup been run?
@@ -237,9 +238,52 @@ protected:
 
   emp::Ptr<emp::Binomial> network_cross_binomial;
 
+  struct CompleteTestSet {
+    emp::vector<size_t> testIDs;
+    emp::vector<SortingTest> tests;
+
+    size_t GetSize() const { return tests.size(); }
+
+    void Generate(size_t test_size) {
+      size_t total_tests = emp::Pow2(test_size);
+      tests.resize(total_tests, test_size);
+      size_t interval = 1;
+      bool val = false;
+      for (size_t pos = 0; pos < test_size; ++pos) {
+        for (size_t tID = 0; tID < tests.size(); ++tID) {
+          // Set test at this position to val.
+          tests[tID][pos] = (int)val;
+          // Change value on interval
+          if ((tID % interval) == 0) {
+            val = (val) ? false : true;
+          }
+        }
+        interval *= 2;
+      }
+      // Print!
+      // std::unordered_set<std::string> set;
+      // for (size_t tID = 0; tID < tests.size(); ++tID) {
+      //   tests[tID].Print(); std::cout << std::endl;
+      //   set.insert(emp::to_string(tests[tID].GetTest()));
+      // }
+      for (size_t i = 0; i < tests.size(); ++i) testIDs.emplace_back(i);
+    }
+
+    size_t Evaluate(const SortingNetwork & network) {
+      size_t sort_cnt = 0;
+      for (size_t i = 0; i < tests.size(); ++i) {
+        sort_cnt += (size_t)tests[i].Evaluate(network);
+      }
+      return sort_cnt;
+    }    
+
+  } complete_test_set;
+
   // Network stats
   std::function<size_t(void)> get_networkID;
   std::function<double(void)> get_network_fitness;
+  std::function<double(void)> get_network_true_correct;
+  std::function<double(void)> get_network_possible_correct;
   std::function<size_t(void)> get_network_pass_total;
   std::function<size_t(void)> get_network_size;
   std::function<size_t(void)> get_network_antagonist_cnt;
@@ -366,6 +410,8 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
   network_pop_ids.Init(NETWORK_POP_SIZE);
   network_cross_binomial = emp::NewPtr<emp::Binomial>(PER_ORG_CROSSOVER, NETWORK_POP_SIZE);
 
+  complete_test_set.Generate(SORT_SIZE);
+
   // Add network world updates
   do_update_sig.AddAction([this]() {
     std::cout << "Update: " << update << ", ";
@@ -431,13 +477,9 @@ void SortingNetworkExperiment::SetupDataCollection() {
 
   // Setup fitness files
   // SetupFitnessFile
+  network_world->SetupFitnessFile(DATA_DIRECTORY + "network_fitness.csv").SetTimingRepeat(AGGREGATE_STATS_INTERVAL);
+  test_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(AGGREGATE_STATS_INTERVAL);
   
-  // Setup systematics file
-  // SetupSystematicsFile
-
-  // Setup population file
-  // SetupPopulationFile
-
   // Setup network/test snapshots
   do_pop_snapshot_sig.AddAction([this]() { 
     SnapshotNetworks(); 
@@ -451,6 +493,14 @@ void SortingNetworkExperiment::SetupNetworkStats() {
   
   get_network_fitness = [this]() { return network_world->CalcFitnessID(curIDs.networkID); };
   
+  get_network_true_correct = [this]() {
+    return complete_test_set.Evaluate(network_world->GetOrg(curIDs.networkID).GetGenome());
+  };
+
+  get_network_possible_correct = [this]() {
+    return emp::Pow2(SORT_SIZE);
+  };
+
   get_network_pass_total = [this]() { 
     return network_world->GetOrg(curIDs.networkID).GetPhenotype().num_passes; 
   };
@@ -916,6 +966,7 @@ void SortingNetworkExperiment::InitConfigs(const SortingNetworkConfig & config) 
   DATA_DIRECTORY = config.DATA_DIRECTORY();
   SNAPSHOT_INTERVAL = config.SNAPSHOT_INTERVAL();
   DOMINANT_STATS_INTERVAL = config.DOMINANT_STATS_INTERVAL();
+  AGGREGATE_STATS_INTERVAL = config.AGGREGATE_STATS_INTERVAL();
 
 }
 
@@ -949,6 +1000,10 @@ void SortingNetworkExperiment::SnapshotNetworks() {
   file.AddFun(get_network_fitness, "fitness", "");
   // - pass total
   file.AddFun(get_network_pass_total, "pass_total", "");
+  
+  file.AddFun(get_network_true_correct, "true_passes");
+  file.AddFun(get_network_possible_correct, "true_possible");
+
   // - network size
   file.AddFun(get_network_size, "network_size");
   // - num_antagonists
