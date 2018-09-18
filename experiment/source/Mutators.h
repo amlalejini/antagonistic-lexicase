@@ -100,7 +100,107 @@ struct SortingNetworkMutator {
     return mut_cnt;
   }
 
+  /// Given genome A and B, crossover.
+  /// If (Valid(AB)) A = AB; If(Valid(BA)) B = BA;
+  void Crossover1Pt(emp::Random & rnd, genome_t & genomeA, genome_t & genomeB) {
+    const size_t min_size = emp::Min(genomeA.GetSize(), genomeB.GetSize());
+    const size_t max_size = emp::Max(genomeA.GetSize(), genomeB.GetSize());
+    const size_t xpoint = rnd.GetUInt(min_size);
+    genome_t genomeAB;
+    genome_t genomeBA;
+
+    for (size_t r = 0; r < xpoint; ++r) {
+      genomeAB.GetNetwork().emplace_back(genomeA[r]);
+      genomeBA.GetNetwork().emplace_back(genomeB[r]);
+    }
+
+    for (size_t r = xpoint; r < max_size; ++r) {
+      if (r < genomeA.GetSize()) { genomeBA.GetNetwork().emplace_back(genomeA[r]); } 
+      if (r < genomeB.GetSize()) { genomeAB.GetNetwork().emplace_back(genomeB[r]); }
+    }
+
+    genomeA = genomeAB;
+    genomeB = genomeBA;
+  }
+
+  /// Given genome A and B, crossover.
+  /// If (Valid(ABA)) A = ABA; If(Valid(BAB)) B = BAB;
+  void Crossover2Pt(emp::Random & rnd, genome_t & genomeA, genome_t & genomeB) {
+    // std::cout << "Genome A: "; genomeA.Print(); std::cout << std::endl;
+    // std::cout << "Genome B: "; genomeB.Print(); std::cout << std::endl;
+
+    double pct1 = rnd.GetDouble();
+    double pct2 = rnd.GetDouble();
+    if (pct2 < pct1) std::swap(pct1, pct2); // pct1 < pct2
+
+    size_t pos1A = (size_t)genomeA.GetSize() * pct1;
+    size_t pos1B = (size_t)genomeB.GetSize() * pct1;
+
+    size_t pos2A = (size_t)genomeA.GetSize() * pct2;
+    size_t pos2B = (size_t)genomeB.GetSize() * pct2;
+
+    size_t ABA_size = pos1A + (pos2B - pos1B) + (genomeA.GetSize() - pos2A);
+    size_t BAB_size = pos1B + (pos2A - pos1A) + (genomeB.GetSize() - pos2B);
+
+    // std::cout << "pct1=" << pct1 << std::endl;
+    // std::cout << "pct2=" << pct2 << std::endl;
+
+    // std::cout << "pA = [" << pos1A << "," << pos2A << "]" << std::endl;
+    // std::cout << "pB = [" << pos1B << "," << pos2B << "]" << std::endl;
+
+    // std::cout << "ABA size = " << ABA_size << std::endl;
+    // std::cout << "BAB size = " << BAB_size << std::endl;
+
+    // ABA: |---A---|---B---|---A---|
+    // BAB: |---B---|---A---|---B---|
+    const bool build_aba = ABA_size <= MAX_NETWORK_SIZE && ABA_size >= MIN_NETWORK_SIZE;
+    const bool build_bab = BAB_size <= MAX_NETWORK_SIZE && BAB_size >= MIN_NETWORK_SIZE;
+    genome_t genomeABA;
+    genome_t genomeBAB;
+
+    if (build_aba) {
+      // std::cout << "Buildinb ABA" << std::endl;    
+      // Build ABA
+      for (size_t r = 0; r < pos1A; ++r) { 
+        // std::cout << "  Copying A[" << r << "]: " << genomeA[r][0] << "=>" << genomeA[r][1] << std::endl; 
+        genomeABA.GetNetwork().emplace_back(genomeA[r]); 
+      }
+      for (size_t r = pos1B; r < pos2B; ++r) { 
+        // std::cout << "  Copying B[" << r << "]: " << genomeB[r][0] << "=>" << genomeB[r][1] << std::endl;
+        genomeABA.GetNetwork().emplace_back(genomeB[r]); 
+      }
+      for (size_t r = pos2A; r < genomeA.GetSize(); ++r) {
+        // std::cout << "  Copying A[" << r << "]: " << genomeA[r][0] << "=>" << genomeA[r][1] << std::endl; 
+        genomeABA.GetNetwork().emplace_back(genomeA[r]); 
+      }
+      emp_assert(genomeABA.GetSize() <= MAX_NETWORK_SIZE && genomeABA.GetSize() >= MIN_NETWORK_SIZE, ABA_size, genomeABA.GetSize(), pos1A, pos1B, pos2A, pos2B);
+    }
+
+    if (build_bab) {
+      // std::cout << "Building BAB" << std::endl;
+      // Build BAB
+      for (size_t r = 0; r < pos1B; ++r) { 
+        // std::cout << "  Copying B[" << r << "]: " << genomeB[r][0] << "=>" << genomeB[r][1] << std::endl;
+        genomeBAB.GetNetwork().emplace_back(genomeB[r]); 
+      }
+      for (size_t r = pos1A; r < pos2A; ++r) { 
+        // std::cout << "  Copying A[" << r << "]: " << genomeA[r][0] << "=>" << genomeA[r][1] << std::endl; 
+        genomeBAB.GetNetwork().emplace_back(genomeA[r]); 
+      }
+      for (size_t r = pos2B; r < genomeB.GetSize(); ++r) {
+        // std::cout << "  Copying B[" << r << "]: " << genomeB[r][0] << "=>" << genomeB[r][1] << std::endl;
+        genomeBAB.GetNetwork().emplace_back(genomeB[r]); 
+      }
+      emp_assert(genomeBAB.GetSize() <= MAX_NETWORK_SIZE && genomeBAB.GetSize() >= MIN_NETWORK_SIZE, BAB_size, genomeBAB.GetSize(), pos1A, pos1B, pos2A, pos2B);
+    }
+
+    if (build_aba) genomeA = genomeABA;
+    if (build_bab) genomeB = genomeBAB;
+
+  }
+
 };
+
 
 struct SortingTestMutator {
   using genome_t = SortingTestOrg::genome_t;

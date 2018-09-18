@@ -13,6 +13,7 @@
 #include "base/vector.h"
 #include "control/Signal.h"
 #include "Evolve/World.h"
+#include "tools/Binomial.h"
 #include "tools/Random.h"
 #include "tools/random_utils.h"
 #include "tools/math.h"
@@ -95,6 +96,7 @@ public:
   // enum EVALUATION_METHODS { WELL_MIXED=0, RANDOM_COHORT=1 };
   enum SELECTION_METHODS { LEXICASE=0, COHORT_LEXICASE=1, TOURNAMENT=2 };
   enum TEST_MODES { COEVOLVE=0, STATIC=1, RANDOM=2 };
+  enum NETWORK_CROSSOVER_MODES { NONE=0, SINGLE_PT=1, TWO_PT=2 };
   
 protected:
 
@@ -119,6 +121,8 @@ protected:
   double PER_PAIR_INS;
   double PER_PAIR_DEL;
   double PER_PAIR_SWAP;
+  size_t NETWORK_CROSSOVER_MODE;
+  double PER_ORG_CROSSOVER;
 
   size_t SORT_SIZE;
   size_t SORTS_PER_TEST;
@@ -220,6 +224,19 @@ protected:
     StatID(size_t nID=0, size_t tID=0) : networkID(nID), testID(tID) { ; }
   } curIDs;
 
+  struct PopIDs {
+    emp::vector<size_t> popIDs;
+    void Init(size_t pop_size) {
+      popIDs.resize(pop_size);
+      for (size_t i = 0; i < pop_size; ++i) popIDs[i] = i;
+    }
+    void Shuffle(emp::Random & rnd) {
+      emp::Shuffle(rnd, popIDs);
+    }
+  } network_pop_ids;
+
+  emp::Ptr<emp::Binomial> network_cross_binomial;
+
   // Network stats
   std::function<size_t(void)> get_networkID;
   std::function<double(void)> get_network_fitness;
@@ -296,6 +313,7 @@ public:
 
   ~SortingNetworkExperiment() {
     if (setup) {
+      network_cross_binomial.Delete();
       dom_network_file.Delete();
       dom_test_file.Delete();
       network_world.Delete();
@@ -344,6 +362,9 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
 
   network_world->SetPopStruct_Mixed(true);
   test_world->SetPopStruct_Mixed(true);
+
+  network_pop_ids.Init(NETWORK_POP_SIZE);
+  network_cross_binomial = emp::NewPtr<emp::Binomial>(PER_ORG_CROSSOVER, NETWORK_POP_SIZE);
 
   // Add network world updates
   do_update_sig.AddAction([this]() {
@@ -598,7 +619,8 @@ void SortingNetworkExperiment::SetupNetworkSelection() {
     
     case (size_t)SELECTION_METHODS::COHORT_LEXICASE: {
       on_lex_test_sel = [this](size_t fit_id) {
-        sel_info.use_network_size = random->P(0.05);
+        // sel_info.use_network_size = random->P(0.05);
+        sel_info.use_network_size = false;
       };
       // Setup network fit funs
       // - 1 function for every cohort member
@@ -615,10 +637,10 @@ void SortingNetworkExperiment::SetupNetworkSelection() {
         });
       }
       // - 1 test case for being small
-      // lexicase_network_fit_set.push_back([this](network_org_t & network) {
-      //   if (network.GetPhenotype().num_passes) return (double)MAX_NETWORK_SIZE - (double)network.GetSize();
-      //   return 0.0;
-      // });
+      lexicase_network_fit_set.push_back([this](network_org_t & network) {
+        if (network.GetPhenotype().num_passes == (COHORT_SIZE * SORTS_PER_TEST)) return (double)MAX_NETWORK_SIZE - (double)network.GetSize();
+        return 0.0;
+      });
       // Add selection action
       emp_assert(COHORT_SIZE * network_cohorts.GetNumCohorts() == NETWORK_POP_SIZE);
       do_selection_sig.AddAction([this]() {
@@ -638,7 +660,8 @@ void SortingNetworkExperiment::SetupNetworkSelection() {
     case (size_t)SELECTION_METHODS::LEXICASE: {
       on_lex_test_sel = [this](size_t fit_id) {
         // std::cout << "FitID: " << fit_id << std::endl;
-        sel_info.use_network_size = random->P(0.05);
+        // sel_info.use_network_size = random->P(0.05);
+        sel_info.use_network_size = false;
       };
       // For lexicase selection, one function for every test organism.
       for (size_t i = 0; i < TEST_POP_SIZE; ++i) {
@@ -652,10 +675,10 @@ void SortingNetworkExperiment::SetupNetworkSelection() {
           return score;
         });
       }
-      // lexicase_network_fit_set.push_back([this](network_org_t & network) {
-      //   if (network.GetPhenotype().num_passes >= TEST_POP_SIZE) return (double)MAX_NETWORK_SIZE - (double)network.GetSize();
-      //   return 0.0;
-      // });
+      lexicase_network_fit_set.push_back([this](network_org_t & network) {
+        if (network.GetPhenotype().num_passes == (TEST_POP_SIZE * SORTS_PER_TEST)) return (double)MAX_NETWORK_SIZE - (double)network.GetSize();
+        return 0.0;
+      });
       do_selection_sig.AddAction([this]() {
         emp::LexicaseSelect_NAIVE(*network_world,
                             lexicase_network_fit_set,
@@ -677,7 +700,51 @@ void SortingNetworkExperiment::SetupNetworkSelection() {
       std::cout << "Unrecognized SELECTION_MODE(" << SELECTION_MODE << "). Exiting..." << std::endl;
       exit(-1);
     }
+  }
 
+  // Do crossover
+  // GetRandBinomial(const double n, const double p)
+  switch (NETWORK_CROSSOVER_MODE) {
+    case NETWORK_CROSSOVER_MODES::NONE: {
+      break;
+    }
+    case NETWORK_CROSSOVER_MODES::SINGLE_PT: {
+      do_selection_sig.AddAction([this]() {
+        network_pop_ids.Shuffle(*random);
+        // const uint32_t num_crosses = random->GetRandBinomial((double)NETWORK_POP_SIZE, (double)PER_ORG_CROSSOVER);
+        const size_t num_crosses = network_cross_binomial->PickRandom(*random);
+        // std::cout << "Crossover" << std::endl;
+        // std::cout << "  Num crosses=" << num_crosses << std::endl;
+        for (size_t i = 0; (int)i < (int)num_crosses-1; ++i) {
+          emp_assert(i+1 < NETWORK_POP_SIZE, NETWORK_POP_SIZE, num_crosses);
+          network_mutator.Crossover1Pt(*random,
+                                      network_world->GetNextOrg(network_pop_ids.popIDs[i]).GetGenome(), 
+                                      network_world->GetNextOrg(network_pop_ids.popIDs[i+1]).GetGenome());
+        }
+      });
+      break;
+    }
+    case NETWORK_CROSSOVER_MODES::TWO_PT: {
+      do_selection_sig.AddAction([this]() {
+        network_pop_ids.Shuffle(*random);
+        // const uint32_t num_crosses = random->GetRandBinomial((double)NETWORK_POP_SIZE, (double)PER_ORG_CROSSOVER);
+        const size_t num_crosses = network_cross_binomial->PickRandom(*random);
+        // std::cout << "Crossover" << std::endl;
+        // std::cout << "  Num crosses=" << num_crosses << std::endl;
+        for (size_t i = 0; (int)i < (int)num_crosses-1; ++i) {
+          emp_assert(i+1 < NETWORK_POP_SIZE, NETWORK_POP_SIZE, num_crosses);
+          network_mutator.Crossover2Pt(*random,
+                                      network_world->GetNextOrg(network_pop_ids.popIDs[i]).GetGenome(), 
+                                      network_world->GetNextOrg(network_pop_ids.popIDs[i+1]).GetGenome());
+        }
+      });
+      break;
+    }
+    default: {
+      std::cout << "Unrecognized crossover mode (" << NETWORK_CROSSOVER_MODE << "). Exiting..." << std::endl;
+      exit(-1);
+      break;
+    }
   }
 }
 
@@ -837,6 +904,8 @@ void SortingNetworkExperiment::InitConfigs(const SortingNetworkConfig & config) 
   PER_PAIR_INS = config.PER_PAIR_INS();
   PER_PAIR_DEL = config.PER_PAIR_DEL();
   PER_PAIR_SWAP = config.PER_PAIR_SWAP();
+  NETWORK_CROSSOVER_MODE = config.NETWORK_CROSSOVER_MODE();
+  PER_ORG_CROSSOVER = config.PER_ORG_CROSSOVER();
 
   SORT_SIZE = config.SORT_SIZE();
   SORTS_PER_TEST = config.SORTS_PER_TEST();

@@ -28,6 +28,8 @@ EMP_BUILD_CONFIG(SortingNetworkConfig,
   VALUE(PER_PAIR_INS, double, 0.0005, "Per-operation operation insertion rate"),
   VALUE(PER_PAIR_DEL, double, 0.001, "Per-operation operation deletion rate"),
   VALUE(PER_PAIR_SWAP, double, 0.001, "Per-operation operation swap rate"),
+  VALUE(NETWORK_CROSSOVER_MODE, size_t, 0, "What kind of crossover do we do? \n0: None\n1: 1 point\n2: 2 point"),
+  VALUE(PER_ORG_CROSSOVER, double, 0.25, "Per-organism crossover rate"),
   
   GROUP(SORTING_TESTS, "Sorting test settings"),
   VALUE(SORT_SIZE, size_t, 16, "Size of sequences being sorted by sorting networks"),
