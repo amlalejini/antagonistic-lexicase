@@ -73,6 +73,8 @@ Experiment execution flow:
 // - [x] Implement 'print test pop' => snapshot
 // - [x] Fix test scores; add more information to phenotype
 // - [x] Setup network testing (e.g., coevolution, static, random)
+// - [ ] Tests
+//  - [ ] Cohort lexicase selects from appropriate cohort
 ////////////////////////////////////////////////////////////////////////////////
 
 
@@ -249,6 +251,13 @@ protected:
   emp::Signal<void(void)> do_pop_snapshot_sig; ///< Trigger population snapshot
 
   emp::Signal<void(void)> end_setup_sig;    ///< Triggered at beginning of a run.
+
+  std::function<void(size_t)> on_lex_test_sel;
+  std::function<void(size_t)> on_lex_repro;
+
+  struct SelectionInfo {
+    bool use_network_size;
+  } sel_info;
 
   void InitConfigs(const SortingNetworkConfig & config);  ///< Initialize (localize) configuration settings.
 
@@ -582,14 +591,27 @@ void SortingNetworkExperiment::SetupEvaluation() {
 
 void SortingNetworkExperiment::SetupNetworkSelection() {
   // Configure network selection.
+
+  sel_info.use_network_size = false;
+
   switch (SELECTION_MODE) {
     
     case (size_t)SELECTION_METHODS::COHORT_LEXICASE: {
+      on_lex_test_sel = [this](size_t fit_id) {
+        sel_info.use_network_size = random->P(0.05);
+      };
       // Setup network fit funs
       // - 1 function for every cohort member
       for (size_t i = 0; i < COHORT_SIZE; ++i) {
-        lexicase_network_fit_set.push_back([i](network_org_t & network) {
-          return network.GetPhenotype().test_results[i];
+        lexicase_network_fit_set.push_back([this, i](network_org_t & network) {
+          // return network.GetPhenotype().test_results[i];
+
+          double score = network.GetPhenotype().test_results[i];
+          if (sel_info.use_network_size && score == SORTS_PER_TEST) {
+            score += ((double)(MAX_NETWORK_SIZE - network.GetSize())/(double)MAX_NETWORK_SIZE);
+          }
+          return score;
+
         });
       }
       // - 1 test case for being small
@@ -602,33 +624,44 @@ void SortingNetworkExperiment::SetupNetworkSelection() {
       do_selection_sig.AddAction([this]() {
         // For each cohort, run selection
         for (size_t cID = 0; cID < network_cohorts.GetNumCohorts(); ++cID) {
-          emp::CohortLexicaseSelect(*network_world, 
-                                    lexicase_network_fit_set,
-                                    network_cohorts.GetCohort(cID),
-                                    COHORT_SIZE,
-                                    COHORTLEX_MAX_FUNS);
+          emp::CohortLexicaseSelect_NAIVE(*network_world, 
+                                          lexicase_network_fit_set,
+                                          network_cohorts.GetCohort(cID),
+                                          COHORT_SIZE,
+                                          COHORTLEX_MAX_FUNS,
+                                          on_lex_test_sel);
         }
       });
       break;
     }
     
     case (size_t)SELECTION_METHODS::LEXICASE: {
+      on_lex_test_sel = [this](size_t fit_id) {
+        // std::cout << "FitID: " << fit_id << std::endl;
+        sel_info.use_network_size = random->P(0.05);
+      };
       // For lexicase selection, one function for every test organism.
       for (size_t i = 0; i < TEST_POP_SIZE; ++i) {
-        lexicase_network_fit_set.push_back([i](network_org_t & network) {
-          return network.GetPhenotype().test_results[i];
+        lexicase_network_fit_set.push_back([this, i](network_org_t & network) {
+          
+          double score = network.GetPhenotype().test_results[i];
+          if (sel_info.use_network_size && score == SORTS_PER_TEST) {
+            score += ((double)(MAX_NETWORK_SIZE - network.GetSize())/(double)MAX_NETWORK_SIZE);
+          }
+          // std::cout << "Use size? " << sel_info.use_network_size << "  score=" << score << std::endl;
+          return score;
         });
       }
-      lexicase_network_fit_set.push_back([this](network_org_t & network) {
-        if (network.GetPhenotype().num_passes >= TEST_POP_SIZE) return (double)MAX_NETWORK_SIZE - (double)network.GetSize();
-        return 0.0;
-      });
+      // lexicase_network_fit_set.push_back([this](network_org_t & network) {
+      //   if (network.GetPhenotype().num_passes >= TEST_POP_SIZE) return (double)MAX_NETWORK_SIZE - (double)network.GetSize();
+      //   return 0.0;
+      // });
       do_selection_sig.AddAction([this]() {
-        emp::LexicaseSelect(*network_world,
+        emp::LexicaseSelect_NAIVE(*network_world,
                             lexicase_network_fit_set,
                             NETWORK_POP_SIZE,
-                            LEX_MAX_FUNS
-                            );
+                            LEX_MAX_FUNS,
+                            on_lex_test_sel);
       });
       break;
     }

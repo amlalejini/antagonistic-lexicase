@@ -46,9 +46,6 @@ struct SortingNetworkMutator {
     // For gene (compare-exchange operation) in genome:
     // - copy gene to new genome, applying mutations
     for (size_t geneID = 0; geneID < genome.GetSize(); ++geneID) {
-      gene_t & gene = genome[geneID];  // Gene we're copying
-
-      const size_t rhead = new_genome.GetSize(); // Where in the new genome are we copying to?
 
       // Do we delete?
       if (rnd.P(PER_PAIR_DEL) && (expected_size > MIN_NETWORK_SIZE)) { 
@@ -56,8 +53,9 @@ struct SortingNetworkMutator {
         ++mut_cnt; 
         continue; 
       }
-      new_genome.GetNetwork().emplace_back(gene);
-      gene_t & gene_copy = new_genome.GetNetwork()[rhead];
+      const size_t rhead = new_genome.GetSize(); // Where in the new genome are we copying to?
+      new_genome.GetNetwork().emplace_back(gene_t{genome[geneID][0], genome[geneID][1]});
+      // gene_t & gene_copy = new_genome.GetNetwork()[rhead];
 
       // Do we insert?
       if (rnd.P(PER_PAIR_INS) && (expected_size < MAX_NETWORK_SIZE)) {
@@ -68,19 +66,19 @@ struct SortingNetworkMutator {
 
       // Do we duplicate?
       if (rnd.P(PER_PAIR_DUP) && (expected_size < MAX_NETWORK_SIZE)) {
-        new_genome.GetNetwork().emplace_back(gene);
+        new_genome.GetNetwork().emplace_back(gene_t{genome[geneID][0], genome[geneID][1]});
         ++expected_size;
         ++mut_cnt;
       }
       
       // Do index changes?
       if (rnd.P(PER_INDEX_SUB)) {
-        gene_copy[0] = rnd.GetUInt(0, SORT_SEQ_SIZE);
+        new_genome.GetNetwork()[rhead][0] = rnd.GetUInt(0, SORT_SEQ_SIZE);
         ++mut_cnt;
       }
 
       if (rnd.P(PER_INDEX_SUB)) {
-        gene_copy[1] = rnd.GetUInt(0, SORT_SEQ_SIZE);
+        new_genome.GetNetwork()[rhead][1] = rnd.GetUInt(0, SORT_SEQ_SIZE);
         ++mut_cnt;
       }
     }
