@@ -212,13 +212,15 @@ struct SortingTestMutator {
   
   double PER_SITE_SUB;
   double PER_SEQ_INVERSION;
+  double PER_SEQ_RANDOMIZE;
 
   SortingTestMutator() 
     : bit_mode(true),
       MAX_VALUE(1),
       MIN_VALUE(0),
       PER_SITE_SUB(0.001),
-      PER_SEQ_INVERSION(0.01)
+      PER_SEQ_INVERSION(0.01),
+      PER_SEQ_RANDOMIZE(0.0)
   { ; }
 
   size_t Mutate(emp::Random & rnd, genome_t & genome) {
@@ -227,6 +229,13 @@ struct SortingTestMutator {
     // For each sorting test in test set.
     for (size_t testID = 0; testID < genome.test_set.size(); ++testID) {
       SortingTest & test = genome.test_set[testID];
+      
+      if (rnd.P(PER_SEQ_RANDOMIZE)) {
+        test.RandomizeTest(rnd);
+        ++mut_cnt;
+        continue;
+      }
+      
       // For each site in test
       for (size_t i = 0; i < test.GetSize(); ++i) {
         if (rnd.P(PER_SITE_SUB)) {

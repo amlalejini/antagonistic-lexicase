@@ -9,7 +9,7 @@ EMP_BUILD_CONFIG(SortingNetworkConfig,
   VALUE(GENERATIONS, size_t, 10000, "How many generations should we run for?"),
   VALUE(NETWORK_POP_SIZE, size_t, 1000, "Population size for sorting networks"),
   VALUE(TEST_POP_SIZE, size_t, 1000, "Population size for sorting tests - how many tests exist at once?"),
-  VALUE(TEST_MODE, size_t, 0, "How do we test sorting networks? \n0: co-evolution \n1: static \n2: random"),
+  VALUE(TEST_MODE, size_t, 0, "How do we test sorting networks? \n0: co-evolution \n1: static \n2: random \n3: drift"),
   VALUE(COHORT_SIZE, size_t, 10, "How big should random cohorts be (only relevant when evaluating with random cohort method)?"),
   
   GROUP(SELECTION, "Selection settings"),
@@ -30,6 +30,7 @@ EMP_BUILD_CONFIG(SortingNetworkConfig,
   VALUE(PER_PAIR_SWAP, double, 0.001, "Per-operation operation swap rate"),
   VALUE(NETWORK_CROSSOVER_MODE, size_t, 0, "What kind of crossover do we do? \n0: None\n1: 1 point\n2: 2 point"),
   VALUE(PER_ORG_CROSSOVER, double, 0.25, "Per-organism crossover rate"),
+  VALUE(PER_ORG_MUTATION, double, 0.9, "Per-organism rate at which mutation will occur"),
   
   GROUP(SORTING_TESTS, "Sorting test settings"),
   VALUE(SORT_SIZE, size_t, 16, "Size of sequences being sorted by sorting networks"),
@@ -38,13 +39,15 @@ EMP_BUILD_CONFIG(SortingNetworkConfig,
   GROUP(TEST_MUTATION, "Settings specific to mutating sorting tests."),
   VALUE(PER_SITE_SUB, double, 0.001, "Per-site substitution (bit flip) rate."),
   VALUE(PER_SEQ_INVERSION, double, 0.01, "Per-sequence inversion rate."),
+  VALUE(PER_SEQ_RANDOMIZE, double, 0.01, "Per-sequence randomization rate."),
 
   GROUP(DATA_COLLECTION, "Settings specific to data collection"),
   VALUE(DATA_DIRECTORY, std::string, "./output", "Where to dump experiment data files"),
   VALUE(SNAPSHOT_INTERVAL, size_t, 100, "Interval to take snapshots"),
   VALUE(DOMINANT_STATS_INTERVAL, size_t, 100, "Interval to output stats about dominant organism"),
-  VALUE(AGGREGATE_STATS_INTERVAL, size_t, 100, "Interval to output aggregate stats")
-
+  VALUE(AGGREGATE_STATS_INTERVAL, size_t, 100, "Interval to output aggregate stats"),
+  VALUE(CORRECTNESS_SAMPLE_SIZE, size_t, 4096, "How many tests do we use to 'test' accuracy of a sorting network (in data collection)?"),
+  VALUE(SOLUTION_SCREEN_INTERVAL, size_t, 100, "Interval to screen networks for correct solutions"),
 
 )
 
