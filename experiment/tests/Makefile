@@ -4,7 +4,7 @@ EMP_DIR := ../../../Empirical
 EMP_SRC_DIR := $(EMP_DIR)/source
 
 
-FLAGS = -std=c++14 -Wall -Wno-unused-function -I$(EMP_DIR)/ -I$(EMP_SRC_DIR)/ -I../
+FLAGS = -std=c++14 -Wall -Wno-unused-function -I$(EMP_DIR)/ -I$(EMP_SRC_DIR)/ -I../source/
 #CXX = clang++-6.0
 CXX = g++
 
