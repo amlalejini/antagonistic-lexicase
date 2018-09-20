@@ -60,22 +60,6 @@ Experiment execution flow:
 
 */
 
-////////////////////////////////////////////////////////////////////////////////
-// TODOS
-// - [ ] Make experiment Setup safe to call twice
-//  - Data files:
-//    - Lexicase
-//      - Depth
-// - [ ] Implement network crossover (as a separate function in mutator - Crossover(p0, p1))
-// - [x] Add selective pressure for being short
-// - [x] Implement 'print network pop' => snapshot
-// - [x] Implement 'print test pop' => snapshot
-// - [x] Fix test scores; add more information to phenotype
-// - [x] Setup network testing (e.g., coevolution, static, random)
-// - [ ] Tests
-//  - [ ] Cohort lexicase selects from appropriate cohort
-////////////////////////////////////////////////////////////////////////////////
-
 class SortingNetworkExperiment {
 public:
 
@@ -90,7 +74,6 @@ public:
   using test_world_t = emp::World<test_org_t>;
 
   // Experiment toggles
-  // enum EVALUATION_METHODS { WELL_MIXED=0, RANDOM_COHORT=1 };
   enum SELECTION_METHODS { LEXICASE=0, COHORT_LEXICASE=1, TOURNAMENT=2 };
   enum TEST_MODES { COEVOLVE=0, STATIC=1, RANDOM=2, DRIFT=3 };
   enum NETWORK_CROSSOVER_MODES { NONE=0, SINGLE_PT=1, TWO_PT=2 };
@@ -175,6 +158,8 @@ protected:
 
     void Init(size_t _pop_size, size_t _cohort_size) {
       emp_assert(_cohort_size > 0);
+      population_ids.clear();
+      cohorts.clear();
       cohort_size = _cohort_size;
       const size_t num_cohorts = _pop_size / _cohort_size;
       // Initialize population ids
@@ -231,6 +216,7 @@ protected:
   struct PopIDs {
     emp::vector<size_t> popIDs;
     void Init(size_t pop_size) {
+      popIDs.clear();
       popIDs.resize(pop_size);
       for (size_t i = 0; i < pop_size; ++i) popIDs[i] = i;
     }
@@ -249,6 +235,8 @@ protected:
     size_t GetSize() const { return tests.size(); }
 
     void Generate(size_t test_size) {
+      testIDs.clear();
+      tests.clear();
       size_t total_tests = emp::Pow2(test_size);
       tests.resize(total_tests, test_size);
       size_t interval = 1;
@@ -307,8 +295,6 @@ protected:
     }
 
   } complete_test_set;
-
-  // emp::vector<size_t> networkIDs_to_test_for_correctness;
 
   // Network stats
   std::function<size_t(void)> get_networkID;
@@ -371,8 +357,6 @@ protected:
   void SnapshotNetworks();  ///< Output a snapshot of network population.
   void SnapshotTests();     ///< Output a snapshot of test population.
 
-  void SetupDominantNetworkFile();
-  void SetupDominantTestFile();
   void SetupSolutionsFile();
 
   /// Evaluate SortingNetworkOrg network against SortingTestOrg test,
@@ -423,6 +407,7 @@ public:
 
 };
 
+/// Setup is, in theory (but untested), able to be called multiple times.
 void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
   std::cout << "Running SortingNetworkExperiment setup." << std::endl;
   // Initialize localized configs
@@ -437,7 +422,19 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
   } else {
     network_world->Reset();
     test_world->Reset();
-    // TODO: clear all of the things that need to be cleared! (signals, fit sets, etc)
+    lexicase_network_fit_set.clear();
+    lexicase_test_fit_set.clear();
+    do_evaluation_sig.Clear();
+    do_selection_sig.Clear();
+    do_update_sig.Clear();
+    do_pop_snapshot_sig.Clear();
+    do_sol_screen_sig.Clear();
+    end_setup_sig.Clear();
+
+    network_cross_binomial.Delete();
+    #ifndef EMSCRIPTEN
+    sol_file.Delete();
+    #endif 
   }
 
   network_world->SetPopStruct_Mixed(true);
@@ -455,16 +452,8 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
     std::cout << "best-test: " << test_world->CalcFitnessID(dominant_test_id) << std::endl;
     
     if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger();
-    
-    // curIDs.networkID = dominant_network_id;
-    // curIDs.testID = dominant_test_id;
-    // dom_network_file->Update(update);
-    // dom_test_file->Update(update);
-
-    // TODO: Screen for solutions here (at screening interval)
     if (update % SOLUTION_SCREEN_INTERVAL == 0) do_sol_screen_sig.Trigger();
 
-    
     network_world->Update();
     network_world->ClearCache();
 
@@ -513,10 +502,6 @@ void SortingNetworkExperiment::SetupDataCollection() {
 
   // Setup solutions file
   SetupSolutionsFile();
-
-  // Setup dominant data file
-  // SetupDominantNetworkFile();
-  // SetupDominantTestFile();
 
   // Setup fitness files
   // SetupFitnessFile
@@ -815,8 +800,6 @@ void SortingNetworkExperiment::SetupNetworkSelection() {
         network_pop_ids.Shuffle(*random);
         // const uint32_t num_crosses = random->GetRandBinomial((double)NETWORK_POP_SIZE, (double)PER_ORG_CROSSOVER);
         const size_t num_crosses = network_cross_binomial->PickRandom(*random);
-        // std::cout << "Crossover" << std::endl;
-        // std::cout << "  Num crosses=" << num_crosses << std::endl;
         for (size_t i = 0; (int)i < (int)num_crosses-1; ++i) {
           emp_assert(i+1 < NETWORK_POP_SIZE, NETWORK_POP_SIZE, num_crosses);
           network_mutator.Crossover1Pt(*random,
@@ -829,10 +812,7 @@ void SortingNetworkExperiment::SetupNetworkSelection() {
     case NETWORK_CROSSOVER_MODES::TWO_PT: {
       do_selection_sig.AddAction([this]() {
         network_pop_ids.Shuffle(*random);
-        // const uint32_t num_crosses = random->GetRandBinomial((double)NETWORK_POP_SIZE, (double)PER_ORG_CROSSOVER);
         const size_t num_crosses = network_cross_binomial->PickRandom(*random);
-        // std::cout << "Crossover" << std::endl;
-        // std::cout << "  Num crosses=" << num_crosses << std::endl;
         for (size_t i = 0; (int)i < (int)num_crosses-1; ++i) {
           emp_assert(i+1 < NETWORK_POP_SIZE, NETWORK_POP_SIZE, num_crosses);
           network_mutator.Crossover2Pt(*random,
@@ -906,7 +886,6 @@ void SortingNetworkExperiment::SetupNetworkMutation() {
   network_mutator.PER_PAIR_INS = PER_PAIR_INS;
   network_mutator.PER_PAIR_DEL = PER_PAIR_DEL;
   network_mutator.PER_PAIR_SWAP = PER_PAIR_SWAP;
-  // - here
 
   if (PER_ORG_MUTATION == 1.0) {
     network_world->SetMutFun([this](network_org_t & network, emp::Random & rnd) {
@@ -1100,8 +1079,6 @@ void SortingNetworkExperiment::SnapshotNetworks() {
 
   // For each network in the population, dump the network and anything we want to know about it.
   complete_test_set.SuffleTestIDs(*random);
-  // networkIDs_to_test_for_correctness.clear();
-  // networkIDs_to_test_for_correctness.resize(0);
   for (curIDs.networkID = 0; curIDs.networkID < network_world->GetSize(); ++curIDs.networkID) {
     if (!network_world->IsOccupied(curIDs.networkID)) continue;
     file.Update();
@@ -1174,47 +1151,5 @@ void SortingNetworkExperiment::SetupSolutionsFile() {
   sol_file->PrintHeaderKeys();
 
 }
-
-// void SortingNetworkExperiment::SetupDominantNetworkFile() {
-  
-//   dom_network_file = emp::NewPtr<emp::DataFile>(DATA_DIRECTORY + "/dominant_network.csv"); 
-//   dom_network_file->SetTimingRepeat(DOMINANT_STATS_INTERVAL);
-
-//   // - Network id
-//   dom_network_file->AddFun(get_networkID, "network_id", "Network ID");
-//   // - Fitness
-//   dom_network_file->AddFun(get_network_fitness, "fitness", "");
-//   // - pass total
-//   dom_network_file->AddFun(get_network_pass_total, "pass_total", "");
-//   // - network size
-//   dom_network_file->AddFun(get_network_size, "network_size");
-//   // - num_antagonists
-//   dom_network_file->AddFun(get_network_antagonist_cnt, "num_antagonists");
-//   // - tests per antagonist
-//   dom_network_file->AddFun(get_network_sorts_per_antagonist, "sorts_per_antagonist");
-//   // - antagonist scores]
-//   dom_network_file->AddFun(get_network_passes_by_antagonist, "scores_by_antagonist");
-//   // - network
-//   dom_network_file->AddFun(get_network, "network");
-
-//   dom_network_file->PrintHeaderKeys();
-// }
-
-// void SortingNetworkExperiment::SetupDominantTestFile() {
-//   dom_test_file = emp::NewPtr<emp::DataFile>(DATA_DIRECTORY + "/dominant_test.csv"); 
-//   dom_test_file->SetTimingRepeat(DOMINANT_STATS_INTERVAL);
-
-//   dom_test_file->AddFun(get_testID, "test_id");
-//   dom_test_file->AddFun(get_test_fitness, "fitness");
-//   dom_test_file->AddFun(get_test_pass_total, "pass_total");
-//   dom_test_file->AddFun(get_test_fail_total, "fail_total");
-//   dom_test_file->AddFun(get_test_sorts_per_antagonist, "sorts_per_antagonist");
-//   dom_test_file->AddFun(get_test_passes_by_antagonist, "passes_by_antagonist");
-//   dom_test_file->AddFun(get_test_size, "test_size");
-//   dom_test_file->AddFun(get_test, "test");
-
-//   dom_test_file->PrintHeaderKeys();
-// }
-
 
 #endif
