@@ -54,6 +54,8 @@ public:
 
   bool Evaluate(const SortingNetwork & network) const;
 
+  bool Validate(size_t test_size, int min_val, int max_val);
+
   void Print(std::ostream & out=std::cout) const;
 
 };
@@ -86,6 +88,14 @@ bool SortingTest::Evaluate(const SortingNetwork & network) const {
   return std::is_sorted(std::begin(eval_test), std::end(eval_test));
 }
 
+bool SortingTest::Validate(size_t test_size, int min_val, int max_val) {
+  if (test.size() != test_size) return false; 
+  for (size_t i = 0; i < test.size(); ++i) {
+    if (test[i] < min_val || test[i] > max_val) return false;
+  }
+  return true;
+}
+
 void SortingTest::Print(std::ostream & out) const {
   out << "[";
   for (size_t i = 0; i < test.size(); ++i) {
@@ -94,6 +104,8 @@ void SortingTest::Print(std::ostream & out) const {
   }
   out << "]";
 }
+
+
 
 
 #endif

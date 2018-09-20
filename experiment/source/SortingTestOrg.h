@@ -35,6 +35,13 @@ public:
       }
     }
 
+    bool Validate(int min_val, int max_val) {
+      for (size_t tID = 0; tID < test_set.size(); ++tID) {
+        if (!test_set[tID].Validate(test_size, min_val, max_val)) return false;
+      }
+      return true;
+    }
+
   };
 
   struct Phenotype {
