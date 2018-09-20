@@ -7,14 +7,24 @@ antagonistic coevolution.
 
 <!-- TOC -->
 
+- [Questions/Hypotheses](#questionshypotheses)
 - [Case study problems](#case-study-problems)
   - [Minimal Sorting Networks](#minimal-sorting-networks)
     - [Implementation issues/decisions to make](#implementation-issuesdecisions-to-make)
     - [Experimental design](#experimental-design)
-- [Stretch goals](#stretch-goals)
+- [To dos](#to-dos)
 - [References](#references)
 
 <!-- /TOC -->
+
+## Questions/Hypotheses
+
+- Q1: Is lexicase selection an effective framework for (antagonistic) coevolution?
+  - Approach: demonstrate it as a technique
+    - If above goes alright: Compare with other frameworks for facilitating
+      antagonistic coevolution
+- Q2: How does coevolutionary lexicase selection compare to regular lexicase selection?
+  - Approach: compare coevolutionary lexicase performance w/regular lexicase performance
 
 ## Case study problems
 
@@ -171,9 +181,10 @@ Project implementation
     - Tournament
     - Lexicase
 
-## Stretch goals
+## To dos
 
 - [ ] Sorting network visualization
+- [ ] Testing
 
 ## References
 
