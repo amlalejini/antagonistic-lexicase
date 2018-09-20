@@ -1,6 +1,6 @@
 TEST_NAMES = sorting_network
 
-EMP_DIR := ../../../../Empirical
+EMP_DIR := ../../../Empirical
 EMP_SRC_DIR := $(EMP_DIR)/source
 
 
