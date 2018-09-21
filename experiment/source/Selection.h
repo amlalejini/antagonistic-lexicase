@@ -299,7 +299,7 @@ namespace emp {
       for (size_t i = 0; i < t_size; ++i) {
         entries.push_back(world.GetRandom().GetUInt(0, cohort.size()));
       }
-      double base_fit = base_fitness[entries[0]];
+      double best_fit = base_fitness[entries[0]];
       size_t best_id = entries[0];
       // Search for a higher fit org in tournament.
       for (size_t i = 1; i < t_size; ++i) {
