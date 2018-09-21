@@ -124,6 +124,7 @@ protected:
   size_t update;
   size_t dominant_network_id;
   size_t dominant_test_id;
+  size_t smallest_known_sol_size;
   size_t MAX_PASSES;
 
   emp::Ptr<emp::Random> random;
@@ -209,8 +210,7 @@ protected:
   struct StatID {
     size_t networkID;
     size_t testID;
-    bool network_correct;
-    StatID(size_t nID=0, size_t tID=0) : networkID(nID), testID(tID), network_correct(false) { ; }
+    StatID(size_t nID=0, size_t tID=0) : networkID(nID), testID(tID) { ; }
   } curIDs;
 
   struct PopIDs {
@@ -320,6 +320,7 @@ protected:
   std::function<std::string(void)> get_test;
 
   emp::Ptr<emp::DataFile> sol_file;
+  emp::Ptr<emp::DataFile> small_sol_file;
 
   // Experiment signals
   emp::Signal<void(void)> do_evaluation_sig;  ///< Trigger network/test evaluations.
@@ -328,6 +329,7 @@ protected:
 
   emp::Signal<void(void)> do_pop_snapshot_sig; ///< Trigger population snapshot
   emp::Signal<void(void)> do_sol_screen_sig;  ///< Trigger a screen for solutions
+  emp::Signal<void(size_t)> do_small_sol_screen_sig;
 
   emp::Signal<void(void)> end_setup_sig;    ///< Triggered at beginning of a run.
 
@@ -378,6 +380,7 @@ public:
 
       #ifndef EMSCRIPTEN
       sol_file.Delete();
+      small_sol_file.Delete();
       #endif 
 
       network_world.Delete();
@@ -429,11 +432,13 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
     do_update_sig.Clear();
     do_pop_snapshot_sig.Clear();
     do_sol_screen_sig.Clear();
+    do_small_sol_screen_sig.Clear();
     end_setup_sig.Clear();
 
     network_cross_binomial.Delete();
     #ifndef EMSCRIPTEN
     sol_file.Delete();
+    small_sol_file.Delete();
     #endif 
   }
 
@@ -444,6 +449,7 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
   network_cross_binomial = emp::NewPtr<emp::Binomial>(PER_ORG_CROSSOVER, NETWORK_POP_SIZE);
 
   complete_test_set.Generate(SORT_SIZE);
+  smallest_known_sol_size = MAX_NETWORK_SIZE + 1;
 
   // Add network world updates
   do_update_sig.AddAction([this]() {
@@ -660,6 +666,7 @@ void SortingNetworkExperiment::SetupEvaluation() {
           // Evaluate network, nID, on test, tID.
           const size_t passes = EvaluateNetworkOrg(network, test);
           network.GetPhenotype().test_results[tID] = passes;
+
           test.GetPhenotype().test_results[nID] = passes;
         }
       }
@@ -671,15 +678,22 @@ void SortingNetworkExperiment::SetupEvaluation() {
     // Sum pass totals for networks.
     dominant_network_id = 0;
     double cur_best = 0;
+    complete_test_set.swap_id = 0;
     for (size_t nID = 0; nID < network_world->GetSize(); ++nID) {
       if (!network_world->IsOccupied(nID)) continue;
       network_org_t & network = network_world->GetOrg(nID);
       const size_t pass_total = emp::Sum(network.GetPhenotype().test_results);
       network.GetPhenotype().num_passes = pass_total;
+      // Is this highest fitness network this generation?
       if (pass_total > cur_best || nID == 0) {
         dominant_network_id = nID;
         cur_best = pass_total;
-      } 
+      }
+      // At this point, network has been evaluated against all tests. Screen
+      // for possible smallest known solution.
+      if (pass_total == MAX_PASSES && network.GetSize() < smallest_known_sol_size) {
+        do_small_sol_screen_sig.Trigger(nID);
+      }
     }
     // Sum pass totals for tests.
     dominant_test_id = 0;
@@ -1149,6 +1163,31 @@ void SortingNetworkExperiment::SetupSolutionsFile() {
   sol_file->AddFun(get_network, "network");
   
   sol_file->PrintHeaderKeys();
+
+  // Setup small sol file (will only have 1 solution per size found)
+  small_sol_file = emp::NewPtr<emp::DataFile>(DATA_DIRECTORY + "/small_solutions.csv");
+
+  do_small_sol_screen_sig.AddAction([this](size_t id) {
+    curIDs.networkID = id;
+    network_org_t & network = network_world->GetOrg(id);
+    if (network.GetPhenotype().num_passes == MAX_PASSES && network.GetSize() < smallest_known_sol_size) {
+      bool correct = complete_test_set.Correct(network.GetGenome());
+      if (correct) {
+        smallest_known_sol_size = network.GetSize();
+        small_sol_file->Update();
+      }
+    }
+  });
+
+  small_sol_file->AddFun(get_update, "update");
+  small_sol_file->AddFun(get_networkID, "network_id", "Network ID");
+  small_sol_file->AddFun(get_network_fitness, "fitness");
+  small_sol_file->AddFun(get_network_pass_total, "pass_total");
+  small_sol_file->AddFun(get_network_size, "network_size");
+  small_sol_file->AddFun(get_network_antagonist_cnt, "num_antagonists");
+  small_sol_file->AddFun(get_network_sorts_per_antagonist, "sorts_per_antagonist");
+  small_sol_file->AddFun(get_network, "network");
+  small_sol_file->PrintHeaderKeys();
 
 }
 

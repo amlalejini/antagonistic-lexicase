@@ -12,7 +12,6 @@
 namespace emp {
   template<typename ORG> class World;
 
-
   /// NOTE: This method was a copy-pasta version of the Empirical lexicase select.
   /// - Needed to modify internals to support experiment
   template<typename ORG>
@@ -238,6 +237,82 @@ namespace emp {
       const size_t winner = world.GetRandom().GetUInt(cur_orgs.size());
       const size_t reproID = cohort[cur_orgs[winner]];
       world.DoBirth(world.GetGenomeAt(reproID), reproID);
+    }
+  }
+
+  /// Assumes fitness [0:BIG NUMBER] (i.e., non-negative to qualify for resource)
+  template<typename ORG>
+  void CohortEcoSelect_NAIVE(World<ORG> & world,
+                             const emp::vector<std::function<double(ORG &)> > & extra_funs,
+                             const emp::vector<double> & pool_sizes,
+                             const emp::vector<size_t> & cohort,
+                             size_t t_size,
+                             size_t tourny_count=1) 
+  {
+    emp_assert(world.GetFitFun(), "Must define a base fitness function");
+    // TODO - more asserts for safety!
+    // emp_assert(world.GetSize() > 0);
+    // emp_assert(t_size > 0 && t_size <= world.GetSize(), t_size, world.GetSize());
+
+    // Setup info to track fitnesses
+    emp::vector<double> base_fitness(cohort.size());
+    emp::vector< emp::vector<double> > extra_fitnesses(extra_funs.size());
+    emp::vector<double> max_extra_fit(extra_funs.size(), 0.0);
+    emp::vector<size_t> max_count(extra_funs.size(), 0);
+    for (size_t i = 0; i < extra_funs.size(); ++i) {
+      extra_fitnesses[i].resize(cohort.size());
+    }
+
+    // Collect all fitness info (from each individual in cohort)
+    for (size_t cID = 0; cID < cohort.size(); ++cID) {
+      const size_t worldID = cohort[cID];
+      base_fitness[cID] = world.CalcFitnessID(worldID);
+      for (size_t exID = 0; exID < extra_funs.size(); ++exID) {
+        double cur_fit = extra_funs[exID](world.GetOrg(worldID));
+        extra_fitnesses[exID][cID] = cur_fit;
+        if (cur_fit > max_extra_fit[exID]) {
+          max_extra_fit[exID] = cur_fit;
+          max_count[exID] = 1;
+        } else if (cur_fit == max_extra_fit[exID]) {
+          max_count[exID]++;
+        }
+      }
+    }
+
+    // Readjust base fitnesses to reflect extra resources.
+    for (size_t exID = 0; exID < extra_funs.size(); ++exID) {
+      if (max_count[exID] == 0) continue; // No one gets this reward.
+      // The current bonus is divided up among the organisms that earned it.
+      const double cur_bonus = pool_sizes[exID] / max_count[exID];
+      for (size_t cID = 0; cID < cohort.size(); ++cID) {
+        // If this organism is the best at the current resource, give it the bonus.
+        if (extra_fitnesses[exID][cID] == max_extra_fit[exID]) {
+          base_fitness[cID] += cur_bonus;
+        }
+      }
+    }
+
+    // Do tournament selection w/adjusted fitnesses
+    emp::vector<size_t> entries;
+    for (size_t T = 0; T < tourny_count; ++T) {
+      entries.clear();
+      for (size_t i = 0; i < t_size; ++i) {
+        entries.push_back(world.GetRandom().GetUInt(0, cohort.size()));
+      }
+      double base_fit = base_fitness[entries[0]];
+      size_t best_id = entries[0];
+      // Search for a higher fit org in tournament.
+      for (size_t i = 1; i < t_size; ++i) {
+        const double cur_fit = base_fitness[entries[i]];
+        if (cur_fit > best_fit) {
+          best_fit = cur_fit;
+          best_id = entries[i];
+        }
+      }
+
+      // Place highest fitness into the next generation.
+      const size_t worldID = cohort[best_id];
+      world.DoBirth(world.GetGenomeAt(worldID), worldID, 1);
     }
   }
 
