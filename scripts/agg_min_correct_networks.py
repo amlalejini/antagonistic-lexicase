@@ -49,7 +49,7 @@ def main():
         
         file_content = None
         with open(run_sols, "r") as fp:
-            file_content = fp.read().split("\n")
+            file_content = fp.read().strip().split("\n")
         header = file_content[0].split(",")
         header_lu = {header[i].strip():i for i in range(0, len(header))}
         file_content = file_content[1:]
