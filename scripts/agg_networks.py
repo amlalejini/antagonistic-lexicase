@@ -67,7 +67,7 @@ def main():
             if len(solutions) > 0:
                 min_network=0
                 for i in range(0, len(solutions)):
-                    if solutions[i][header_lu["network_size"]] < solutions[min_network][header_lu["network_size"]]:
+                    if float(solutions[i][header_lu["network_size"]]) < float(solutions[min_network][header_lu["network_size"]]):
                         min_network = i
                 min_sol = solutions[min_network]
                 network_size = min_sol[header_lu["network_size"]]
