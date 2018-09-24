@@ -104,7 +104,7 @@ def main():
             treatment = run
             # Pull out all pop directories
             out_dir = os.path.join(run_dir, "output")
-            pops = [p for p in os.listdir(data_directory) if "pop_" in p]
+            pops = [p for p in os.listdir(out_dir) if "pop_" in p]
             pops.sort()
             for pop in pops:
                 print("  Extracting from {}".format(pop))
@@ -120,11 +120,11 @@ def main():
                 file_content = file_content[1:]
 
                 networks = [l for l in csv.reader(file_content, quotechar='"', delimiter=',', quoting=csv.QUOTE_ALL, skipinitialspace=True)]
-
                 for network in networks:
                     #"treatment,run_id,network_size,update,fitness\n"
                     pop_size_content += ",".join([treatment, run_id, network[header_lu["network_size"]], network[header_lu["update"]], network[header_lu["fitness"]]]) + "\n"
-        with open(os.path.join(os.path.join(dump, "network_pop_size_ot.csv"))) as fp:
+
+        with open(os.path.join(dump, "network_pop_size_ot.csv"), "w") as fp:
             fp.write(pop_size_content)
 
 
