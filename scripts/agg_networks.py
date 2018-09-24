@@ -113,7 +113,7 @@ def main():
 
                 # Pull out network pop snapshot info
                 file_content = None
-                with open(os.path.join(pop_dir, "network_pop_{}".format(pop_ud)), "r") as fp:
+                with open(os.path.join(pop_dir, "network_pop_{}.csv".format(pop_ud)), "r") as fp:
                     file_content = fp.read().strip().split("\n")
                 header = file_content[0].split(",")
                 header_lu = {header[i].strip():i for i in range(0, len(header))}
