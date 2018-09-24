@@ -122,7 +122,7 @@ def main():
                 networks = [l for l in csv.reader(file_content, quotechar='"', delimiter=',', quoting=csv.QUOTE_ALL, skipinitialspace=True)]
                 for network in networks:
                     #"treatment,run_id,network_size,update,fitness\n"
-                    pop_size_content += ",".join([treatment, run_id, network[header_lu["network_size"]], network[header_lu["update"]], network[header_lu["fitness"]]]) + "\n"
+                    pop_size_content += ",".join([treatment, run_id, network[header_lu["network_size"]], pop_ud, network[header_lu["fitness"]]]) + "\n"
 
         with open(os.path.join(dump, "network_pop_size_ot.csv"), "w") as fp:
             fp.write(pop_size_content)
