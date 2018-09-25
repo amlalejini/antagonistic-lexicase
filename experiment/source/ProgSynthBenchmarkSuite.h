@@ -16,10 +16,13 @@
  // TODO: 
  // - [ ] where relevant, setup eval cache(?); do this in organism?
 
+#include <algorithm>
+#include <unordered_set>
 #include "base/array.h"
 #include "base/vector.h"
 #include "tools/math.h"
 #include "tools/Random.h"
+#include "tools/set_utils.h"
 #include "tools/vector_utils.h"
 
 /// Test case (1): Number IO
@@ -845,13 +848,151 @@ public:
 /// - Description: Given two equal-sized vectors of integers, return a vector
 ///   of integers that contains the sum of the input vectors at each index.
 class VectorsSummedTest {
+public:
+  using test_t = emp::array< emp::vector<int>, 2 >;
+  using out_t = emp::vector<int>;
 
+  static constexpr size_t DEFAULT_MIN_VEC_LEN = 0;
+  static constexpr size_t DEFAULT_MAX_VEC_LEN = 50;
+  static constexpr int DEFAULT_MIN_VAL = -1000;
+  static constexpr int DEFAULT_MAX_VAL = 1000;
+
+protected:
+  test_t test;
+
+public:
+
+  VectorsSummedTest() : test() { ; }
+  VectorsSummedTest(emp::Random & rnd,
+                size_t min_vec_len=DEFAULT_MIN_VEC_LEN, size_t max_vec_len=DEFAULT_MAX_VEC_LEN,
+                int min_val=DEFAULT_MIN_VAL, int max_val=DEFAULT_MAX_VAL)
+    : test() { RandomizeTest(rnd, min_vec_len, max_vec_len, min_val, max_val); }
+
+  VectorsSummedTest(VectorsSummedTest &&) = default;
+  VectorsSummedTest(const VectorsSummedTest &) = default;
+
+  VectorsSummedTest & operator=(const VectorsSummedTest &) = default;
+  VectorsSummedTest & operator=(VectorsSummedTest &&) = default;
+
+  bool operator==(const VectorsSummedTest & in) const { return in.test == test; }
+  bool operator!=(const VectorsSummedTest & in) const { return !(in == *this); }
+  bool operator<(const VectorsSummedTest & in) const { return test < in.test; }
+
+  void RandomizeTest(emp::Random & rnd,
+                     size_t min_vec_len=DEFAULT_MIN_VEC_LEN, size_t max_vec_len=DEFAULT_MAX_VEC_LEN,
+                     int min_val=DEFAULT_MIN_VAL, int max_val=DEFAULT_MAX_VAL) {
+    size_t vec_len = rnd.GetUInt(min_vec_len, max_vec_len+1);
+    test[0].resize(vec_len, 0);
+    test[1].resize(vec_len, 0);
+    for (size_t i = 0; i < vec_len; ++i) {
+      test[0][i] = rnd.GetInt(min_val, max_val+1);
+      test[1][i] = rnd.GetInt(min_val, max_val+1);
+    }
+  }
+
+  bool Evaluate(const out_t & out) {
+    emp_assert(test[0].size() == test[1].size());
+    emp_assert(test[0].size() == out.size());
+    for (size_t i = 0; i < out.size(); ++i) {
+      if (out[i] != test[0][i] + test[1][i]) return false;
+    }
+    return true;
+  }
+
+  bool Validate(size_t min_vec_len=DEFAULT_MIN_VEC_LEN, size_t max_vec_len=DEFAULT_MAX_VEC_LEN,
+                int min_val=DEFAULT_MIN_VAL, int max_val=DEFAULT_MAX_VAL) {
+    if (test[0].size() != test[1].size()) return false;
+    if (test[0].size() < min_vec_len || test[0].size() > max_vec_len) return false;
+    for (size_t i = 0; i < test[0].size(); ++i) {
+      if (test[0][i] < min_val || test[0][i] > max_val) return false;
+      if (test[1][i] < min_val || test[1][i] > max_val) return false;
+    }
+    return true;
+  }
+
+  void Print(std::ostream & out=std::cout) const {
+    out << "[[";
+    for (size_t i = 0; i < test[0].size(); ++i) {
+      if (i) out << ",";
+      out << test[0][i];
+    }
+    out << "],";
+    for (size_t i = 0; i < test[1].size(); ++i) {
+      if (i) out << ",";
+      out << test[1][i];
+    }
+    out << "]]";
+  }
 };
 
 /// Test case (21): Negative to zero
 /// - Description: Given a vector of integers, return the vector where all negative
 ///   integers have been replaced by 0.
 class NegativeToZeroTest {
+public:
+  using test_t = emp::vector<int>;
+  using out_t = emp::vector<int>;
+
+  static constexpr size_t DEFAULT_MIN_TEST_LEN=0;
+  static constexpr size_t DEFAULT_MAX_TEST_LEN=50;
+  static constexpr int DEFAULT_MIN_TEST_VAL=-1000.0;
+  static constexpr int DEFAULT_MAX_TEST_VAL=1000.0;
+
+protected:
+  test_t test;
+
+public:
+
+  NegativeToZeroTest() : test() { ; }
+  NegativeToZeroTest(emp::Random & rnd,
+                size_t min_test_len=DEFAULT_MIN_TEST_LEN, size_t max_test_len=DEFAULT_MAX_TEST_LEN,
+                int min_test_val=DEFAULT_MIN_TEST_VAL, int max_test_val=DEFAULT_MAX_TEST_VAL)
+    : test() { RandomizeTest(rnd, min_test_len, max_test_len, min_test_val, max_test_val); }
+
+  NegativeToZeroTest(NegativeToZeroTest &&) = default;
+  NegativeToZeroTest(const NegativeToZeroTest &) = default;
+
+  NegativeToZeroTest & operator=(const NegativeToZeroTest &) = default;
+  NegativeToZeroTest & operator=(NegativeToZeroTest &&) = default;
+
+  bool operator==(const NegativeToZeroTest & in) const { return in.test == test; }
+  bool operator!=(const NegativeToZeroTest & in) const { return !(in == *this); }
+  bool operator<(const NegativeToZeroTest & in) const { return test < in.test; }
+
+  void RandomizeTest(emp::Random & rnd,
+                     size_t min_test_len=DEFAULT_MIN_TEST_LEN, size_t max_test_len=DEFAULT_MAX_TEST_LEN,
+                     int min_test_val=DEFAULT_MIN_TEST_VAL, int max_test_val=DEFAULT_MAX_TEST_VAL) {
+    test.resize(rnd.GetUInt(min_test_len, max_test_len+1), min_test_val);
+    for (size_t i = 0; i < test.size(); ++i) {
+      test[i] = rnd.GetInt(min_test_val, max_test_val+1);
+    }
+  }
+
+  bool Evaluate(const out_t & out) {
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (test[i] < 0 && out[i] != 0) return false;
+      else if (out[i] != test[i]) return false;
+    }
+    return true;
+  }
+
+  bool Validate(size_t min_test_len=DEFAULT_MIN_TEST_LEN, size_t max_test_len=DEFAULT_MAX_TEST_LEN,
+                int min_test_val=DEFAULT_MIN_TEST_VAL, int max_test_val=DEFAULT_MAX_TEST_VAL) {
+    if (test.size() > max_test_len || test.size() < min_test_len) return false;
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (test[i] > max_test_val || test[i] < min_test_val) return false;
+    }
+    return true;
+  }
+
+  void Print(std::ostream & out=std::cout) const {
+    out << "[";
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (i) out << ",";
+      out << test[i];
+    }
+    out << "]";
+  }
 
 };
 
@@ -860,6 +1001,60 @@ class NegativeToZeroTest {
 ///   own line starting with the least significant digit. A negative integer
 ///   should have the negative sign printed before the most significant digit.
 class DigitsTest {
+public:
+  using out_t = emp::vector<int>;
+
+  static constexpr int DEFAULT_MIN_N = 1;
+  static constexpr int DEFAULT_MAX_N = 100;
+
+protected:
+  int test;
+
+public:
+
+  DigitsTest()
+  : test(DEFAULT_MIN_N) { ; }
+  
+  DigitsTest(emp::Random & rnd, 
+             int min_n=DEFAULT_MIN_N, int max_n=DEFAULT_MAX_N)
+    : test(DEFAULT_MIN_N)
+  { RandomizeTest(rnd, min_n, max_n); }
+
+  DigitsTest(DigitsTest &&) = default;
+  DigitsTest(const DigitsTest &) = default;
+
+  DigitsTest & operator=(const DigitsTest &) = default;
+  DigitsTest & operator=(DigitsTest &&) = default;
+
+  bool operator==(const DigitsTest & in) const { return in.test == test; }
+  bool operator!=(const DigitsTest & in) const { return !(in == *this); }
+  bool operator<(const DigitsTest & in) const { return test < in.test; }
+
+  void RandomizeTest(emp::Random & rnd, 
+                     int min_n=DEFAULT_MIN_N, int max_n=DEFAULT_MAX_N) {
+    emp_assert(min_n <= max_n);
+    test = rnd.GetInt(min_n, max_n+1);
+  }
+  
+  // todo - check that neg num comes out properly
+  bool Evaluate(const out_t & out) {
+    int n = test;
+    emp::vector<int> digits;
+    while (n) {
+      digits.emplace_back(n%10);
+      n/=10;
+    }
+    return out == digits;
+  }
+
+  bool Validate(emp::Random & rnd, 
+                int min_n=DEFAULT_MIN_N, int max_n=DEFAULT_MAX_N) {
+    return test <= max_n && test >= min_n;
+  }
+
+  void Print(std::ostream & out=std::cout) const {
+    out << test;
+  }
 
 };
 
@@ -870,19 +1065,227 @@ class DigitsTest {
 ///   must print 'Student has a X grade.', where X is A, B, C, D, of F depending
 ///   on the thresholds and the numeric grade.
 class GradeTest {
+public:
+  using test_t = emp::array<int, 5>;
 
+  enum GRADE_TYPE { A=0, B=1, C=2, D=3, F=4 };
+
+  static constexpr int DEFAULT_MIN_GRADE_VAL = 0;
+  static constexpr int DEFAULT_MAX_GRADE_VAL = 100;
+
+protected:
+  test_t test;
+
+public:
+  GradeTest()
+    : test({DEFAULT_MIN_GRADE_VAL, 
+            DEFAULT_MIN_GRADE_VAL+1, 
+            DEFAULT_MIN_GRADE_VAL+2,
+            DEFAULT_MIN_GRADE_VAL+3,
+            DEFAULT_MIN_GRADE_VAL}) { ; }
+  
+  GradeTest(emp::Random & rnd, 
+            int min_g=DEFAULT_MIN_GRADE_VAL, int max_g=DEFAULT_MAX_GRADE_VAL)
+    : test({0,0,0,0,0})
+  { RandomizeTest(rnd, min_g, max_g); }
+
+  GradeTest(GradeTest &&) = default;
+  GradeTest(const GradeTest &) = default;
+
+  GradeTest & operator=(const GradeTest &) = default;
+  GradeTest & operator=(GradeTest &&) = default;
+
+  bool operator==(const GradeTest & in) const { return in.test == test; }
+  bool operator!=(const GradeTest & in) const { return !(in == *this); }
+  bool operator<(const GradeTest & in) const { return test < in.test; }
+
+  int GetAThresh() const { return test[0]; }
+  int GetBThresh() const { return test[1]; }
+  int GetCThresh() const { return test[2]; }
+  int GetDThresh() const { return test[3]; }
+  int GetStuGrade() const { return test[4]; }
+
+  void RandomizeTest(emp::Random & rnd, 
+                     int min_g=DEFAULT_MIN_GRADE_VAL, int max_g=DEFAULT_MAX_GRADE_VAL) {
+    emp_assert(min_g <= max_g);
+    emp_assert(max_g - min_g > 5);
+    emp::vector<int> thresholds(4, 0);
+    std::unordered_set<int> set;
+    for (size_t i = 0; i < thresholds.size(); ++i) {
+      while (true) {
+       int candidate_thresh = rnd.GetInt(min_g, max_g+1);
+       if (!emp::Has(set, candidate_thresh)) {
+         thresholds.emplace_back(candidate_thresh);
+         set.emplace(candidate_thresh);
+         break;
+       }
+      }
+    }
+    emp::Sort(thresholds);
+    test[0] = thresholds[3];
+    test[1] = thresholds[2];
+    test[2] = thresholds[1];
+    test[3] = thresholds[0];
+    test[4] = rnd.GetInt(min_g, max_g+1);
+  }
+  
+  // todo - check that neg num comes out properly
+  bool Evaluate(GRADE_TYPE out) {
+    GRADE_TYPE letter;
+    if (GetStuGrade() >= GetAThresh()) letter = GRADE_TYPE::A;
+    else if (GetStuGrade() >= GetBThresh()) letter = GRADE_TYPE::B;
+    else if (GetStuGrade() >= GetCThresh()) letter = GRADE_TYPE::C;
+    else if (GetStuGrade() >= GetDThresh()) letter = GRADE_TYPE::D;
+    else letter = GRADE_TYPE::F;
+    return out == letter;
+  }
+
+  bool Validate(emp::Random & rnd, 
+                int min_n=DEFAULT_MIN_GRADE_VAL, int max_n=DEFAULT_MAX_GRADE_VAL) {  
+    emp::vector<int> thresholds({test[0], test[1], test[2], test[3]});
+    emp::Sort(thresholds);
+    if (test[0] != thresholds[3] || test[1] != thresholds[2] || test[2] != thresholds[1] || test[3] != thresholds[0]) return false;
+    std::unordered_set<int> set;
+    for (size_t i = 0; i < thresholds.size(); ++i) {
+      set.emplace(thresholds[i]);
+    }
+    if (set.size() != thresholds.size()) return false;
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (test[i] < min_n || test[i] > max_n) return false;
+    }
+    return true;
+  }
+
+  void Print(std::ostream & out=std::cout) const {
+    out << "[";
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (i) out << ",";
+      out << test[i];
+    }
+    out << "]";
+  }
 };
 
 /// Test case (27): Median
 /// - Description: Given 3 integers, print their median.
 class MedianTest {
+public:
+  using test_t = emp::array<int, 3>;
 
+  static constexpr int DEFAULT_MIN_VAL = -100;
+  static constexpr int DEFAULT_MAX_VAL = 100;
+
+protected:
+  test_t test;
+
+public:
+  MedianTest()
+    : test({DEFAULT_MIN_VAL, 
+            DEFAULT_MIN_VAL, 
+            DEFAULT_MIN_VAL}) { ; }
+  
+  MedianTest(emp::Random & rnd, 
+            int min_n=DEFAULT_MIN_VAL, int max_n=DEFAULT_MAX_VAL)
+    : test({0,0,0})
+  { RandomizeTest(rnd, min_n, max_n); }
+
+  MedianTest(MedianTest &&) = default;
+  MedianTest(const MedianTest &) = default;
+
+  MedianTest & operator=(const MedianTest &) = default;
+  MedianTest & operator=(MedianTest &&) = default;
+
+  bool operator==(const MedianTest & in) const { return in.test == test; }
+  bool operator!=(const MedianTest & in) const { return !(in == *this); }
+  bool operator<(const MedianTest & in) const { return test < in.test; }
+
+  void RandomizeTest(emp::Random & rnd, 
+                     int min_n=DEFAULT_MIN_VAL, int max_n=DEFAULT_MAX_VAL) {
+    for (size_t i = 0; i < test.size(); ++i) test[i] = rnd.GetInt(min_n, max_n+1);
+  }
+  
+  bool Evaluate(int out) {
+    emp::vector<int> vals(test);
+    emp::Sort(vals);
+    return out == vals[1];
+  }
+
+  bool Validate(emp::Random & rnd, 
+                int min_n=DEFAULT_MIN_VAL, int max_n=DEFAULT_MAX_VAL) {  
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (test[i] > max_n || test[i] < min_n) return false;
+    }
+    return true;
+  }
+
+  void Print(std::ostream & out=std::cout) const {
+    out << "[";
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (i) out << ",";
+      out << test[i];
+    }
+    out << "]";
+  }
 };
 
 /// Test case (28): Smallest
 /// - Description: Given 4 integers, print the smallest of them.
 class SmallestTest {
+public:
+  using test_t = emp::array<int, 4>;
 
+  static constexpr int DEFAULT_MIN_VAL = -100;
+  static constexpr int DEFAULT_MAX_VAL = 100;
+
+protected:
+  test_t test;
+
+public:
+  SmallestTest()
+    : test({DEFAULT_MIN_VAL, 
+            DEFAULT_MIN_VAL, 
+            DEFAULT_MIN_VAL}) { ; }
+  
+  SmallestTest(emp::Random & rnd, 
+            int min_n=DEFAULT_MIN_VAL, int max_n=DEFAULT_MAX_VAL)
+    : test({0,0,0})
+  { RandomizeTest(rnd, min_n, max_n); }
+
+  SmallestTest(SmallestTest &&) = default;
+  SmallestTest(const SmallestTest &) = default;
+
+  SmallestTest & operator=(const SmallestTest &) = default;
+  SmallestTest & operator=(SmallestTest &&) = default;
+
+  bool operator==(const SmallestTest & in) const { return in.test == test; }
+  bool operator!=(const SmallestTest & in) const { return !(in == *this); }
+  bool operator<(const SmallestTest & in) const { return test < in.test; }
+
+  void RandomizeTest(emp::Random & rnd, 
+                     int min_n=DEFAULT_MIN_VAL, int max_n=DEFAULT_MAX_VAL) {
+    for (size_t i = 0; i < test.size(); ++i) test[i] = rnd.GetInt(min_n, max_n+1);
+  }
+  
+  bool Evaluate(int out) {
+    return out == *std::min_element(test.begin(), test.end());
+  }
+
+  bool Validate(emp::Random & rnd, 
+                int min_n=DEFAULT_MIN_VAL, int max_n=DEFAULT_MAX_VAL) {  
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (test[i] > max_n || test[i] < min_n) return false;
+    }
+    return true;
+  }
+
+  void Print(std::ostream & out=std::cout) const {
+    out << "[";
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (i) out << ",";
+      out << test[i];
+    }
+    out << "]";
+  }
 };
 
 #endif

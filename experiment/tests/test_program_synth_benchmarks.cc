@@ -74,10 +74,108 @@ TEST_CASE("EvenSquaresTest", "[prog_synth_benchmarks]") {
 }
 
 // TODO
+TEST_CASE("WallisPiTest", "[prog_synth_benchmarks]") {
+  constexpr int SEED = 2;
+  emp::Random random(SEED);
+
+  WallisPiTest emptytest;
+
+}
+
+// TODO
 TEST_CASE("LastIndexOfZeroTest", "[prog_synth_benchmarks]") {
   constexpr int SEED = 2;
   emp::Random random(SEED);
 
   LastIndexOfZeroTest emptytest;
+
+}
+
+// TODO
+TEST_CASE("VectorAverageTest", "[prog_synth_benchmarks]") {
+  constexpr int SEED = 2;
+  emp::Random random(SEED);
+
+  VectorAverageTest emptytest;
+
+}
+
+// TODO
+TEST_CASE("CountOddsTest", "[prog_synth_benchmarks]") {
+  constexpr int SEED = 2;
+  emp::Random random(SEED);
+
+  CountOddsTest emptytest;
+
+}
+
+// TODO
+TEST_CASE("MirrorImageTest", "[prog_synth_benchmarks]") {
+  constexpr int SEED = 2;
+  emp::Random random(SEED);
+
+  MirrorImageTest emptytest;
+
+}
+
+// TODO
+TEST_CASE("SumOfSquaresTest", "[prog_synth_benchmarks]") {
+  constexpr int SEED = 2;
+  emp::Random random(SEED);
+
+  SumOfSquaresTest emptytest;
+
+}
+
+// TODO
+TEST_CASE("VectorsSummedTest", "[prog_synth_benchmarks]") {
+  constexpr int SEED = 2;
+  emp::Random random(SEED);
+
+  VectorsSummedTest emptytest;
+
+}
+
+// TODO
+TEST_CASE("NegativeToZeroTest", "[prog_synth_benchmarks]") {
+  constexpr int SEED = 2;
+  emp::Random random(SEED);
+
+  NegativeToZeroTest emptytest;
+
+}
+
+// TODO
+TEST_CASE("DigitsTest", "[prog_synth_benchmarks]") {
+  constexpr int SEED = 2;
+  emp::Random random(SEED);
+
+  DigitsTest emptytest;
+}
+
+// TODO
+TEST_CASE("GradeTest", "[prog_synth_benchmarks]") {
+  constexpr int SEED = 2;
+  emp::Random random(SEED);
+
+  GradeTest emptytest;
+
+}
+
+// TODO
+TEST_CASE("MedianTest", "[prog_synth_benchmarks]") {
+  constexpr int SEED = 2;
+  emp::Random random(SEED);
+
+  MedianTest emptytest;
+
+}
+
+// TODO
+TEST_CASE("SmallestTest", "[prog_synth_benchmarks]") {
+  constexpr int SEED = 2;
+  emp::Random random(SEED);
+
+  SmallestTest emptytest;
 
 }
