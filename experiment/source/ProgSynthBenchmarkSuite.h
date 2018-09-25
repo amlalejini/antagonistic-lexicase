@@ -219,6 +219,8 @@ public:
   int GetStart() const { return test[0]; }
   int GetEnd() const { return test[1]; }
   int GetStep() const { return test[2]; }
+
+  const out_t & GetCorrectOutput() const { return correct_out; }
   
   void SetStart(int val) { test[0] = val; CalcOut(); }
   void SetEnd(int val) { test[1] = val; CalcOut(); }
@@ -333,6 +335,75 @@ public:
 
 
 /// Test case (9): Even Squares
+/// - Description: Given an integer n, print all positive even perfect squres
+///   less than n on separate lines.
+/// - Note: squares of even numbers are even, squares of odd numbers are odd
+class EvenSquaresTest {
+public:
+  using out_t = emp::vector<size_t>;
+
+  static constexpr size_t MIN_TEST_VAL = 1;
+  static constexpr size_t DEFAULT_MAX_TEST_VAL=9999;
+
+protected:
+  size_t test;
+  out_t correct_out;
+
+  void CalcOut() {
+    correct_out.clear();
+    for (size_t i = 2; i*i < test; i+= 2) {
+      correct_out.emplace_back(i*i);
+    }
+  }
+
+public:
+
+  EvenSquaresTest()
+    : test(1), correct_out() { CalcOut(); }
+  
+  EvenSquaresTest(emp::Random & rnd, 
+                     size_t max_val=DEFAULT_MAX_TEST_VAL)
+    : test(rnd.GetUInt(MIN_TEST_VAL, max_val+1)),
+      correct_out()
+  { 
+    emp_assert(max_val >= MIN_TEST_VAL); 
+    CalcOut();
+  }
+
+  EvenSquaresTest(EvenSquaresTest &&) = default;
+  EvenSquaresTest(const EvenSquaresTest &) = default;
+
+  EvenSquaresTest & operator=(const EvenSquaresTest &) = default;
+  EvenSquaresTest & operator=(EvenSquaresTest &&) = default;
+
+  bool operator==(const EvenSquaresTest & in) const { return in.test == test; }
+  bool operator!=(const EvenSquaresTest & in) const { return !(in == *this); }
+  bool operator<(const EvenSquaresTest & in) const { return test < in.test; }
+
+  const out_t & GetCorrectOutput() const { return correct_out; }
+  size_t GetTest() const { return test; }
+
+  void SetTest(size_t val) { test = val; CalcOut(); }
+
+  void RandomizeTest(emp::Random & rnd, size_t max_val=DEFAULT_MAX_TEST_VAL) {
+    emp_assert(max_val >= MIN_TEST_VAL);
+    test = rnd.GetUInt(MIN_TEST_VAL, max_val+1);
+    CalcOut();
+  }
+
+  bool Evaluate(const out_t & out) {
+    return out == correct_out;
+  }
+
+  bool Validate(size_t max_val=DEFAULT_MAX_TEST_VAL) {
+    return test >= MIN_TEST_VAL && test <= max_val;
+  }
+
+  void Print(std::ostream & out=std::cout) const {
+    out << test;
+  }  
+
+};
 
 /// Test case (10): Wallis Pi
 

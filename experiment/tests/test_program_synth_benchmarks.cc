@@ -63,3 +63,12 @@ TEST_CASE("CollatzNumbersTest", "[prog_synth_benchmarks]") {
   CollatzNumbersTest emptytest;
 
 }
+
+// TODO
+TEST_CASE("EvenSquaresTest", "[prog_synth_benchmarks]") {
+  constexpr int SEED = 2;
+  emp::Random random(SEED);
+
+  EvenSquaresTest emptytest;
+
+}
