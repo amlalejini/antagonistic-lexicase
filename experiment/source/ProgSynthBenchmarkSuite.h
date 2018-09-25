@@ -406,27 +406,140 @@ public:
 };
 
 /// Test case (10): Wallis Pi
+/// - Description: John Wallis gave the following infinite product that converges
+///   to pi/4:
+///     2/3 * 4/3 * 4/5 * 6/5 * 6/7 * 8/7 * 8/9 * 10/9 * ...
+///   Given an integer input n, compute an approximation of this product out to
+///   n terms. Results are rounded to 5 decimal places.
+// TODO(?) --> Don't feel like dealing with rounding for now.
 
 /// Test case (12): Last Index of Zero
+/// - Description: Given a vector of integers, at least one of which is 0, return
+///   the index of the last occurrence of 0 in the vector.
+class LastIndexOfZeroTest {
+public:
+  using test_t = emp::vector<int>;
+
+  static constexpr size_t MIN_TEST_LEN = 1;
+  static constexpr size_t DEFAULT_MAX_LEN = 50;
+  static constexpr int DEFAULT_MAX_VAL = 50;
+  static constexpr int DEFAULT_MIN_VAL = -50;
+    
+protected:
+  test_t test;
+
+public:
+
+  LastIndexOfZeroTest()
+    : test(MIN_TEST_LEN, 0) { ; }
+  
+  LastIndexOfZeroTest(emp::Random & rnd, size_t max_test_len=DEFAULT_MAX_LEN,
+                      int min_val=DEFAULT_MIN_VAL, int max_val=DEFAULT_MAX_VAL)
+    : test() { RandomizeTest(rnd, max_test_len, min_val, max_val); }
+
+  LastIndexOfZeroTest(LastIndexOfZeroTest &&) = default;
+  LastIndexOfZeroTest(const LastIndexOfZeroTest &) = default;
+
+  LastIndexOfZeroTest & operator=(const LastIndexOfZeroTest &) = default;
+  LastIndexOfZeroTest & operator=(LastIndexOfZeroTest &&) = default;
+
+  bool operator==(const LastIndexOfZeroTest & in) const { return in.test == test; }
+  bool operator!=(const LastIndexOfZeroTest & in) const { return !(in == *this); }
+  bool operator<(const LastIndexOfZeroTest & in) const { return test < in.test; }
+  
+  test_t & GetTest() { return test; }
+
+  void RandomizeTest(emp::Random & rnd, size_t max_test_len=DEFAULT_MAX_LEN,
+                     int min_val=DEFAULT_MIN_VAL, int max_val=DEFAULT_MAX_VAL) {
+    emp_assert(max_test_len >= MIN_TEST_LEN);
+    emp_assert(min_val <= max_val);
+    size_t new_size = rnd.GetUInt(MIN_TEST_LEN, max_test_len+1);
+    test.resize(new_size, 0);
+    size_t zero_cnt = 0;
+    for (size_t i = 0; i < test.size(); ++i) {
+      const int val = rnd.GetInt(min_val, max_val+1);
+      if (val == 0) ++zero_cnt;
+      test[i] = val;
+    }
+    // Guarantee that at least one value is a zero.
+    if (!zero_cnt) { test[rnd.GetUInt(test.size())] = 0; }
+  }
+
+  bool Evaluate(size_t out) {
+    int last_zero = -1;
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (test[i] == 0) last_zero = (int)i;
+    }
+    return (int)out == last_zero;
+  }
+
+  bool Validate(size_t max_test_len=DEFAULT_MAX_LEN,
+                int min_val=DEFAULT_MIN_VAL, int max_val=DEFAULT_MAX_VAL) {
+    if (test.size() > max_test_len || test.size() < MIN_TEST_LEN) return false;
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (test[i] > max_val || test[i] < min_val) return false;
+    }
+    return true;
+  }
+
+  void Print(std::ostream & out=std::cout) const {
+    out << "[";
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (i) out << ",";
+      out << test[i];
+    }
+    out << "]";
+  }
+};
 
 /// Test case (13): Vector average
+class VectorAverageTest {
+
+};
 
 /// Test case (14): Count odds
+class CountOddsTest {
+
+};
 
 /// Test case (15): Mirror image
+class MirrorImageTest {
+
+};
 
 /// Test case (17): Sum of Squares
+class SumOfSquaresTest {
+
+};
 
 /// Test case (18): Vectors summed
+class VectorsSummedTest {
+
+};
 
 /// Test case (21): Negative to zero
+class NegativeToZeroTest {
+
+};
 
 /// Test case (25): Digits
+class DigitsTest {
+
+};
 
 /// Test case (26): Grade
+class GradeTest {
+
+};
 
 /// Test case (27): Median
+class MedianTest {
+
+};
 
 /// Test case (28): Smallest
+class SmallestTest {
+
+};
 
 #endif

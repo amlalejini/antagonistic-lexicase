@@ -72,3 +72,12 @@ TEST_CASE("EvenSquaresTest", "[prog_synth_benchmarks]") {
   EvenSquaresTest emptytest;
 
 }
+
+// TODO
+TEST_CASE("LastIndexOfZeroTest", "[prog_synth_benchmarks]") {
+  constexpr int SEED = 2;
+  emp::Random random(SEED);
+
+  LastIndexOfZeroTest emptytest;
+
+}
