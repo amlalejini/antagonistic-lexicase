@@ -13,9 +13,14 @@
  * For now, I just provide implementations of non-string requiring benchmarks.
  */
 
+ // TODO: 
+ // - [ ] where relevant, setup eval cache(?); do this in organism?
+
 #include "base/array.h"
 #include "base/vector.h"
+#include "tools/math.h"
 #include "tools/Random.h"
+#include "tools/vector_utils.h"
 
 /// Test case (1): Number IO
 /// - Description: Given an integer and a float, print their sum.
@@ -411,7 +416,66 @@ public:
 ///     2/3 * 4/3 * 4/5 * 6/5 * 6/7 * 8/7 * 8/9 * 10/9 * ...
 ///   Given an integer input n, compute an approximation of this product out to
 ///   n terms. Results are rounded to 5 decimal places.
-// TODO(?) --> Don't feel like dealing with rounding for now.
+class WallisPiTest {
+public:
+  static constexpr double EPSILON = 0.000005;
+  static constexpr size_t MIN_TEST_VAL = 1;
+  static constexpr size_t DEFAULT_MAX_TEST_VAL = 200;
+
+protected:
+  int test;
+
+public:
+
+  WallisPiTest() : test(MIN_TEST_VAL) { ; }
+
+  WallisPiTest(emp::Random & rnd, size_t max_test_val=DEFAULT_MAX_TEST_VAL)
+    : test()
+  { RandomizeTest(rnd, max_test_val); }
+
+  WallisPiTest(WallisPiTest &&) = default;
+  WallisPiTest(const WallisPiTest &) = default;
+
+  WallisPiTest & operator=(const WallisPiTest &) = default;
+  WallisPiTest & operator=(WallisPiTest &&) = default;
+
+  bool operator==(const WallisPiTest & in) const { return in.test == test; }
+  bool operator!=(const WallisPiTest & in) const { return !(in == *this); }
+  bool operator<(const WallisPiTest & in) const { return test < in.test; }
+
+  void RandomizeTest(emp::Random & rnd, size_t max_test_val=DEFAULT_MAX_TEST_VAL) {
+    test = rnd.GetInt(MIN_TEST_VAL, max_test_val+1);
+  }
+
+  bool Evaluate(double out) {
+    // Calculate wallis pi n out
+    double num = 2.0;
+    double denom = 3.0;
+    bool inc_num = true;
+    bool inc_denom = false;
+    double approx = 0;
+    for (size_t i = 0; i <= test; ++i) {
+      approx *= num/denom;
+      if (inc_num) { num+=2; }
+      if (inc_denom) { denom+=2; }
+      std::swap(inc_num, inc_denom);
+    }
+    // Is out ~correct?
+    if ((emp::Abs(approx) < emp::Abs(out) + EPSILON) && (emp::Abs(approx) >= emp::Abs(out) - EPSILON)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool Validate(size_t max_test_val=DEFAULT_MAX_TEST_VAL) {
+    return test >= MIN_TEST_VAL && test <= max_test_val;
+  }
+
+  void Print(std::ostream & out=std::cout) const {
+    out << test;
+  }
+
+};
 
 /// Test case (12): Last Index of Zero
 /// - Description: Given a vector of integers, at least one of which is 0, return
@@ -493,51 +557,330 @@ public:
 };
 
 /// Test case (13): Vector average
+/// - Description: Given a vector of floats, return the average of those floats.
+///   Results are rounded to 4 decimal places.
 class VectorAverageTest {
+public:
+  using test_t = emp::vector<double>;
+
+  static constexpr double EPSILON = 0.00005;
+  static constexpr size_t MIN_TEST_LEN = 1;
+  static constexpr size_t DEFAULT_MAX_TEST_LEN = 50;
+  static constexpr double DEFAULT_MAX_TEST_VAL = 1000.0;
+  static constexpr double DEFAULT_MIN_TEST_VAL = -1000.0;
+
+protected:
+  test_t test;
+
+public:
+  VectorAverageTest() : test(MIN_TEST_LEN, 0.0) { ; }
+
+  VectorAverageTest(emp::Random & rnd, 
+                    size_t max_test_len=DEFAULT_MAX_TEST_LEN,
+                    size_t min_test_val=DEFAULT_MIN_TEST_VAL,
+                    size_t max_test_val=DEFAULT_MAX_TEST_VAL)
+    : test() { RandomizeTest(rnd, max_test_len, min_test_val, max_test_val); }
+
+  VectorAverageTest(VectorAverageTest &&) = default;
+  VectorAverageTest(const VectorAverageTest &) = default;
+
+  VectorAverageTest & operator=(const VectorAverageTest &) = default;
+  VectorAverageTest & operator=(VectorAverageTest &&) = default;
+
+  bool operator==(const VectorAverageTest & in) const { return in.test == test; }
+  bool operator!=(const VectorAverageTest & in) const { return !(in == *this); }
+  bool operator<(const VectorAverageTest & in) const { return test < in.test; }
+
+  test_t & GetTest() { return test; }
+
+  void RandomizeTest(emp::Random & rnd,
+                     size_t max_test_len=DEFAULT_MAX_TEST_LEN,
+                     size_t min_test_val=DEFAULT_MIN_TEST_VAL,
+                     size_t max_test_val=DEFAULT_MAX_TEST_VAL) {
+    test.resize(rnd.GetUInt(MIN_TEST_LEN, max_test_len+1), 0.0);
+    for (size_t i = 0; i < test.size(); ++i) {
+      test[i] = rnd.GetDouble(min_test_val, max_test_val);
+    }
+  }
+
+  bool Evaluate(double out) {
+    emp_assert(test.size());
+    const double avg = emp::Sum(test) / test.size();
+    if ((emp::Abs(avg) < emp::Abs(out) + EPSILON) && (emp::Abs(avg) >= emp::Abs(out) - EPSILON)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool Validate(size_t max_test_len=DEFAULT_MAX_TEST_LEN,
+                size_t min_test_val=DEFAULT_MIN_TEST_VAL,
+                size_t max_test_val=DEFAULT_MAX_TEST_VAL) {
+    if (test.size() < MIN_TEST_LEN || test.size() > max_test_len) return false;
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (test[i] < min_test_val || test[i] >= max_test_val) return false;
+    }
+    return true;
+  }
+
+  void Print(std::ostream & out=std::cout) const {
+    out << "[";
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (i) out << ",";
+      out << test[i];
+    }
+    out << "]";
+  }
 
 };
 
 /// Test case (14): Count odds
+/// - Description: Given a vector of integers, return the number of integers that
+///   are odd, without use of a specific even or odd instruction (but allowing
+///   instructions such as mod or quotient).
 class CountOddsTest {
+public:
+  using test_t = emp::vector<int>;
+
+  static constexpr size_t DEFAULT_MIN_TEST_LEN=0;
+  static constexpr size_t DEFAULT_MAX_TEST_LEN=50;
+  static constexpr int DEFAULT_MIN_TEST_VAL=-1000.0;
+  static constexpr int DEFAULT_MAX_TEST_VAL=1000.0;
+
+protected:
+  test_t test;
+
+public:
+
+  CountOddsTest() : test() { ; }
+  CountOddsTest(emp::Random & rnd,
+                size_t min_test_len=DEFAULT_MIN_TEST_LEN, size_t max_test_len=DEFAULT_MAX_TEST_LEN,
+                int min_test_val=DEFAULT_MIN_TEST_VAL, int max_test_val=DEFAULT_MAX_TEST_VAL)
+    : test() { RandomizeTest(rnd, min_test_len, max_test_len, min_test_val, max_test_val); }
+
+  CountOddsTest(CountOddsTest &&) = default;
+  CountOddsTest(const CountOddsTest &) = default;
+
+  CountOddsTest & operator=(const CountOddsTest &) = default;
+  CountOddsTest & operator=(CountOddsTest &&) = default;
+
+  bool operator==(const CountOddsTest & in) const { return in.test == test; }
+  bool operator!=(const CountOddsTest & in) const { return !(in == *this); }
+  bool operator<(const CountOddsTest & in) const { return test < in.test; }
+
+  void RandomizeTest(emp::Random & rnd,
+                     size_t min_test_len=DEFAULT_MIN_TEST_LEN, size_t max_test_len=DEFAULT_MAX_TEST_LEN,
+                     int min_test_val=DEFAULT_MIN_TEST_VAL, int max_test_val=DEFAULT_MAX_TEST_VAL) {
+    test.resize(rnd.GetUInt(min_test_len, max_test_len+1), min_test_val);
+    for (size_t i = 0; i < test.size(); ++i) {
+      test[i] = rnd.GetInt(min_test_val, max_test_val+1);
+    }
+  }
+
+  bool Evaluate(size_t out) {
+    size_t cnt = 0;
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (test[i] & 1) ++cnt;
+    }
+    return out == cnt;
+  }
+
+  bool Validate(size_t min_test_len=DEFAULT_MIN_TEST_LEN, size_t max_test_len=DEFAULT_MAX_TEST_LEN,
+                int min_test_val=DEFAULT_MIN_TEST_VAL, int max_test_val=DEFAULT_MAX_TEST_VAL) {
+    if (test.size() > max_test_len || test.size() < min_test_len) return false;
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (test[i] > max_test_val || test[i] < min_test_val) return false;
+    }
+    return true;
+  }
+
+  void Print(std::ostream & out=std::cout) const {
+    out << "[";
+    for (size_t i = 0; i < test.size(); ++i) {
+      if (i) out << ",";
+      out << test[i];
+    }
+    out << "]";
+  }
 
 };
 
 /// Test case (15): Mirror image
+/// - Description: Given two vectors of integers, return true if one vector is the
+///   reverse of the other, and false otherwise.
 class MirrorImageTest {
+public:
+  using test_t = emp::array< emp::vector<int>, 2 >;
 
+  static constexpr size_t DEFAULT_MIN_VEC_LEN = 0;
+  static constexpr size_t DEFAULT_MAX_VEC_LEN = 50;
+  static constexpr int DEFAULT_MIN_VAL = -1000;
+  static constexpr int DEFAULT_MAX_VAL = 1000;
+
+protected:
+  test_t test;
+
+public:
+
+  MirrorImageTest() : test() { ; }
+  MirrorImageTest(emp::Random & rnd,
+                size_t min_vec_len=DEFAULT_MIN_VEC_LEN, size_t max_vec_len=DEFAULT_MAX_VEC_LEN,
+                int min_val=DEFAULT_MIN_VAL, int max_val=DEFAULT_MAX_VAL)
+    : test() { RandomizeTest(rnd, min_vec_len, max_vec_len, min_val, max_val); }
+
+  MirrorImageTest(MirrorImageTest &&) = default;
+  MirrorImageTest(const MirrorImageTest &) = default;
+
+  MirrorImageTest & operator=(const MirrorImageTest &) = default;
+  MirrorImageTest & operator=(MirrorImageTest &&) = default;
+
+  bool operator==(const MirrorImageTest & in) const { return in.test == test; }
+  bool operator!=(const MirrorImageTest & in) const { return !(in == *this); }
+  bool operator<(const MirrorImageTest & in) const { return test < in.test; }
+
+  void RandomizeTest(emp::Random & rnd,
+                     size_t min_vec_len=DEFAULT_MIN_VEC_LEN, size_t max_vec_len=DEFAULT_MAX_VEC_LEN,
+                     int min_val=DEFAULT_MIN_VAL, int max_val=DEFAULT_MAX_VAL) {
+    size_t vec_len = rnd.GetUInt(min_vec_len, max_vec_len+1);
+    test[0].resize(vec_len, 0);
+    test[1].resize(vec_len, 0);
+    for (size_t i = 0; i < vec_len; ++i) {
+      test[0][i] = rnd.GetInt(min_val, max_val+1);
+      test[1][i] = rnd.GetInt(min_val, max_val+1);
+    }
+  }
+
+  bool Evaluate(bool out) {
+    emp_assert(test[0].size() == test[1].size());
+    const size_t vec_len = test[0].size();
+    bool mirror = true;
+    for (size_t i = 0; i < vec_len; ++i) {
+      if (test[0][i] != test[1][vec_len-1-i]) mirror = false;
+    }
+    return out == mirror;
+  }
+
+  bool Validate(size_t min_vec_len=DEFAULT_MIN_VEC_LEN, size_t max_vec_len=DEFAULT_MAX_VEC_LEN,
+                int min_val=DEFAULT_MIN_VAL, int max_val=DEFAULT_MAX_VAL) {
+    if (test[0].size() != test[1].size()) return false;
+    if (test[0].size() < min_vec_len || test[0].size() > max_vec_len) return false;
+    for (size_t i = 0; i < test[0].size(); ++i) {
+      if (test[0][i] < min_val || test[0][i] > max_val) return false;
+      if (test[1][i] < min_val || test[1][i] > max_val) return false;
+    }
+    return true;
+  }
+
+  void Print(std::ostream & out=std::cout) const {
+    out << "[[";
+    for (size_t i = 0; i < test[0].size(); ++i) {
+      if (i) out << ",";
+      out << test[0][i];
+    }
+    out << "],";
+    for (size_t i = 0; i < test[1].size(); ++i) {
+      if (i) out << ",";
+      out << test[1][i];
+    }
+    out << "]]";
+  }
 };
 
 /// Test case (17): Sum of Squares
+/// - Description: Given integer n, return the sum of squaring each integer in the
+///   range [1, n].
 class SumOfSquaresTest {
+public:
+  static constexpr int DEFAULT_MIN_N = 1;
+  static constexpr int DEFAULT_MAX_N = 100;
+
+protected:
+  int test;
+
+public:
+
+  SumOfSquaresTest()
+  : test(DEFAULT_MIN_N) { ; }
+  
+  SumOfSquaresTest(emp::Random & rnd, 
+                   int min_n=DEFAULT_MIN_N, int max_n=DEFAULT_MAX_N)
+    : test(DEFAULT_MIN_N)
+  { RandomizeTest(rnd, min_n, max_n); }
+
+  SumOfSquaresTest(SumOfSquaresTest &&) = default;
+  SumOfSquaresTest(const SumOfSquaresTest &) = default;
+
+  SumOfSquaresTest & operator=(const SumOfSquaresTest &) = default;
+  SumOfSquaresTest & operator=(SumOfSquaresTest &&) = default;
+
+  bool operator==(const SumOfSquaresTest & in) const { return in.test == test; }
+  bool operator!=(const SumOfSquaresTest & in) const { return !(in == *this); }
+  bool operator<(const SumOfSquaresTest & in) const { return test < in.test; }
+
+  void RandomizeTest(emp::Random & rnd, 
+                     int min_n=DEFAULT_MIN_N, int max_n=DEFAULT_MAX_N) {
+    emp_assert(min_n <= max_n);
+    test = rnd.GetInt(min_n, max_n+1);
+  }
+  
+  bool Evaluate(int out) {
+    int sum = 0;
+    for (size_t i = 1; i <= test; ++i) {
+      sum += i*i;
+    }
+    return out == sum;
+  }
+
+  bool Validate(emp::Random & rnd, 
+                int min_n=DEFAULT_MIN_N, int max_n=DEFAULT_MAX_N) {
+    return test <= max_n && test >= min_n;
+  }
+
+  void Print(std::ostream & out=std::cout) const {
+    out << test;
+  }
 
 };
 
 /// Test case (18): Vectors summed
+/// - Description: Given two equal-sized vectors of integers, return a vector
+///   of integers that contains the sum of the input vectors at each index.
 class VectorsSummedTest {
 
 };
 
 /// Test case (21): Negative to zero
+/// - Description: Given a vector of integers, return the vector where all negative
+///   integers have been replaced by 0.
 class NegativeToZeroTest {
 
 };
 
 /// Test case (25): Digits
+/// - Description: Given an integer, print that integer's digits each on their
+///   own line starting with the least significant digit. A negative integer
+///   should have the negative sign printed before the most significant digit.
 class DigitsTest {
 
 };
 
 /// Test case (26): Grade
+/// - Description: Given 5 integers, the first four represent the lower numeric
+///   thresholds for achieving an A, B, C, and D, and will be distinct and in
+///   descending order. The fifth represents the student's numeric grade. The program
+///   must print 'Student has a X grade.', where X is A, B, C, D, of F depending
+///   on the thresholds and the numeric grade.
 class GradeTest {
 
 };
 
 /// Test case (27): Median
+/// - Description: Given 3 integers, print their median.
 class MedianTest {
 
 };
 
 /// Test case (28): Smallest
+/// - Description: Given 4 integers, print the smallest of them.
 class SmallestTest {
 
 };
