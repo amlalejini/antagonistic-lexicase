@@ -1,4 +1,4 @@
-TEST_NAMES = sorting_network
+TEST_NAMES = sorting_network program_synth_benchmarks
 
 EMP_DIR := ../../../Empirical
 EMP_SRC_DIR := $(EMP_DIR)/source
