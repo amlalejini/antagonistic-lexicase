@@ -2,103 +2,18 @@
 #define TAG_LINEAR_GP_H
 
 #include <string>
+#include <functional>
+#include <unordered_set>
 
+#include "base/vector.h"
 #include "tools/BitSet.h"
+#include "tools/map_utils.h"
+#include "tools/Random.h"
+#include "tools/string_utils.h"
+
+#include "TagLinearGP_InstLib.h"
 
 namespace TagLGP {
-
-  /// Instruction library class used by TagLinearGP class.
-  /// Original version pulled from InstLib.h in Empirical library.
-  /// - Modified to potentially facilitate some experimental functionality.
-  template<typename HARDWARE_T>
-  class InstLib {
-  public:
-    using hardware_t = HARDWARE_T;
-    using inst_t = typename hardware_t::inst_t;
-    using fun_t = std::function<void(hardware_t &, const inst_t &)>; // Provide arguments, too?
-    
-    struct InstDef {
-      std::string name;                   ///< Name of this instruction.
-      fun_t fun_call;                     ///< Function to call when executing.
-      size_t num_args;                    ///< Number of args needed by function.
-      std::string desc;                   ///< Description of function.
-      
-      InstDef(const std::string & _n, fun_t _fun, 
-              size_t _nargs, const std::string & _d)
-        : name(_n), fun_call(_fun), num_args(_nargs), desc(_d) { ; }
-      InstDef(const InstDef &) = default;
-    };
-    
-  protected:
-    emp::vector<InstDef> inst_lib;           ///< Full definitions for instructions.
-    emp::vector<fun_t> inst_funs;            ///< Map of instruction IDs to their functions.
-    std::map<std::string, size_t> name_map;  ///< How do names link to instructions?
-
-    
-  public:
-    InstLib() : inst_lib(), inst_funs(), name_map() { ; }  ///< Default Constructor
-    InstLib(const InstLib &) = default;                    ///< Copy Constructor
-    InstLib(InstLib &&) = default;                         ///< Move Constructor
-    ~InstLib() { ; }
-
-    InstLib & operator=(const InstLib &) = default;        ///< Copy Operator
-    InstLib & operator=(InstLib &&) = default;       
-
-    /// Return the name associated with the specified instruction ID.
-    const std::string & GetName(size_t id) const { return inst_lib[id].name; }
-
-    /// Return the function associated with the specified instruction ID.
-    const fun_t & GetFunction(size_t id) const { return inst_lib[id].fun_call; }
-
-    /// Return the number of arguments expected for the specified instruction ID.
-    size_t GetNumArgs(size_t id) const { return inst_lib[id].num_args; }
-
-    /// Return the provided description for the provided instruction ID.
-    const std::string & GetDesc(size_t id) const { return inst_lib[id].desc; }
-
-    /// Get the number of instructions in this set.
-    size_t GetSize() const { return inst_lib.size(); }
-
-    bool IsInst(const std::string name) const {
-        return Has(name_map, name);
-    }
-
-    /// Return the ID of the instruction that has the specified name.
-    size_t GetID(const std::string & name) const {
-      emp_assert(Has(name_map, name), name);
-      return Find(name_map, name, (size_t) -1);
-    }
-
-    /// @brief Add a new instruction to the set.
-    /// @param name A unique string name for this instruction.
-    /// @param fun_call The function that should be called when this instruction is executed.
-    /// @param num_args How many arguments does this function require? (default=0)
-    /// @param desc A description of how this function operates. (default="")
-    void AddInst(const std::string & name,
-                 const fun_t & fun_call,
-                 size_t num_args=0,
-                 const std::string & desc="")
-    {
-      const size_t id = inst_lib.size();
-      inst_lib.emplace_back(name, fun_call, num_args, desc);
-      inst_funs.emplace_back(fun_call);
-      name_map[name] = id;
-    }
-
-    /// Process a specified instruction in the provided hardware.
-    void ProcessInst(hardware_t & hw, const inst_t & inst) const {
-      inst_funs[inst.id](hw, inst);
-    }
-
-    /// Process a specified instruction on hardware that can be converted to the correct type.
-    template <typename IN_HW>
-    void ProcessInst(emp::Ptr<IN_HW> hw, const inst_t & inst) const {
-      emp_assert( dynamic_cast<hardware_t*>(hw.Raw()) );
-      inst_funs[inst.id](*(hw.template Cast<hardware_t>()), inst);
-    }
-  };
-
- 
   /////////////
   // TODO:
   // - [ ] Work out how memory will be represented
@@ -131,6 +46,8 @@ namespace TagLGP {
     using inst_lib_t = InstLib<hardware_t>;
 
     using program_t = Program;
+
+    using fun_get_modules_t = std::function<emp::vector<module_t>(const program_t &)>;
 
     static constexpr size_t DEFAULT_MEM_SIZE = 16;
     static constexpr size_t DEFAULT_MAX_CALL_DEPTH = 128;
@@ -412,6 +329,7 @@ namespace TagLGP {
     program_t program;
     
     emp::vector<module_t> modules;
+    fun_get_modules_t get_modules_fun;
 
     MemoryPosition default_mem;
 
@@ -437,6 +355,7 @@ namespace TagLGP {
     : random_ptr(rnd), random_owner(false),
       program(_ilib),
       modules(),
+      get_modules_fun(),
       default_mem(),
       mem_size(DEFAULT_MEM_SIZE),
       shared_mem_tags(mem_size),
@@ -451,6 +370,7 @@ namespace TagLGP {
   { 
     // If no random number generator is provided, create one (taking ownership).
     if (!rnd) NewRandom(); 
+    SetDefaultGetModulesFun();
   }
 
   TagLinearGP_TW(inst_lib_t & _ilib, 
@@ -461,6 +381,7 @@ namespace TagLGP {
     : random_ptr(nullptr), random_owner(false),
       program(in.program),
       modules(in.modules),
+      get_modules_fun(in.get_modules_fun),
       default_mem(in.default_mem),
       mem_size(in.mem_size),
       shared_mem_tags(in.shared_mem_tags),
@@ -479,16 +400,55 @@ namespace TagLGP {
 
   ~TagLinearGP_TW() { if (random_owner) random_ptr.Delete(); }
 
+  // ---- Hardware configuration ---
 
-  void Reset();
-  void ResetHardware();
+  void SetGetModulesFun(const fun_get_modules_t & fun) { get_modules_fun = fun; }
 
+  // ---- Hardware control ----
+  /// Reset everything, including the program.
+  void Reset() {
+    emp_assert(!is_executing);
+    ResetHardware();
+    modules.clear();
+    program.Clear();
+  }
+
+  /// Reset only hardware, not program.
+  /// Not allowed to reset hardware during execution.
+  void ResetHardware() {
+    emp_assert(!is_executing);
+    shared_mem.clear();
+    call_stack.clear();
+    is_executing = false;
+  }
+
+  // ---- Accessors ----
+  /// Get instruction library associated with hardware's program.
+  emp::Ptr<const inst_lib_t> GetInstLib() const { return program.GetInstLib(); }
+
+  /// Get random number generator.
+  emp::Random & GetRandom() { return *random_ptr; }
+  
+  /// Get pointer to random number generator.
+  emp::Ptr<emp::Random> GetRandomPtr() { return random_ptr; }
+
+  /// Get program loaded on this hardware.
+  const program_t & GetProgram() const { return program; }
+  program_t & GetProgram() { return program; }
+
+  
   // ---- Hardware utilities ----
   void NewRandom(int seed=-1) {
     if (random_owner) random_ptr.Delete();
     else random_ptr = nullptr;
     random_ptr = emp::NewPtr<emp::Random>(seed);
     random_owner = true;
+  }
+
+  void SetDefaultGetModulesFun() {
+    get_modules_fun = [](const program_t & p) -> emp::vector<module_t> {
+      return {{0, p.GetSize(), tag_t()}};
+    };
   }
   
   };
