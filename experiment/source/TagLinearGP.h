@@ -317,7 +317,20 @@ namespace TagLGP {
 
       bool ValidPosition(size_t pos) const { return pos < GetSize(); }
 
-
+      void Print(std::ostream & os=std::cout) {
+        for (size_t i = 0; i < program.size(); ++i) {
+          const inst_t & inst = program[i];
+          // Print instruction
+          os << inst_lib->GetName(inst.id);
+          os << "(";
+          for (size_t t = 0; t < inst.arg_tags.size(); ++t) {
+            if (t) os << ",";
+            inst.arg_tags[t].Print(os);
+          }
+          os << ")";
+          os << "\n";
+        }
+      }
 
     };
 
