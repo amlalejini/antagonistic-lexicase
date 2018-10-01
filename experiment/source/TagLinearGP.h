@@ -44,10 +44,11 @@ namespace TagLGP {
     using module_t = Module;
     using inst_t = Instruction;
     using inst_lib_t = InstLib<hardware_t>;
+    using inst_prop_t = typename inst_lib_t::InstProperty;
 
     using program_t = Program;
 
-    using fun_get_modules_t = std::function<emp::vector<module_t>(const program_t &)>;
+    // using fun_get_modules_t = std::function<emp::vector<module_t>(const program_t &)>;
 
     static constexpr size_t DEFAULT_MEM_SIZE = 16;
     static constexpr size_t DEFAULT_MAX_CALL_DEPTH = 128;
@@ -235,16 +236,30 @@ namespace TagLGP {
 
     /// Module definition.
     struct Module {
-      size_t begin;
-      size_t end;
-      tag_t tag;
+      size_t begin;   ///< First instruction in module (will be executed first).
+      size_t end;     ///< Instruction pointer value this module returns (or loops back) on (1 past last instruction that is part of this module).
+      tag_t tag;      ///< Module tag. Used to call/reference module.
+      bool wrap;
 
       Module(size_t _begin=0, size_t _end=0, tag_t _tag=tag_t())
-        : begin(_begin), end(_end), tag(_tag) { ; }
+        : begin(_begin), end(_end), tag(_tag), wrap(false) { ; }
     };
     
-    struct Flow {
+    enum FlowType { BASIC=0, LOOP, ROUTINE };
 
+    struct Flow {
+      FlowType type;
+      size_t begin;
+      size_t end;
+      size_t return_loc;
+      size_t m_id;
+
+      Flow(FlowType _type, size_t _begin, size_t _end, size_t _m_id, size_t _rloc=0) 
+        : type(_type), 
+          begin(_begin), 
+          end(_end), 
+          m_id(_m_id), 
+          return_loc(_rloc) { ; }
     };
 
     struct Instruction {
@@ -280,10 +295,21 @@ namespace TagLGP {
         return arg_tags[i];
       }
 
+      void Set(size_t _id, const emp::vector<tag_t> _args) {
+        id = _id;
+        arg_tags = _args;
+      }
+
+      void Set(const Instruction & other) {
+        id = other.id;
+        arg_tags = other.arg_tags;
+      } 
+
     };
 
     struct Program {
       using inst_seq_t = emp::vector<Instruction>;
+      using args_t = emp::vector<tag_t>;
 
       emp::Ptr<const inst_lib_t> inst_lib;  ///< Pointer to instruction library associated with this program.
       inst_seq_t program;     ///< Programs are linear sequences of instructions.
@@ -293,41 +319,88 @@ namespace TagLGP {
       
       Program(const Program &) = default;
 
-      void Clear() { program.clear(); }
+      bool operator==(const Program & in) const { return program == in.program; }
+      bool operator!=(const Program & in) const { return !(*this == in); }
+      bool operator<(const Program & other) const { return program < other.program; }
 
+      /// Allow program's instruction sequence to be indexed as if a vector.
       Instruction & operator[](size_t id) { 
         emp_assert(id < program.size());
         return program[id]; 
       }
 
+      /// Allow program's instruction sequence to be indexed as if a vector.
       const Instruction & operator[](size_t id) const {
         emp_assert(id < program.size());
         return program[id];
       }
 
-      bool operator==(const Program & in) const { return program == in.program; }
-      bool operator!=(const Program & in) const { return !(*this == in); }
-      bool operator<(const Program & other) const { return program < other.program; }
+      // Clear program's instruction sequence.
+      void Clear() { program.clear(); }
 
       /// Get program size.
       size_t GetSize() const { return program.size(); }
 
+      /// Get a pointer to const instruction library.
       emp::Ptr<const inst_lib_t> GetInstLibPtr() const { return inst_lib; }
+
+      /// Get const reference to instruction library.
       const inst_lib_t & GetInstLib() const { return *inst_lib; }
 
+      /// Is given position a valid position in this program?
       bool ValidPosition(size_t pos) const { return pos < GetSize(); }
 
+      /// Set program's instruction sequence to the one given.
+      void SetProgram(const inst_seq_t & p) { program = p; }
+
+      /// Push new instruction to program by instruction ID.
+      void PushInst(size_t id, const args_t & args) {
+        program.emplace_back(id, args);
+      }
+
+      /// Push new instruction to program by instruction name.
+      void PushInst(std::string & name, const args_t & args) {
+        emp_assert(inst_lib->IsInst(name), "Uknown instruction name", name);
+        PushInst(inst_lib->GetID(name), args);
+      }
+
+      /// Push given instruction onto program.
+      void PushInst(const inst_t & inst) {
+        program.emplace_back(inst);
+      }
+
+      /// Overwrite instruction in sequence (@ position pos).
+      void SetInst(size_t pos, size_t id, const args_t & args) {
+        emp_assert(pos < GetSize());
+        program[pos].Set(id, args);
+      }
+
+      /// Overwrite instruction in sequence (@ position pos).
+      void SetInst(size_t pos, std::string & name, const args_t & args) {
+        SetInst(pos, inst_lib->GetID(name), args);
+      }
+
+      /// Overwrite instruction in sequence (@ position pos).
+      void SetInst(size_t pos, const inst_t & inst) {
+        program[pos] = inst;
+      }
+
+      void PrintInst(const inst_t & inst, std::ostream & os=std::cout) {
+        // Print instruction
+        os << inst_lib->GetName(inst.id);
+        os << "(";
+        for (size_t t = 0; t < inst.arg_tags.size(); ++t) {
+          if (t) os << ",";
+          inst.arg_tags[t].Print(os);
+        }
+        os << ")";
+      }
+
+      /// Plain-print program.
       void Print(std::ostream & os=std::cout) {
         for (size_t i = 0; i < program.size(); ++i) {
           const inst_t & inst = program[i];
-          // Print instruction
-          os << inst_lib->GetName(inst.id);
-          os << "(";
-          for (size_t t = 0; t < inst.arg_tags.size(); ++t) {
-            if (t) os << ",";
-            inst.arg_tags[t].Print(os);
-          }
-          os << ")";
+          PrintInst(inst, os);
           os << "\n";
         }
       }
@@ -342,7 +415,6 @@ namespace TagLGP {
     program_t program;
     
     emp::vector<module_t> modules;
-    fun_get_modules_t get_modules_fun;
 
     MemoryPosition default_mem;
 
@@ -363,107 +435,232 @@ namespace TagLGP {
 
   public:
 
-  TagLinearGP_TW(emp::Ptr<const inst_lib_t> _ilib,
-                 emp::Ptr<emp::Random> rnd=nullptr)
-    : random_ptr(rnd), random_owner(false),
-      program(_ilib),
-      modules(),
-      get_modules_fun(),
-      default_mem(),
-      mem_size(DEFAULT_MEM_SIZE),
-      shared_mem_tags(mem_size),
-      working_mem_tags(mem_size),
-      input_mem_tags(mem_size),
-      output_mem_tags(mem_size),
-      shared_mem(mem_size),
-      call_stack(),
-      max_call_depth(DEFAULT_MAX_CALL_DEPTH),
-      min_tag_specificity(DEFAULT_MIN_TAG_SPECIFICITY),
-      is_executing(false)
-  { 
-    // If no random number generator is provided, create one (taking ownership).
-    if (!rnd) NewRandom(); 
-    SetDefaultGetModulesFun();
-  }
+    TagLinearGP_TW(emp::Ptr<const inst_lib_t> _ilib,
+                  emp::Ptr<emp::Random> rnd=nullptr)
+      : random_ptr(rnd), random_owner(false),
+        program(_ilib),
+        modules(),
+        // get_modules_fun(),
+        default_mem(),
+        mem_size(DEFAULT_MEM_SIZE),
+        shared_mem_tags(mem_size),
+        working_mem_tags(mem_size),
+        input_mem_tags(mem_size),
+        output_mem_tags(mem_size),
+        shared_mem(mem_size),
+        call_stack(),
+        max_call_depth(DEFAULT_MAX_CALL_DEPTH),
+        min_tag_specificity(DEFAULT_MIN_TAG_SPECIFICITY),
+        is_executing(false)
+    { 
+      // If no random number generator is provided, create one (taking ownership).
+      if (!rnd) NewRandom(); 
+    }
 
-  TagLinearGP_TW(inst_lib_t & _ilib, 
-                 emp::Ptr<emp::Random> rnd=nullptr)
-    : TagLinearGP_TW(&_ilib, rnd) { ; }
-  
-  TagLinearGP_TW(const hardware_t & in) 
-    : random_ptr(nullptr), random_owner(false),
-      program(in.program),
-      modules(in.modules),
-      get_modules_fun(in.get_modules_fun),
-      default_mem(in.default_mem),
-      mem_size(in.mem_size),
-      shared_mem_tags(in.shared_mem_tags),
-      working_mem_tags(in.working_mem_tags),
-      input_mem_tags(in.input_mem_tags),
-      output_mem_tags(in.output_mem_tags),
-      shared_mem(in.shared_mem),
-      call_stack(in.call_stack),
-      max_call_depth(in.max_call_depth),
-      min_tag_specificity(in.min_tag_specificity),
-      is_executing(in.is_executing)
-  {
-    if (in.random_owner) NewRandom();
-    else random_ptr = in.random_ptr;
-  }
+    TagLinearGP_TW(inst_lib_t & _ilib, 
+                  emp::Ptr<emp::Random> rnd=nullptr)
+      : TagLinearGP_TW(&_ilib, rnd) { ; }
+    
+    TagLinearGP_TW(const hardware_t & in) 
+      : random_ptr(nullptr), random_owner(false),
+        program(in.program),
+        modules(in.modules),
+        // get_modules_fun(in.get_modules_fun),
+        default_mem(in.default_mem),
+        mem_size(in.mem_size),
+        shared_mem_tags(in.shared_mem_tags),
+        working_mem_tags(in.working_mem_tags),
+        input_mem_tags(in.input_mem_tags),
+        output_mem_tags(in.output_mem_tags),
+        shared_mem(in.shared_mem),
+        call_stack(in.call_stack),
+        max_call_depth(in.max_call_depth),
+        min_tag_specificity(in.min_tag_specificity),
+        is_executing(in.is_executing)
+    {
+      if (in.random_owner) NewRandom();
+      else random_ptr = in.random_ptr;
+    }
 
-  ~TagLinearGP_TW() { if (random_owner) random_ptr.Delete(); }
+    ~TagLinearGP_TW() { if (random_owner) random_ptr.Delete(); }
 
-  // ---- Hardware configuration ---
+    // ---------------------------- Hardware configuration ----------------------------
 
-  void SetGetModulesFun(const fun_get_modules_t & fun) { get_modules_fun = fun; }
+    /// Set program for this hardware object.
+    /// After updating hardware's program, run UpdateModules to update module definitions.
+    void SetProgram(const program_t & _program) { 
+      emp_assert(!is_executing);
+      program = _program; 
+      UpdateModules();
+    }
 
-  // ---- Hardware control ----
-  /// Reset everything, including the program.
-  void Reset() {
-    emp_assert(!is_executing);
-    ResetHardware();
-    modules.clear();
-    program.Clear();
-  }
+    // ---------------------------- Hardware control ----------------------------
+    /// Reset everything, including the program.
+    void Reset() {
+      emp_assert(!is_executing);
+      ResetHardware();
+      modules.clear();
+      program.Clear();
+    }
 
-  /// Reset only hardware, not program.
-  /// Not allowed to reset hardware during execution.
-  void ResetHardware() {
-    emp_assert(!is_executing);
-    shared_mem.clear();
-    call_stack.clear();
-    is_executing = false;
-  }
+    /// Reset only hardware, not program.
+    /// Not allowed to reset hardware during execution.
+    void ResetHardware() {
+      emp_assert(!is_executing);
+      shared_mem.clear();
+      call_stack.clear();
+      is_executing = false;
+    }
 
-  // ---- Accessors ----
-  /// Get instruction library associated with hardware's program.
-  emp::Ptr<const inst_lib_t> GetInstLib() const { return program.GetInstLib(); }
+    /// Update modules.
+    void UpdateModules() {
+      // Grab reference to program's instruction library.
+      const inst_lib_t & ilib = program.GetInstLib();
+      // Clear out current module definitions.
+      modules.clear();
+      // Scan program for module definitions.
+      for (size_t pos = 0; pos < program.GetSize(); ++pos) {
+        inst_t & inst = program[pos];
+        // Is this a module definition?
+        if (ilib.HasProperty(inst.id, inst_prop_t::MODULE)) {
+          if (modules.size()) { modules.back().end = pos; }
+          modules.emplace_back(pos+1, 0, inst.arg_tags[0]);
+        }
+      }
+      // If we've added at least 1 module, cap it off (by wrapping it).
+      if (modules.size()) {
+        modules.back().end = program.GetSize() + modules[0].begin - 1;
+        modules.back().wrap = true;
+      } else {
+        // No modules definitions, default behavior.
+        modules.emplace_back(0, program.GetSize(), tag_t());
+      }
+    }
 
-  /// Get random number generator.
-  emp::Random & GetRandom() { return *random_ptr; }
-  
-  /// Get pointer to random number generator.
-  emp::Ptr<emp::Random> GetRandomPtr() { return random_ptr; }
+    
+    // ---------------------------- Hardware execution ----------------------------
+    /// Process a single instruction, provided by the caller.
+    void ProcessInst(const inst_t & inst) { program.GetInstLib().ProcessInst(*this, inst); }
 
-  /// Get program loaded on this hardware.
-  const program_t & GetProgram() const { return program; }
-  program_t & GetProgram() { return program; }
+    /// Advance hardware by a single instruction.
+    void SingleProcess() {
+      emp_assert(program.GetSize()); // Must have a non-empty program to advance the hardware.
 
-  
-  // ---- Hardware utilities ----
-  void NewRandom(int seed=-1) {
-    if (random_owner) random_ptr.Delete();
-    else random_ptr = nullptr;
-    random_ptr = emp::NewPtr<emp::Random>(seed);
-    random_owner = true;
-  }
+      is_executing = true;
 
-  void SetDefaultGetModulesFun() {
-    get_modules_fun = [](const program_t & p) -> emp::vector<module_t> {
-      return {{0, p.GetSize(), tag_t()}};
-    };
-  }
-  
+      // If there's a call state on the call stack, execute an instruction in
+      // that call.
+
+      // Repeat:
+      // - If flow:
+      //   - HandleFlow (if outside flow: close flow; continue;)
+      // - else if ip outside of module:
+      //   - Handle return (break;)
+      // - ProcessInstruction
+      // - Break;
+
+      while (call_stack.size()) {
+        CallState & state = call_stack.back();
+        size_t ip = state.iptr;
+        size_t mp = state.mptr;
+
+        // todo - check validity of ip/mp
+        emp_assert(mp < modules.size()); // Ensure module pointer is to valid module.
+
+        
+        break;
+      }
+      
+      is_executing = false;
+
+    }
+    
+    // ---------------------------- Accessors ----------------------------
+    /// Get instruction library associated with hardware's program.
+    emp::Ptr<const inst_lib_t> GetInstLib() const { return program.GetInstLib(); }
+
+    /// Get random number generator.
+    emp::Random & GetRandom() { return *random_ptr; }
+    
+    /// Get pointer to random number generator.
+    emp::Ptr<emp::Random> GetRandomPtr() { return random_ptr; }
+
+    /// Get program loaded on this hardware.
+    const program_t & GetProgram() const { return program; }
+    program_t & GetProgram() { return program; }
+
+    /// Get the minimum tag specificity (i.e., required similarity between two tags
+    /// for a successful reference to occur).
+    double GetMinTagSpecificity() const { return min_tag_specificity; }
+
+    /// Get maximum allowed call depth (maximum number of call states allowed on
+    /// the call stack at any one time).
+    size_t GetMaxCallDepth() const { return max_call_depth; }
+
+    /// Get memory size. How many memory positions are available in input, output,
+    /// working, and shared memory.
+    size_t GetMemSize() const { return mem_size; }
+
+    /// Get shared memory vector.
+    memory_t & GetSharedMem() { return shared_mem; }
+    const memory_t & GetSharedMem() const { return shared_mem; }
+
+    /// memory tag accessors
+    emp::vector<tag_t> & GetSharedMemTags() { return shared_mem_tags; }
+    const emp::vector<tag_t> & GetSharedMemTags() const { return shared_mem_tags; }
+    emp::vector<tag_t> & GetWorkingMemTags() { return working_mem_tags; }
+    const emp::vector<tag_t> & GetWorkingMemTags() const { return working_mem_tags; }
+    emp::vector<tag_t> & GetInputMemTags() { return input_mem_tags; }
+    const emp::vector<tag_t> & GetInputMemTags() const { return input_mem_tags; }
+    emp::vector<tag_t> & GetOutputMemTags() { return output_mem_tags; }
+    const emp::vector<tag_t> & GetOutputMemTags() const { return output_mem_tags; }
+
+    CallState & GetCurCallState() {
+      emp_assert(call_stack.size(), "Cannot query for current call state if call stack is empty.");
+      return call_stack.back();
+    }
+
+    const CallState & GetCurCallState() const { 
+      emp_assert(call_stack.size(), "Cannot query for current call state if call stack is empty.");
+      return call_stack.back();
+    }
+
+    // ---------------------------- Hardware utilities ----------------------------
+    void NewRandom(int seed=-1) {
+      if (random_owner) random_ptr.Delete();
+      else random_ptr = nullptr;
+      random_ptr = emp::NewPtr<emp::Random>(seed);
+      random_owner = true;
+    }
+
+    // ---------------------------- Printing ----------------------------
+    void PrintModules(std::ostream & os=std::cout) {
+      os << "Modules: {";
+      for (size_t i = 0; i < modules.size(); ++i) {
+        if (i) os << ",";
+        os << "[" << modules[i].begin << ":" << modules[i].end << "]";
+        os << "(";
+        modules[i].tag.Print(os);
+        os << ")";
+      }
+      os << "}";
+    }
+
+    void PrintModuleSequences(std::ostream & os=std::cout) {
+      for (size_t i = 0; i < modules.size(); ++i) {
+        Module & module = modules[i];
+        os << "Module (";
+        module.tag.Print(os);
+        os << ")\n";
+        for (size_t mip = module.begin; mip < module.end; ++mip) {
+          os << "  ";
+          if (mip < program.GetSize()) program.PrintInst(program[mip], os);
+          else program.PrintInst(program[mip % program.GetSize()], os);
+          os << "\n";
+        }
+      }
+    }
+
   };
 
 }

@@ -17,13 +17,16 @@ namespace TagLGP {
   /// Instruction library class used by TagLinearGP class.
   /// Original version pulled from InstLib.h in Empirical library.
   /// - Modified to potentially facilitate some experimental functionality.
-  template<typename HARDWARE_T>
+  template<typename HARDWARE_T, size_t MAX_ARG_CNT=3>
   class InstLib {
   public:
     using hardware_t = HARDWARE_T;
     using inst_t = typename hardware_t::inst_t;
     using fun_t = std::function<void(hardware_t &, const inst_t &)>; // Provide arguments, too?
-    using inst_properties_t = std::unordered_set<std::string>;
+    
+    enum InstProperty { BEGIN_FLOW, END_FLOW, MODULE };
+
+    using inst_properties_t = std::unordered_set<InstProperty>;
 
     struct InstDef {
       std::string name;                   ///< Name of this instruction.
@@ -70,7 +73,15 @@ namespace TagLGP {
     const inst_properties_t & GetProperties(size_t id) const { return inst_lib[id].properties; }
 
     /// Does the given instruction ID have the given property value?
-    bool HasProperty(size_t id, std::string property) const { return inst_lib[id].properties.count(property); }
+    bool HasProperty(size_t id, InstProperty property) const { return inst_lib[id].properties.count(property); }
+
+    /// 
+    std::string GetPropertyStr(InstProperty property) {
+      switch (property) {
+        case InstProperty::MODULE: return "MODULE";
+        default: return "UNKNOWN";
+      }
+    }
 
     /// Get the number of instructions in this set.
     size_t GetSize() const { return inst_lib.size(); }
