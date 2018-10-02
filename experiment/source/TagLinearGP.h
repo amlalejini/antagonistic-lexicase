@@ -42,6 +42,7 @@ namespace TagLGP {
     using hardware_t = TagLinearGP_TW<TAG_WIDTH>;
     using tag_t = emp::BitSet<TAG_WIDTH>;
     using memory_t = Memory;
+    using mem_type_t = typename MemoryValue::MemoryType;
     // using mem_pos_t = MemoryPosition;
 
     using module_t = Module;
@@ -277,6 +278,9 @@ namespace TagLGP {
               pos(1, val) { ; }
           MemoryPosition(const MemoryPosition &) = default;
 
+          MemoryPosition & operator=(const MemoryPosition &) = default;
+          MemoryPosition & operator=(MemoryPosition &&) = default;
+
           void Print(std::ostream & os=std::cout) const {
             if (is_vector) {
               os << "[";
@@ -302,18 +306,6 @@ namespace TagLGP {
         Memory(const Memory &) = default;
         Memory(Memory &&) = default;
 
-        // /// Allow program's instruction sequence to be indexed as if a vector.
-        // MemoryPosition & operator[](size_t id) { 
-        //   emp_assert(id < memory.size());
-        //   return memory[id];
-        // }
-
-        // /// Allow program's instruction sequence to be indexed as if a vector.
-        // const MemoryPosition & operator[](size_t id) const {
-        //   emp_assert(id < memory.size());
-        //   return memory[id];
-        // }
-
         void Reset(const MemoryValue & default_value=MemoryValue()) {
           const size_t size = memory.size();
           memory.clear();
@@ -324,6 +316,16 @@ namespace TagLGP {
           memory.resize(size, {default_value});
         }
 
+        bool IsSet(size_t id) const {
+          emp_assert(id < memory.size());
+          return memory[id].set;
+        }
+
+        bool IsVec(size_t id) const {
+          emp_assert(id < memory.size());
+          return memory[id].is_vector;
+        }
+
         size_t GetSize() const { return memory.size(); }
 
         const MemoryPosition & GetPos(size_t id) const {
@@ -331,12 +333,90 @@ namespace TagLGP {
           return memory[id];
         }
 
-        // emp::vector
+        MemoryValue & AccessVal(size_t id) {
+          emp_assert(id < memory.size());
+          memory[id].set = true;          // Memory becomes set on access by reference.
+          return memory[id].pos[0];          
+        }
+
+        emp::vector<MemoryValue> & AccessVec(size_t id) {
+          emp_assert(id < memory.size());
+          memory[id].set = true;          // Memory becomes set on access by reference.
+          return memory[id];
+        }
+
+        /// Set memory[id] = other
+        void Set(size_t id, const MemoryPosition & other) {
+          emp_assert(id < memory.size());
+          memory[id] = other;
+          memory[id].set = true;
+        }
+        
+        /// Set memory[id] = vector of MemoryValues
+        void Set(size_t id, const emp::vector<MemoryValue> & val_vec) {
+          emp_assert(id < memory.size());
+          memory[id].pos = val_vec;
+          memory[id].set = true;
+          memory[id].is_vec = true;
+        }
+
+        /// Set memory[id] = given MemoryValue
+        void Set(size_t id, const MemoryValue & val) {
+          emp_assert(id < memory.size());
+          memory[id].pos.resize(1); // Memory position is now just a value, shrink appropriately.
+          memory[id].pos[0] = val;
+          memory[id].set = true;
+          memory[id].is_vec = false;
+        }
+
+        void Set(size_t id, double val) {
+          emp_assert(id < memory.size());
+          memory[id].pos.resize(1);
+          memory[id].pos[0] = val;
+          memory[id].set = true;
+          memory[id].is_vec = false;
+        }
+
+        void Set(size_t id, const emp::vector<double> & val_vec) {
+          emp_assert(id < memory.size());
+          memory[id].pos.resize(val_vec.size());
+          for (size_t i = 0; i < memory[id].pos.size(); ++i) memory[id].pos[i] = val_vec[i];
+          memory[id].set = true;
+          memory[id].is_vec = true;
+        }
+
+        void Set(size_t id, std::string str) {
+          emp_assert(id < memory.size());
+          memory[id].pos.resize(1);
+          memory[id].pos[0] = str;
+          memory[id].set = true;
+          memory[id].is_vec = false;
+        }
+
+        void Set(size_t id, const emp::vector<std::string> & str_vec) {
+          emp_assert(id < memory.size());
+          memory[id].pos.resize(str_vec.size());
+          for (size_t i = 0; i < memory[id].pos.size(); ++i) memory[id].pos[i] = str_vec[i];
+          memory[id].set = true;
+          memory[id].is_vec = true;
+        }
 
         void Print(std::ostream & os=std::cout) const {
           os << "{";
           for (size_t i = 0; i < memory.size(); ++i) {
             if (i) os << ",";
+            os << i << ":";
+            memory[i].Print(os);
+          }
+          os << "}";
+        }
+
+        void PrintSetMem(std::ostream & os=std::cout) const {
+          os << "{";
+          for (size_t i = 0; i < memory.size(); ++i) {
+            if (!memory[i].set) { continue; }
+            if (i) os << ",";
+            os << i << ":";
             memory[i].Print(os);
           }
           os << "}";
@@ -777,14 +857,19 @@ namespace TagLGP {
         // TODO
         return;
       }  
-      
+
       // Is there anything to return to?
       if (call_stack.size() > 1) {
         // If so, copy returning state's output memory into caller state's local memory.
         CallState & caller_state = call_stack[call_stack.size() - 2];
-        // TODO
-        // for (const MemoryPosition & mem : returning_state.GetOutputMem()) caller_state.SetWorking(mem);
+        Memory & out_mem = returning_state.GetOutputMem();
+        Memory & working_mem = caller_state.GetWorkingMem();
+        for (size_t i = 0; i < mem_size; ++i) {
+          if (out_mem.IsSet(i)) { working_mem.Set(i, out_mem.GetPos(i)); } 
+        }
       }
+
+      // Pop returning state from call stack.
       call_stack.pop_back();
     }
     
@@ -871,7 +956,6 @@ namespace TagLGP {
           const size_t ip = (module.begin+mip)%program.GetSize();
           os << "  ip[" << ip << "]: ";
           program.PrintInst(program[ip], os);
-          // else program.PrintInst(program[mip % program.GetSize()], os);
           os << "\n";
         }
       }
@@ -884,6 +968,7 @@ namespace TagLGP {
         global_mem_tags[gi].Print(os);
         os << "): ";
         global_mem.GetPos(gi).Print(os);
+        if (!global_mem.IsSet(gi)) { os << " (unset)"; }
         os << "\n";
       }
       for (int ci = (int)call_stack.size()-1; ci >= 0; --ci) {
@@ -896,6 +981,7 @@ namespace TagLGP {
           input_mem_tags[i].Print(os);
           os << "): ";
           state.GetInputMem().GetPos(i).Print(os);
+          if (!state.GetInputMem().IsSet(i)) { os << " (unset)"; }
           os << "\n";
         } 
 
@@ -905,6 +991,7 @@ namespace TagLGP {
           working_mem_tags[i].Print(os);
           os << "): ";
           state.GetWorkingMem().GetPos(i).Print(os);
+          if (!state.GetWorkingMem().IsSet(i)) { os << " (unset)"; }
           os << "\n";
         } 
 
@@ -914,15 +1001,12 @@ namespace TagLGP {
           output_mem_tags[i].Print(os);
           os << "): ";
           state.GetOutputMem().GetPos(i).Print(os);
+          if (!state.GetOutputMem().IsSet(i)) { os << " (unset)"; }
           os << "\n";
         } 
 
-
       }
-
-
     }
-
   };
 
 }
