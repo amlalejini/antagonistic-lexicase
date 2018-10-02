@@ -17,6 +17,8 @@ namespace TagLGP {
   /////////////
   // TODO:
   // - [ ] Work out how memory will be represented
+  // NOTES:
+  // - WARNING - Can currently have infinitely recursing routine flows...
   /////////////
 
   /// TagLinearGP class.
@@ -32,19 +34,22 @@ namespace TagLGP {
     struct Instruction;
     struct Flow;
     struct CallState;
-    class MemoryPosition;
+    class Memory;
     class MemoryValue;
+
     struct Program;
 
     using hardware_t = TagLinearGP_TW<TAG_WIDTH>;
     using tag_t = emp::BitSet<TAG_WIDTH>;
-    using memory_t = emp::vector<MemoryPosition>;
-    using mem_pos_t = MemoryPosition;
+    using memory_t = Memory;
+    // using mem_pos_t = MemoryPosition;
 
     using module_t = Module;
     using inst_t = Instruction;
     using inst_lib_t = InstLib<hardware_t>;
     using inst_prop_t = typename inst_lib_t::InstProperty;
+    using inst_seq_t = emp::vector<Instruction>;
+    using args_t = emp::vector<tag_t>;
 
     using program_t = Program;
 
@@ -53,6 +58,25 @@ namespace TagLGP {
     static constexpr size_t DEFAULT_MEM_SIZE = 16;
     static constexpr size_t DEFAULT_MAX_CALL_DEPTH = 128;
     static constexpr double DEFAULT_MIN_TAG_SPECIFICITY = 0.0;
+
+    enum FlowType { BASIC=0, LOOP, ROUTINE, CALL };
+
+    struct Flow {
+      FlowType type;
+      size_t begin;
+      size_t end;
+      size_t iptr;
+      size_t mptr;
+
+      Flow(FlowType _type, size_t _begin, size_t _end,
+           size_t _mptr, size_t _iptr) 
+        : type(_type), 
+          begin(_begin), 
+          end(_end), 
+          iptr(_iptr),
+          mptr(_mptr)
+      { ; }
+    };
 
     /// Struct - State
     /// - Description: maintains information about local call state.
@@ -63,22 +87,19 @@ namespace TagLGP {
       memory_t input_mem;
       memory_t output_mem;
 
-      size_t mptr;    ///< Module pointer.
-      size_t iptr;    ///< Instruction pointer.
-
       emp::vector<Flow> flow_stack; ///< Stack of Flow (top is current).
 
       bool returnable;  ///< Can we return from this state? (or, are we trapped here forever!)
       bool circular;    ///< Does call have an implicit return at EOM? Or, is it circular?
 
-      CallState(size_t _mem_size=128, bool _returnable=true, bool _circular=false,
-                const MemoryPosition & _def_mem=MemoryPosition())
+      CallState(Module & module,
+                size_t _mem_size=128, bool _returnable=true, bool _circular=false,
+                const MemoryValue & _def_mem=MemoryValue())
         : mem_size(_mem_size),
           working_mem(_mem_size, _def_mem),
           input_mem(_mem_size, _def_mem),
           output_mem(_mem_size, _def_mem),
-          mptr(0), iptr(0),
-          flow_stack(),
+          flow_stack({FlowType::CALL, module.begin, module.end, module.id, module.begin}),
           returnable(_returnable),
           circular(_circular)
       { ; }
@@ -86,20 +107,28 @@ namespace TagLGP {
       CallState(const CallState &) = default;
       CallState(CallState &&) = default;
 
-      void Reset(const MemoryPosition & def_mem=MemoryPosition()) {
-        working_mem.clear();
-        working_mem.resize(mem_size, def_mem);
-        input_mem.clear();
-        input_mem.resize(mem_size, def_mem);
-        output_mem.clear();
-        output_mem.resize(mem_size, def_mem);
+      void Reset(const MemoryValue & def_mem=MemoryValue()) {
+        working_mem.Reset(); // TODO - use default memory value?
+        input_mem.Reset();
+        output_mem.Reset();
       }
-
-      size_t GetMP() const { return mptr; }
-      size_t GetIP() const { return iptr; }
 
       bool IsReturnable() const { return returnable; }
       bool IsCircular() const { return circular; }
+      bool IsFlow() const { return !flow_stack.empty(); }
+
+      size_t GetMP() const { 
+        if (flow_stack.size()) return flow_stack.back().mptr; 
+        else return (size_t)-1;
+      }
+      
+      size_t GetIP() const { 
+        if (flow_stack.size()) return flow_stack.back().iptr;
+        else return (size_t)-1;
+      }
+
+      emp::vector<Flow> & GetFlowStack() { return flow_stack; }
+      Flow & GetTopFlow() { emp_assert(flow_stack.size()); return flow_stack.back(); }
 
       memory_t & GetWorkingMem() { return working_mem; }
       memory_t & GetInputMem() { return input_mem; }
@@ -107,13 +136,20 @@ namespace TagLGP {
 
       // mem_pos_t & GetWorkingPos(size_t i) { ; }
 
-      void SetMP(size_t mp) { mptr = mp;}
-      void SetIP(size_t ip) { iptr = ip; }
+      void SetMP(size_t mp) { 
+        if (flow_stack.size()) flow_stack.back().mptr = mp;
+      }
+
+      void SetIP(size_t ip) { 
+        if (flow_stack.size()) flow_stack.back().iptr = ip; 
+      }
       
-      void AdvanceIP(size_t inc=1) { iptr += inc; }
+      void AdvanceIP(size_t inc=1) { 
+        if (flow_stack.size()) flow_stack.back().iptr += inc; 
+      }
     
     };
-
+    
     /// Structure of this class hails from C++ Primer 5th Ed. By Lippman, Lajoie, and Moo.
     class MemoryValue {
       public:
@@ -216,52 +252,114 @@ namespace TagLGP {
 
         void SetDefaultStr(const std::string & ds) { default_str = ds; }
         void SetDefaultNum(double dn) { default_num = dn; }
+
+        void Print(std::ostream & os=std::cout) const {
+          switch (type) {
+            case MemoryType::NUM: os << num; break;
+            case MemoryType::STR: os << "\"" << str << "\""; break;
+            default: os << "UNKOWN TYPE"; break;
+          }
+        }
     };
 
-    // TODO: round this out
-    class MemoryPosition {
-      protected:
-        bool is_vector;
-        emp::vector<MemoryValue> pos;
-
+    /// Memory class to manage TagLGP memory.
+    class Memory {
       public:
-
-        MemoryPosition(bool is_vec=false)
-          : is_vector(is_vec),
-            pos(1) { ; }
         
-        MemoryPosition(const MemoryPosition &) = default;
+        struct MemoryPosition {
+          bool is_vector;
+          bool set;
+          emp::vector<MemoryValue> pos;
+
+          MemoryPosition(const MemoryValue & val=MemoryValue(), bool is_vec=false)
+            : is_vector(is_vec), 
+              set(false),
+              pos(1, val) { ; }
+          MemoryPosition(const MemoryPosition &) = default;
+
+          void Print(std::ostream & os=std::cout) const {
+            if (is_vector) {
+              os << "[";
+              for (size_t i = 0; i < pos.size(); ++i) {
+                if (i) os << ",";
+                pos[i].Print(os);
+              }
+              os << "]";
+            } else {
+              pos[0].Print(os);
+            }
+          }
+        };
+
+      protected:
+        emp::vector<MemoryPosition> memory;
+        
+      public:
+        Memory(size_t size, const MemoryValue & default_value=MemoryValue()) 
+          : memory(size, {default_value})
+        { ; }
+
+        Memory(const Memory &) = default;
+        Memory(Memory &&) = default;
+
+        // /// Allow program's instruction sequence to be indexed as if a vector.
+        // MemoryPosition & operator[](size_t id) { 
+        //   emp_assert(id < memory.size());
+        //   return memory[id];
+        // }
+
+        // /// Allow program's instruction sequence to be indexed as if a vector.
+        // const MemoryPosition & operator[](size_t id) const {
+        //   emp_assert(id < memory.size());
+        //   return memory[id];
+        // }
+
+        void Reset(const MemoryValue & default_value=MemoryValue()) {
+          const size_t size = memory.size();
+          memory.clear();
+          memory.resize(size, {default_value});
+        }
+
+        void Resize(size_t size, const MemoryValue & default_value=MemoryValue()) {
+          memory.resize(size, {default_value});
+        }
+
+        size_t GetSize() const { return memory.size(); }
+
+        const MemoryPosition & GetPos(size_t id) const {
+          emp_assert(id < memory.size());
+          return memory[id];
+        }
+
+        // emp::vector
+
+        void Print(std::ostream & os=std::cout) const {
+          os << "{";
+          for (size_t i = 0; i < memory.size(); ++i) {
+            if (i) os << ",";
+            memory[i].Print(os);
+          }
+          os << "}";
+        }
 
     };
 
     /// Module definition.
     struct Module {
+      size_t id;
       size_t begin;   ///< First instruction in module (will be executed first).
       size_t end;     ///< Instruction pointer value this module returns (or loops back) on (1 past last instruction that is part of this module).
       tag_t tag;      ///< Module tag. Used to call/reference module.
-      bool wrap;
+      std::unordered_set<size_t> in_module; ///< instruction positions belonging to this module.
 
-      Module(size_t _begin=0, size_t _end=0, tag_t _tag=tag_t())
-        : begin(_begin), end(_end), tag(_tag), wrap(false) { ; }
+      Module(size_t _id, size_t _begin=0, size_t _end=0, tag_t _tag=tag_t())
+        : id(_id), begin(_begin), end(_end), tag(_tag) { ; }
+
+      bool InModule(size_t ip) const {
+        return emp::Has(in_module, ip);
+      }
     };
     
-    enum FlowType { BASIC=0, LOOP, ROUTINE };
-
-    struct Flow {
-      FlowType type;
-      size_t begin;
-      size_t end;
-      size_t return_loc;
-      size_t m_id;
-
-      Flow(FlowType _type, size_t _begin, size_t _end, size_t _m_id, size_t _rloc=0) 
-        : type(_type), 
-          begin(_begin), 
-          end(_end), 
-          m_id(_m_id), 
-          return_loc(_rloc) { ; }
-    };
-
     struct Instruction {
       size_t id;
       emp::vector<tag_t> arg_tags;
@@ -308,9 +406,6 @@ namespace TagLGP {
     };
 
     struct Program {
-      using inst_seq_t = emp::vector<Instruction>;
-      using args_t = emp::vector<tag_t>;
-
       emp::Ptr<const inst_lib_t> inst_lib;  ///< Pointer to instruction library associated with this program.
       inst_seq_t program;     ///< Programs are linear sequences of instructions.
 
@@ -385,7 +480,7 @@ namespace TagLGP {
         program[pos] = inst;
       }
 
-      void PrintInst(const inst_t & inst, std::ostream & os=std::cout) {
+      void PrintInst(const inst_t & inst, std::ostream & os=std::cout) const {
         // Print instruction
         os << inst_lib->GetName(inst.id);
         os << "(";
@@ -397,7 +492,7 @@ namespace TagLGP {
       }
 
       /// Plain-print program.
-      void Print(std::ostream & os=std::cout) {
+      void Print(std::ostream & os=std::cout) const {
         for (size_t i = 0; i < program.size(); ++i) {
           const inst_t & inst = program[i];
           PrintInst(inst, os);
@@ -416,15 +511,15 @@ namespace TagLGP {
     
     emp::vector<module_t> modules;
 
-    MemoryPosition default_mem;
+    MemoryValue default_mem_val;
 
     size_t mem_size;
-    emp::vector<tag_t> shared_mem_tags;
+    emp::vector<tag_t> global_mem_tags;
     emp::vector<tag_t> working_mem_tags;
     emp::vector<tag_t> input_mem_tags;
     emp::vector<tag_t> output_mem_tags;
 
-    memory_t shared_mem;
+    memory_t global_mem;
 
     emp::vector<CallState> call_stack;
 
@@ -433,6 +528,51 @@ namespace TagLGP {
 
     bool is_executing;
 
+    void CloseFlow_BASIC(CallState & state, bool implicit) {
+      emp_assert(state.IsFlow());
+      // Closing BASIC flow:
+      // - Pop basic flow from flow stack, passing IP and MP down.
+      const size_t ip = state.GetTopFlow().iptr;
+      const size_t mp = state.GetTopFlow().mptr;
+      state.GetFlowStack().pop_back();
+      if (state.IsFlow()) {
+        Flow & top = state.GetTopFlow();
+        top.iptr = ip;
+        top.mptr = mp;
+      }
+    }
+
+    void CloseFlow_LOOP(CallState & state, bool implicit) {
+      emp_assert(state.IsFlow());
+      // Closing a LOOP flow:
+      // - In short, we don't. Loop ip back to flow.begin.
+      Flow & top = state.GetTopFlow();
+      top.iptr = top.begin;
+    }
+
+    void CloseFlow_ROUTINE(CallState & state, bool implicit) {
+      emp_assert(state.IsFlow());
+      // Closing a ROUTINE flow:
+      // - Pop ROUTINE flow from flow stack.
+      // - We don't pass IP and MP down (those on the lower stack are where we
+      //   should return to).
+      state.GetFlowStack.pop_back();
+    }
+
+    void CloseFlow_CALL(CallState & state, bool implicit) {
+      emp_assert(state.IsFlow());
+      // Closing a CALL flow:
+      // - Pop call flow from flow stack.
+      // - No need to pass IP and MP down (presumably, this was the bottom of the
+      //   flow stack).
+      if (implicit && state.IsCircular()) {
+        Flow & top = state.GetTopFlow();
+        top.iptr = top.begin;
+      } else {
+        state.GetFlowStack.pop_back();
+      }
+    }
+
   public:
 
     TagLinearGP_TW(emp::Ptr<const inst_lib_t> _ilib,
@@ -440,14 +580,13 @@ namespace TagLGP {
       : random_ptr(rnd), random_owner(false),
         program(_ilib),
         modules(),
-        // get_modules_fun(),
-        default_mem(),
+        default_mem_val(),
         mem_size(DEFAULT_MEM_SIZE),
-        shared_mem_tags(mem_size),
+        global_mem_tags(mem_size),
         working_mem_tags(mem_size),
         input_mem_tags(mem_size),
         output_mem_tags(mem_size),
-        shared_mem(mem_size),
+        global_mem(mem_size, default_mem_val),
         call_stack(),
         max_call_depth(DEFAULT_MAX_CALL_DEPTH),
         min_tag_specificity(DEFAULT_MIN_TAG_SPECIFICITY),
@@ -465,14 +604,13 @@ namespace TagLGP {
       : random_ptr(nullptr), random_owner(false),
         program(in.program),
         modules(in.modules),
-        // get_modules_fun(in.get_modules_fun),
-        default_mem(in.default_mem),
+        default_mem_val(in.default_mem_val),
         mem_size(in.mem_size),
-        shared_mem_tags(in.shared_mem_tags),
+        global_mem_tags(in.global_mem_tags),
         working_mem_tags(in.working_mem_tags),
         input_mem_tags(in.input_mem_tags),
         output_mem_tags(in.output_mem_tags),
-        shared_mem(in.shared_mem),
+        global_mem(in.global_mem),
         call_stack(in.call_stack),
         max_call_depth(in.max_call_depth),
         min_tag_specificity(in.min_tag_specificity),
@@ -494,6 +632,25 @@ namespace TagLGP {
       UpdateModules();
     }
 
+    /// Set hardware memory size (number of memory positions per memory buffer)
+    void SetMemSize(size_t size) {
+      mem_size = size;
+      global_mem.Resize(mem_size, default_mem_val);
+      global_mem_tags.resize(mem_size, tag_t());
+      for (size_t i = 0; i < call_stack.size(); ++i) {
+        CallState & state = call_stack[i];
+        
+        state.input_mem.Resize(mem_size, default_mem_val);
+        state.working_mem.Resize(mem_size, default_mem_val);
+        state.output_mem.Resize(mem_size, default_mem_val);
+
+        input_mem_tags.resize(mem_size, tag_t());
+        working_mem_tags.resize(mem_size, tag_t());
+        output_mem_tags.resize(mem_size, tag_t());
+
+      }
+    }
+
     // ---------------------------- Hardware control ----------------------------
     /// Reset everything, including the program.
     void Reset() {
@@ -507,7 +664,7 @@ namespace TagLGP {
     /// Not allowed to reset hardware during execution.
     void ResetHardware() {
       emp_assert(!is_executing);
-      shared_mem.clear();
+      global_mem.clear();
       call_stack.clear();
       is_executing = false;
     }
@@ -519,25 +676,31 @@ namespace TagLGP {
       // Clear out current module definitions.
       modules.clear();
       // Scan program for module definitions.
+      std::unordered_set<size_t> dangling_instructions;
       for (size_t pos = 0; pos < program.GetSize(); ++pos) {
         inst_t & inst = program[pos];
         // Is this a module definition?
         if (ilib.HasProperty(inst.id, inst_prop_t::MODULE)) {
-          if (modules.size()) { modules.back().end = pos; }
-          modules.emplace_back(pos+1, 0, inst.arg_tags[0]);
+          if (modules.size()) { modules.back().end = pos; } 
+          const size_t mod_id = modules.size();
+          modules.emplace_back(mod_id, (pos+1)%program.GetSize(), -1, inst.arg_tags[0]);
+        } else {
+          // Not a new module definition.
+          if (modules.size()) { modules.back().in_module.emplace(pos); }
+          else { dangling_instructions.emplace(pos); }
         }
       }
-      // If we've added at least 1 module, cap it off (by wrapping it).
-      if (modules.size()) {
-        modules.back().end = program.GetSize() + modules[0].begin - 1;
-        modules.back().wrap = true;
-      } else {
-        // No modules definitions, default behavior.
-        modules.emplace_back(0, program.GetSize(), tag_t());
+      // Take care of dangling instructions and add default module if necessary.
+      if (modules.size()) {                               // if we've found at least one module, set it's end point.
+        if (modules[0].begin == 0) modules.back().end = program.GetSize();
+        else modules.back().end = modules[0].begin-1;
+      } else {                                            // found no modules, add a default module.
+        // Default module starts at beginning of program and ends at the end.
+        modules.emplace_back(0, 0, program.GetSize(), tag_t());
       }
+      for (size_t val : dangling_instructions) modules.back().in_module.emplace(val);
     }
 
-    
     // ---------------------------- Hardware execution ----------------------------
     /// Process a single instruction, provided by the caller.
     void ProcessInst(const inst_t & inst) { program.GetInstLib().ProcessInst(*this, inst); }
@@ -552,27 +715,77 @@ namespace TagLGP {
       // that call.
 
       // Repeat:
-      // - If flow:
-      //   - HandleFlow (if outside flow: close flow; continue;)
-      // - else if ip outside of module:
-      //   - Handle return (break;)
-      // - ProcessInstruction
-      // - Break;
-
       while (call_stack.size()) {
         CallState & state = call_stack.back();
-        size_t ip = state.iptr;
-        size_t mp = state.mptr;
-
         // todo - check validity of ip/mp
-        emp_assert(mp < modules.size()); // Ensure module pointer is to valid module.
-
-        
+        if (state.IsFlow()) {
+          Flow & top_flow = state.GetTopFlow();
+          const size_t ip = top_flow.iptr;
+          const size_t mp = top_flow.mptr;
+          emp_assert(mp < modules.size());
+          if (modules[mp].InModule(ip)) { // Valid IP
+            // First, increment flow's IP by 1. This may invalidate the IP, but
+            // that's okay.
+            ++top_flow.iptr;
+            // Next, run instruction @ ip.
+            GetInstLib().ProcessInst(*this, program[ip]);
+          } else { 
+            CloseFlow(state);
+            continue;
+          }
+        } else {
+          // Return from CallState
+          ReturnCall();
+          continue; // Implicit returns are free for now...
+        }
         break;
       }
       
       is_executing = false;
 
+    }
+
+    void OpenFlow(CallState & state) {
+
+
+    }
+
+    void CloseFlow(CallState & state, bool implicit=false) {
+      if (!state.IsFlow()) return;
+      switch (state.GetTopFlow().type) {
+        case BASIC: CloseFlow_BASIC(state, implicit); break;
+        case LOOP: CloseFlow_LOOP(state, implicit); break;
+        case ROUTINE: CloseFlow_ROUTINE(state, implicit); break;
+        case CALL: CloseFlow_CALL(state, implicit); break;
+        default:
+          std::cout << "Uknown flow type (" << state.GetFlow().type << ")!" << std::endl;
+      }
+    }
+
+    void Call() {
+
+    }
+
+    void ReturnCall() {
+      // bool returnable;  ///< Can we return from this state? (or, are we trapped here forever!)
+      // bool circular;    ///< Does call have an implicit return at EOM? Or, is it circular?
+      if (call_stack.empty()) return; // Nothing to return from.
+      CallState & returning_state = GetCurCallState();
+
+      // No returning from non-returnable call state.
+      if (!returning_state.IsReturnable()) {
+        // TODO
+        return;
+      }  
+      
+      // Is there anything to return to?
+      if (call_stack.size() > 1) {
+        // If so, copy returning state's output memory into caller state's local memory.
+        CallState & caller_state = call_stack[call_stack.size() - 2];
+        // TODO
+        // for (const MemoryPosition & mem : returning_state.GetOutputMem()) caller_state.SetWorking(mem);
+      }
+      call_stack.pop_back();
     }
     
     // ---------------------------- Accessors ----------------------------
@@ -598,16 +811,16 @@ namespace TagLGP {
     size_t GetMaxCallDepth() const { return max_call_depth; }
 
     /// Get memory size. How many memory positions are available in input, output,
-    /// working, and shared memory.
+    /// working, and global memory.
     size_t GetMemSize() const { return mem_size; }
 
-    /// Get shared memory vector.
-    memory_t & GetSharedMem() { return shared_mem; }
-    const memory_t & GetSharedMem() const { return shared_mem; }
+    /// Get global memory vector.
+    memory_t & GetGlobalMem() { return global_mem; }
+    const memory_t & GetGlobalMem() const { return global_mem; }
 
     /// memory tag accessors
-    emp::vector<tag_t> & GetSharedMemTags() { return shared_mem_tags; }
-    const emp::vector<tag_t> & GetSharedMemTags() const { return shared_mem_tags; }
+    emp::vector<tag_t> & GetGlobalMemTags() { return global_mem_tags; }
+    const emp::vector<tag_t> & GetGlobalMemTags() const { return global_mem_tags; }
     emp::vector<tag_t> & GetWorkingMemTags() { return working_mem_tags; }
     const emp::vector<tag_t> & GetWorkingMemTags() const { return working_mem_tags; }
     emp::vector<tag_t> & GetInputMemTags() { return input_mem_tags; }
@@ -649,16 +862,65 @@ namespace TagLGP {
     void PrintModuleSequences(std::ostream & os=std::cout) {
       for (size_t i = 0; i < modules.size(); ++i) {
         Module & module = modules[i];
-        os << "Module (";
+        os << "Module["<<module.id<<"](";
         module.tag.Print(os);
         os << ")\n";
-        for (size_t mip = module.begin; mip < module.end; ++mip) {
-          os << "  ";
-          if (mip < program.GetSize()) program.PrintInst(program[mip], os);
-          else program.PrintInst(program[mip % program.GetSize()], os);
+        size_t msize = (module.begin < module.end) ? module.end - module.begin : (program.GetSize() - module.begin) + module.end;
+        std::cout << "#size=" << msize << std::endl;
+        for (size_t mip = 0; mip < msize; ++mip) {
+          const size_t ip = (module.begin+mip)%program.GetSize();
+          os << "  ip[" << ip << "]: ";
+          program.PrintInst(program[ip], os);
+          // else program.PrintInst(program[mip % program.GetSize()], os);
           os << "\n";
         }
       }
+    }
+
+    void PrintMemoryVerbose(std::ostream & os=std::cout) {
+      os << "-- Global memory --\n";
+      for (size_t gi = 0; gi < mem_size; ++gi) {
+        os << "  mem[" << gi << "](";
+        global_mem_tags[gi].Print(os);
+        os << "): ";
+        global_mem.GetPos(gi).Print(os);
+        os << "\n";
+      }
+      for (int ci = (int)call_stack.size()-1; ci >= 0; --ci) {
+        CallState & state = call_stack[ci];
+        os << "Local Memory (stack id=" << ci << ")\n";
+        
+        os << "  -- Input Memory -- \n";
+        for (size_t i = 0; i < mem_size; ++i) {
+          os << "    mem[" << i << "](";
+          input_mem_tags[i].Print(os);
+          os << "): ";
+          state.GetInputMem().GetPos(i).Print(os);
+          os << "\n";
+        } 
+
+        os << "  -- Working Memory -- \n";
+        for (size_t i = 0; i < mem_size; ++i) {
+          os << "    mem[" << i << "](";
+          working_mem_tags[i].Print(os);
+          os << "): ";
+          state.GetWorkingMem().GetPos(i).Print(os);
+          os << "\n";
+        } 
+
+        os << "  -- Output Memory -- \n";
+        for (size_t i = 0; i < mem_size; ++i) {
+          os << "    mem[" << i << "](";
+          output_mem_tags[i].Print(os);
+          os << "): ";
+          state.GetOutputMem().GetPos(i).Print(os);
+          os << "\n";
+        } 
+
+
+      }
+
+
     }
 
   };
