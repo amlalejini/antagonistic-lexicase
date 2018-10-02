@@ -1,4 +1,4 @@
-TEST_NAMES = sorting_network program_synth_benchmarks
+TEST_NAMES = sorting_network program_synth_benchmarks tag_lgp
 
 EMP_DIR := ../../../Empirical
 EMP_SRC_DIR := $(EMP_DIR)/source
