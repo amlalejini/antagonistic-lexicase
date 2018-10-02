@@ -16,7 +16,17 @@
 namespace TagLGP {
   /////////////
   // TODO:
-  // - [ ] Work out how memory will be represented
+  // - [x] Work out how memory will be represented
+  // - [ ] Default instruction set
+  // - [ ] At the moment, function returns are likely broken (when returning from closed call).
+  //    - Closing from non-returnable function is broken
+  // - [ ] Utilities
+  //  - [ ] Random program
+  // - [ ] Tests
+  //  - [ ] Memory
+  //  - [ ] Calls
+  //  - [ ] Flows
+  //  - [ ] Execution
   // NOTES:
   // - WARNING - Can currently have infinitely recursing routine flows...
   /////////////
@@ -93,14 +103,14 @@ namespace TagLGP {
       bool returnable;  ///< Can we return from this state? (or, are we trapped here forever!)
       bool circular;    ///< Does call have an implicit return at EOM? Or, is it circular?
 
-      CallState(Module & module,
-                size_t _mem_size=128, bool _returnable=true, bool _circular=false,
+      CallState(size_t _mem_size=DEFAULT_MEM_SIZE, bool _returnable=true, bool _circular=false,
                 const MemoryValue & _def_mem=MemoryValue())
         : mem_size(_mem_size),
           working_mem(_mem_size, _def_mem),
           input_mem(_mem_size, _def_mem),
           output_mem(_mem_size, _def_mem),
-          flow_stack({FlowType::CALL, module.begin, module.end, module.id, module.begin}),
+          flow_stack(),
+          // flow_stack({FlowType::CALL, module.begin, module.end, module.id, module.begin}),
           returnable(_returnable),
           circular(_circular)
       { ; }
@@ -357,7 +367,7 @@ namespace TagLGP {
           emp_assert(id < memory.size());
           memory[id].pos = val_vec;
           memory[id].set = true;
-          memory[id].is_vec = true;
+          memory[id].is_vector = true;
         }
 
         /// Set memory[id] = given MemoryValue
@@ -366,7 +376,7 @@ namespace TagLGP {
           memory[id].pos.resize(1); // Memory position is now just a value, shrink appropriately.
           memory[id].pos[0] = val;
           memory[id].set = true;
-          memory[id].is_vec = false;
+          memory[id].is_vector = false;
         }
 
         void Set(size_t id, double val) {
@@ -374,7 +384,7 @@ namespace TagLGP {
           memory[id].pos.resize(1);
           memory[id].pos[0] = val;
           memory[id].set = true;
-          memory[id].is_vec = false;
+          memory[id].is_vector = false;
         }
 
         void Set(size_t id, const emp::vector<double> & val_vec) {
@@ -382,7 +392,7 @@ namespace TagLGP {
           memory[id].pos.resize(val_vec.size());
           for (size_t i = 0; i < memory[id].pos.size(); ++i) memory[id].pos[i] = val_vec[i];
           memory[id].set = true;
-          memory[id].is_vec = true;
+          memory[id].is_vector = true;
         }
 
         void Set(size_t id, std::string str) {
@@ -390,7 +400,7 @@ namespace TagLGP {
           memory[id].pos.resize(1);
           memory[id].pos[0] = str;
           memory[id].set = true;
-          memory[id].is_vec = false;
+          memory[id].is_vector = false;
         }
 
         void Set(size_t id, const emp::vector<std::string> & str_vec) {
@@ -398,8 +408,10 @@ namespace TagLGP {
           memory[id].pos.resize(str_vec.size());
           for (size_t i = 0; i < memory[id].pos.size(); ++i) memory[id].pos[i] = str_vec[i];
           memory[id].set = true;
-          memory[id].is_vec = true;
+          memory[id].is_vector = true;
         }
+
+        // TODO - Append, Resize - (case - to zero - unset, resize 1 default), Clear()
 
         void Print(std::ostream & os=std::cout) const {
           os << "{";
@@ -434,6 +446,8 @@ namespace TagLGP {
 
       Module(size_t _id, size_t _begin=0, size_t _end=0, tag_t _tag=tag_t())
         : id(_id), begin(_begin), end(_end), tag(_tag) { ; }
+
+      size_t GetLen() const { return in_module.size(); }
 
       bool InModule(size_t ip) const {
         return emp::Has(in_module, ip);
@@ -608,6 +622,27 @@ namespace TagLGP {
 
     bool is_executing;
 
+    // void OpenFlow_BASIC() {
+
+    // }
+
+    // void OpenFlow_LOOP() {
+
+    // }
+
+    // void OpenFlow_ROUTINE() {
+
+    // }
+
+
+    // void OpenFlow_CALL(CallState & state, ) {
+
+    // }
+
+    void OpenFlow_CALL(CallState & state, const Module & module) {
+      OpenFlow(state, {FlowType::CALL, module.begin, module.end, module.id, module.begin});
+    }
+
     void CloseFlow_BASIC(CallState & state, bool implicit) {
       emp_assert(state.IsFlow());
       // Closing BASIC flow:
@@ -648,6 +683,9 @@ namespace TagLGP {
       if (implicit && state.IsCircular()) {
         Flow & top = state.GetTopFlow();
         top.iptr = top.begin;
+      } else if (!state.IsReturnable() && state.GetFlowStack().size() == 1) {
+        Flow & top = state.GetTopFlow();
+        top.iptr = top.begin; // Wrap
       } else {
         state.GetFlowStack.pop_back();
       }
@@ -798,7 +836,7 @@ namespace TagLGP {
       while (call_stack.size()) {
         CallState & state = call_stack.back();
         // todo - check validity of ip/mp
-        if (state.IsFlow()) {
+        if (state.IsFlow()) { //TODO - may need to switch this to flag (e.g., state.done)
           Flow & top_flow = state.GetTopFlow();
           const size_t ip = top_flow.iptr;
           const size_t mp = top_flow.mptr;
@@ -820,14 +858,26 @@ namespace TagLGP {
         }
         break;
       }
-      
       is_executing = false;
-
     }
 
-    void OpenFlow(CallState & state) {
+    void OpenFlow_ROUTINE(CallState & state, const Module & module) {
+      OpenFlow(state, {FlowType::ROUTINE, module.begin, module.end, module.id, module.begin});
+    }
 
+    void OpenFlow_ROUTINE(CallState & state, size_t mID) {
+      emp_assert(mID < modules.size());
+      const Module & module = modules[mID];
+      OpenFlow(state, {FlowType::ROUTINE, module.begin, module.end, module.id, module.begin});
+    }
 
+    void OpenFlow(CallState & state, FlowType type, 
+                  size_t begin, size_t end, size_t iptr, size_t mptr) {
+      OpenFlow(state, {type, begin, end, iptr, mptr});
+    }
+
+    void OpenFlow(CallState & state, const Flow & new_flow) {
+      state.GetFlowStack().emplace_back(new_flow);
     }
 
     void CloseFlow(CallState & state, bool implicit=false) {
@@ -842,8 +892,25 @@ namespace TagLGP {
       }
     }
 
-    void Call() {
-
+    void CallModule(size_t mID, bool returnable=true, bool circular=false) {
+      emp_assert(mID < modules.size());
+      // Are we at max depth? If so, call fails.
+      if (call_stack.size() >= max_call_depth) return;
+      // Push new state onto stack.
+      call_stack.emplace_back({mem_size, returnable, circular, default_mem_val});
+      // Open call flow on stack w/called module.
+      OpenFlow_CALL(call_stack.back(), modules[mID]);
+      // If there's at least one call state before this one, configure new
+      // state's memory appropriately; otherwise, leave defaults.
+      if (call_stack.size() > 1) {
+        CallState & new_state = call_stack.back();
+        CallState & caller_state = call_stack[call_stack.size() - 2]; 
+        Memory & new_input_mem = new_state.GetInputMem();
+        Memory & caller_working_mem = caller_state.GetWorkingMem();
+        for (size_t i = 0; i < mem_size; ++i) {
+          if (caller_working_mem.IsSet(i)) { new_input_mem.Set(i, caller_working_mem.GetPos(i)); }
+        }
+      }
     }
 
     void ReturnCall() {
@@ -852,11 +919,11 @@ namespace TagLGP {
       if (call_stack.empty()) return; // Nothing to return from.
       CallState & returning_state = GetCurCallState();
 
-      // No returning from non-returnable call state.
-      if (!returning_state.IsReturnable()) {
-        // TODO
-        return;
-      }  
+      // // No returning from non-returnable call state.
+      // if (!returning_state.IsReturnable()) {
+      //   // TODO - Close all flows until bottom
+      //   return;
+      // }  
 
       // Is there anything to return to?
       if (call_stack.size() > 1) {
