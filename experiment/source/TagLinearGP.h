@@ -27,6 +27,8 @@ namespace TagLGP {
   //  - [ ] Calls
   //  - [ ] Flows
   //  - [ ] Execution
+  // - [ ] Caching
+  //  - memory search, module search
   // NOTES:
   // - WARNING - Can currently have infinitely recursing routine flows...
   /////////////
@@ -70,6 +72,7 @@ namespace TagLGP {
     static constexpr size_t DEFAULT_MAX_CALL_DEPTH = 128;
     static constexpr double DEFAULT_MIN_TAG_SPECIFICITY = 0.0;
 
+    enum MemPosType { NUM=0, STR, VEC, ANY};
     enum FlowType { BASIC=0, LOOP, ROUTINE, CALL };
 
     struct Flow {
@@ -102,7 +105,7 @@ namespace TagLGP {
 
       bool returnable;  ///< Can we return from this state? (or, are we trapped here forever!)
       bool circular;    ///< Does call have an implicit return at EOM? Or, is it circular?
-
+      // {mem_size, returnable, circular, default_mem_val}
       CallState(size_t _mem_size=DEFAULT_MEM_SIZE, bool _returnable=true, bool _circular=false,
                 const MemoryValue & _def_mem=MemoryValue())
         : mem_size(_mem_size),
@@ -110,7 +113,6 @@ namespace TagLGP {
           input_mem(_mem_size, _def_mem),
           output_mem(_mem_size, _def_mem),
           flow_stack(),
-          // flow_stack({FlowType::CALL, module.begin, module.end, module.id, module.begin}),
           returnable(_returnable),
           circular(_circular)
       { ; }
@@ -145,8 +147,6 @@ namespace TagLGP {
       memory_t & GetInputMem() { return input_mem; }
       memory_t & GetOutputMem() { return output_mem; }
 
-      // mem_pos_t & GetWorkingPos(size_t i) { ; }
-
       void SetMP(size_t mp) { 
         if (flow_stack.size()) flow_stack.back().mptr = mp;
       }
@@ -164,7 +164,7 @@ namespace TagLGP {
     /// Structure of this class hails from C++ Primer 5th Ed. By Lippman, Lajoie, and Moo.
     class MemoryValue {
       public:
-        enum MemoryType { NUM=0, STR=1 };
+        enum MemoryType { NUM=0, STR=1};
         
       protected:
         MemoryType type;
@@ -187,6 +187,8 @@ namespace TagLGP {
               new (&str) std::string(in.str);
               break;
             }
+            default:
+              emp_assert(false, "Uknown memory value type.", in.type);
           }
         }
 
@@ -202,16 +204,19 @@ namespace TagLGP {
           : type(p.type),
             default_str(p.default_str),
             default_num(p.default_num)
-        { CopyUnion(p); }
+        { 
+          CopyUnion(p); 
+        }
 
         MemoryValue & operator=(const MemoryValue & in) {
           using std::string;
           if (type == MemoryType::STR && in.type != MemoryType::STR) str.~string();
-          else if (type == MemoryType::STR && in.type == MemoryType::STR) {
+          if (type == MemoryType::STR && in.type == MemoryType::STR) {
             str = in.str;
           } else {
             CopyUnion(in);
           }
+          type = in.type;
           return *this;
         }
 
@@ -334,6 +339,13 @@ namespace TagLGP {
         bool IsVec(size_t id) const {
           emp_assert(id < memory.size());
           return memory[id].is_vector;
+        }
+
+        MemPosType GetPosType(size_t id) const {
+          if (memory[id].is_vector) return MemPosType::VEC;
+          else if (memory[id].pos[0].type == mem_type_t::NUM) return MemPosType::NUM;
+          else if (memory[id].pos[0].type == mem_type_t::STR) return MemPosType::STR;
+          return MemPosType::ANY;
         }
 
         size_t GetSize() const { return memory.size(); }
@@ -608,10 +620,10 @@ namespace TagLGP {
     MemoryValue default_mem_val;
 
     size_t mem_size;
-    emp::vector<tag_t> global_mem_tags;
-    emp::vector<tag_t> working_mem_tags;
-    emp::vector<tag_t> input_mem_tags;
-    emp::vector<tag_t> output_mem_tags;
+    emp::vector<tag_t> mem_tags;
+    // emp::vector<tag_t> working_mem_tags;
+    // emp::vector<tag_t> input_mem_tags;
+    // emp::vector<tag_t> output_mem_tags;
 
     memory_t global_mem;
 
@@ -622,24 +634,8 @@ namespace TagLGP {
 
     bool is_executing;
 
-    // void OpenFlow_BASIC() {
-
-    // }
-
-    // void OpenFlow_LOOP() {
-
-    // }
-
-    // void OpenFlow_ROUTINE() {
-
-    // }
-
-
-    // void OpenFlow_CALL(CallState & state, ) {
-
-    // }
-
     void OpenFlow_CALL(CallState & state, const Module & module) {
+      emp_assert(state.GetFlowStack().size() == 0); // Should only put call flows at bottom of stack.
       OpenFlow(state, {FlowType::CALL, module.begin, module.end, module.id, module.begin});
     }
 
@@ -671,7 +667,7 @@ namespace TagLGP {
       // - Pop ROUTINE flow from flow stack.
       // - We don't pass IP and MP down (those on the lower stack are where we
       //   should return to).
-      state.GetFlowStack.pop_back();
+      state.GetFlowStack().pop_back();
     }
 
     void CloseFlow_CALL(CallState & state, bool implicit) {
@@ -685,9 +681,10 @@ namespace TagLGP {
         top.iptr = top.begin;
       } else if (!state.IsReturnable() && state.GetFlowStack().size() == 1) {
         Flow & top = state.GetTopFlow();
+        emp_assert(top.type == FlowType::CALL, "Expected flow type here to be CALL.");
         top.iptr = top.begin; // Wrap
       } else {
-        state.GetFlowStack.pop_back();
+        state.GetFlowStack().pop_back();
       }
     }
 
@@ -700,10 +697,11 @@ namespace TagLGP {
         modules(),
         default_mem_val(),
         mem_size(DEFAULT_MEM_SIZE),
-        global_mem_tags(mem_size),
-        working_mem_tags(mem_size),
-        input_mem_tags(mem_size),
-        output_mem_tags(mem_size),
+        // global_mem_tags(mem_size),
+        // working_mem_tags(mem_size),
+        // input_mem_tags(mem_size),
+        // output_mem_tags(mem_size),
+        mem_tags(mem_size),
         global_mem(mem_size, default_mem_val),
         call_stack(),
         max_call_depth(DEFAULT_MAX_CALL_DEPTH),
@@ -724,10 +722,11 @@ namespace TagLGP {
         modules(in.modules),
         default_mem_val(in.default_mem_val),
         mem_size(in.mem_size),
-        global_mem_tags(in.global_mem_tags),
-        working_mem_tags(in.working_mem_tags),
-        input_mem_tags(in.input_mem_tags),
-        output_mem_tags(in.output_mem_tags),
+        // global_mem_tags(in.global_mem_tags),
+        // working_mem_tags(in.working_mem_tags),
+        // input_mem_tags(in.input_mem_tags),
+        // output_mem_tags(in.output_mem_tags),
+        mem_tags(in.mem_tags),
         global_mem(in.global_mem),
         call_stack(in.call_stack),
         max_call_depth(in.max_call_depth),
@@ -754,7 +753,8 @@ namespace TagLGP {
     void SetMemSize(size_t size) {
       mem_size = size;
       global_mem.Resize(mem_size, default_mem_val);
-      global_mem_tags.resize(mem_size, tag_t());
+      mem_tags.resize(mem_size, tag_t());
+      // global_mem_tags.resize(mem_size, tag_t());
       for (size_t i = 0; i < call_stack.size(); ++i) {
         CallState & state = call_stack[i];
         
@@ -762,9 +762,9 @@ namespace TagLGP {
         state.working_mem.Resize(mem_size, default_mem_val);
         state.output_mem.Resize(mem_size, default_mem_val);
 
-        input_mem_tags.resize(mem_size, tag_t());
-        working_mem_tags.resize(mem_size, tag_t());
-        output_mem_tags.resize(mem_size, tag_t());
+        // input_mem_tags.resize(mem_size, tag_t());
+        // working_mem_tags.resize(mem_size, tag_t());
+        // output_mem_tags.resize(mem_size, tag_t());
 
       }
     }
@@ -836,7 +836,7 @@ namespace TagLGP {
       while (call_stack.size()) {
         CallState & state = call_stack.back();
         // todo - check validity of ip/mp
-        if (state.IsFlow()) { //TODO - may need to switch this to flag (e.g., state.done)
+        if (state.IsFlow()) { // TODO - may need to switch this to flag (e.g., state.done)
           Flow & top_flow = state.GetTopFlow();
           const size_t ip = top_flow.iptr;
           const size_t mp = top_flow.mptr;
@@ -848,12 +848,12 @@ namespace TagLGP {
             // Next, run instruction @ ip.
             GetInstLib().ProcessInst(*this, program[ip]);
           } else { 
-            CloseFlow(state);
+            CloseFlow(state, true);
             continue;
           }
         } else {
           // Return from CallState
-          ReturnCall();
+          ReturnCall(true);
           continue; // Implicit returns are free for now...
         }
         break;
@@ -861,11 +861,11 @@ namespace TagLGP {
       is_executing = false;
     }
 
-    void OpenFlow_ROUTINE(CallState & state, const Module & module) {
+    void OpenFlowRoutine(CallState & state, const Module & module) {
       OpenFlow(state, {FlowType::ROUTINE, module.begin, module.end, module.id, module.begin});
     }
 
-    void OpenFlow_ROUTINE(CallState & state, size_t mID) {
+    void OpenFlowRoutine(CallState & state, size_t mID) {
       emp_assert(mID < modules.size());
       const Module & module = modules[mID];
       OpenFlow(state, {FlowType::ROUTINE, module.begin, module.end, module.id, module.begin});
@@ -877,6 +877,7 @@ namespace TagLGP {
     }
 
     void OpenFlow(CallState & state, const Flow & new_flow) {
+      emp_assert(!(state.GetFlowStack().size() > 0 && new_flow.type == FlowType::CALL), "Call flows are only allowed at bottom of flow stack.");
       state.GetFlowStack().emplace_back(new_flow);
     }
 
@@ -888,16 +889,17 @@ namespace TagLGP {
         case ROUTINE: CloseFlow_ROUTINE(state, implicit); break;
         case CALL: CloseFlow_CALL(state, implicit); break;
         default:
-          std::cout << "Uknown flow type (" << state.GetFlow().type << ")!" << std::endl;
+          std::cout << "Uknown flow type (" << state.GetTopFlow().type << ")!" << std::endl;
       }
     }
 
     void CallModule(size_t mID, bool returnable=true, bool circular=false) {
       emp_assert(mID < modules.size());
+      std::cout << ">> --- CALL MODULE ---" << std::endl;
       // Are we at max depth? If so, call fails.
       if (call_stack.size() >= max_call_depth) return;
       // Push new state onto stack.
-      call_stack.emplace_back({mem_size, returnable, circular, default_mem_val});
+      call_stack.emplace_back(mem_size, returnable, circular, default_mem_val);
       // Open call flow on stack w/called module.
       OpenFlow_CALL(call_stack.back(), modules[mID]);
       // If there's at least one call state before this one, configure new
@@ -913,17 +915,21 @@ namespace TagLGP {
       }
     }
 
-    void ReturnCall() {
+    void ReturnCall(bool implicit=false) {
       // bool returnable;  ///< Can we return from this state? (or, are we trapped here forever!)
       // bool circular;    ///< Does call have an implicit return at EOM? Or, is it circular?
       if (call_stack.empty()) return; // Nothing to return from.
       CallState & returning_state = GetCurCallState();
 
       // // No returning from non-returnable call state.
-      // if (!returning_state.IsReturnable()) {
-      //   // TODO - Close all flows until bottom
-      //   return;
-      // }  
+      if (!returning_state.IsReturnable()) {
+        while (returning_state.GetFlowStack().size() > 1) {
+          CloseFlow(returning_state, implicit);
+        }
+        emp_assert(returning_state.GetTopFlow().type == FlowType::CALL, "Bottom flow should be the call.", returning_state.GetTopFlow().type);
+        CloseFlow(returning_state, implicit);
+        return;
+      }  
 
       // Is there anything to return to?
       if (call_stack.size() > 1) {
@@ -971,14 +977,16 @@ namespace TagLGP {
     const memory_t & GetGlobalMem() const { return global_mem; }
 
     /// memory tag accessors
-    emp::vector<tag_t> & GetGlobalMemTags() { return global_mem_tags; }
-    const emp::vector<tag_t> & GetGlobalMemTags() const { return global_mem_tags; }
-    emp::vector<tag_t> & GetWorkingMemTags() { return working_mem_tags; }
-    const emp::vector<tag_t> & GetWorkingMemTags() const { return working_mem_tags; }
-    emp::vector<tag_t> & GetInputMemTags() { return input_mem_tags; }
-    const emp::vector<tag_t> & GetInputMemTags() const { return input_mem_tags; }
-    emp::vector<tag_t> & GetOutputMemTags() { return output_mem_tags; }
-    const emp::vector<tag_t> & GetOutputMemTags() const { return output_mem_tags; }
+    emp::vector<tag_t> & GetMemTags() { return mem_tags; }
+    const emp::vector<tag_t> & GetMemTags() const { return mem_tags; }
+    // emp::vector<tag_t> & GetGlobalMemTags() { return global_mem_tags; }
+    // const emp::vector<tag_t> & GetGlobalMemTags() const { return global_mem_tags; }
+    // emp::vector<tag_t> & GetWorkingMemTags() { return working_mem_tags; }
+    // const emp::vector<tag_t> & GetWorkingMemTags() const { return working_mem_tags; }
+    // emp::vector<tag_t> & GetInputMemTags() { return input_mem_tags; }
+    // const emp::vector<tag_t> & GetInputMemTags() const { return input_mem_tags; }
+    // emp::vector<tag_t> & GetOutputMemTags() { return output_mem_tags; }
+    // const emp::vector<tag_t> & GetOutputMemTags() const { return output_mem_tags; }
 
     CallState & GetCurCallState() {
       emp_assert(call_stack.size(), "Cannot query for current call state if call stack is empty.");
@@ -998,7 +1006,59 @@ namespace TagLGP {
       random_owner = true;
     }
 
+    /// Return best matching memory
+    /// TODO - configurable tie-breaking procedure
+    size_t BestMemoryMatch(const Memory & mem, const tag_t & tag, double threshold=0.0, MemPosType mem_type=MemPosType::ANY) { 
+      // TODO - type checking
+      emp::vector<size_t> best_matches;
+      for (size_t i = 0; i < mem_tags.size(); ++i) {
+        // ANY, VEC, STR, NUM
+        if (mem_type == MemPosType::ANY || mem_type == mem.GetPosType(i)) {
+          double match = emp::SimpleMatchCoeff(tag, mem_tags[i]);
+          if (match == threshold) best_matches.emplace_back(i);
+          else if (match > threshold) {
+            best_matches.resize(1);
+            best_matches[0] = i;
+            threshold = match;
+          }
+        }
+      }
+      if (best_matches.size()) {
+        return best_matches[0];
+      } else {
+        return (size_t)-1;
+      }
+    }
+
+    size_t BestModuleMatch(const tag_t & tag, double threshold=0.0) { 
+      emp::vector<size_t> best_matches;
+      for (size_t i = 0; i < modules.size(); ++i) {
+        double match = emp::SimpleMatchCoeff(tag, modules[i].tag);
+        if (match == threshold) best_matches.emplace_back(i);
+        else if (match > threshold) {
+          best_matches.resize(1);
+          best_matches[0] = i;
+          threshold = match;
+        }
+      }
+      if (best_matches.size()) {
+        return best_matches[0];
+      } else {
+        return (size_t)-1;
+      }
+    }
+
     // ---------------------------- Printing ----------------------------
+    std::string FlowTypeToString(FlowType type) {
+      switch (type) {
+        case FlowType::BASIC: return "BASIC";
+        case FlowType::LOOP: return "LOOP";
+        case FlowType::ROUTINE: return "ROUTINE";
+        case FlowType::CALL: return "CALL";
+        default: return "UNKNOWN";
+      }
+    }
+    
     void PrintModules(std::ostream & os=std::cout) {
       os << "Modules: {";
       for (size_t i = 0; i < modules.size(); ++i) {
@@ -1028,11 +1088,23 @@ namespace TagLGP {
       }
     }
 
-    void PrintMemoryVerbose(std::ostream & os=std::cout) {
+    void PrintMemoryVerbose(const Memory & memory, const emp::vector<tag_t> & mem_tags, std::ostream & os=std::cout, const std::string & indent="") {
+      emp_assert(memory.GetSize() == mem_tags.size());
+      for (size_t i = 0; i < memory.GetSize(); ++i) {
+        os << indent << "mem[" << i << "](";
+        mem_tags[i].Print(os);
+        os << "): ";
+        memory.GetPos(i).Print(os);
+        if (!memory.IsSet(i)) { os << " (unset)"; }
+        os << "\n";
+      } 
+    }
+
+    void PrintHardwareMemoryVerbose(std::ostream & os=std::cout) {
       os << "-- Global memory --\n";
       for (size_t gi = 0; gi < mem_size; ++gi) {
         os << "  mem[" << gi << "](";
-        global_mem_tags[gi].Print(os);
+        mem_tags[gi].Print(os);
         os << "): ";
         global_mem.GetPos(gi).Print(os);
         if (!global_mem.IsSet(gi)) { os << " (unset)"; }
@@ -1045,7 +1117,7 @@ namespace TagLGP {
         os << "  -- Input Memory -- \n";
         for (size_t i = 0; i < mem_size; ++i) {
           os << "    mem[" << i << "](";
-          input_mem_tags[i].Print(os);
+          mem_tags[i].Print(os);
           os << "): ";
           state.GetInputMem().GetPos(i).Print(os);
           if (!state.GetInputMem().IsSet(i)) { os << " (unset)"; }
@@ -1055,7 +1127,7 @@ namespace TagLGP {
         os << "  -- Working Memory -- \n";
         for (size_t i = 0; i < mem_size; ++i) {
           os << "    mem[" << i << "](";
-          working_mem_tags[i].Print(os);
+          mem_tags[i].Print(os);
           os << "): ";
           state.GetWorkingMem().GetPos(i).Print(os);
           if (!state.GetWorkingMem().IsSet(i)) { os << " (unset)"; }
@@ -1065,7 +1137,7 @@ namespace TagLGP {
         os << "  -- Output Memory -- \n";
         for (size_t i = 0; i < mem_size; ++i) {
           os << "    mem[" << i << "](";
-          output_mem_tags[i].Print(os);
+          mem_tags[i].Print(os);
           os << "): ";
           state.GetOutputMem().GetPos(i).Print(os);
           if (!state.GetOutputMem().IsSet(i)) { os << " (unset)"; }
@@ -1074,6 +1146,84 @@ namespace TagLGP {
 
       }
     }
+
+    void PrintHardwareState(std::ostream & os=std::cout) {
+      // Print state of global memory
+      os << "Global memory (size=" << global_mem.GetSize() << "):\n";
+      PrintMemoryVerbose(global_mem, mem_tags, os, "  ");
+      // Print call stack
+      os << "Call stack (size=" << call_stack.size() << "):\n";
+      for (int ci = (int)call_stack.size()-1; ci >= 0; --ci) {
+        CallState & state = call_stack[ci];
+        os << "----------ID="<<ci<<"----------\n";
+        os << "  Attributes: {" << "returnable:" << state.IsReturnable() << "," << "circular:" << state.IsCircular() << "}\n";
+        os << "  Flow stack: [";
+        for (int fi = (int)state.GetFlowStack().size()-1; fi >= 0; --fi) {
+          Flow & flow = state.GetFlowStack()[fi];
+          os << "{";
+          os << "type:" << FlowTypeToString(flow.type) << ",";
+          os << "mp:" << flow.mptr << ",";
+          os << "ip:" << flow.iptr << ",";
+          os << "begin:" << flow.begin << ",";
+          os << "end:" << flow.end;
+          os << "}";
+          if (fi) os << ",";
+        }
+        os << "]\n";
+
+        os << "  Input memory (size=" << state.GetInputMem().GetSize() << "):\n";
+        PrintMemoryVerbose(state.GetInputMem(), mem_tags, os, "    ");
+        os << "  Working memory (size=" << state.GetWorkingMem().GetSize() << "):\n";
+        PrintMemoryVerbose(state.GetWorkingMem(), mem_tags, os, "    ");
+        os << "  Output memory (size=" << state.GetOutputMem().GetSize() << "):\n";
+        PrintMemoryVerbose(state.GetOutputMem(), mem_tags, os, "    ");
+      }
+      os << "----------BOTTOM----------\n"; 
+    }
+
+    void PrintHardwareStateFlat(std::ostream & os=std::cout) {
+      // os << "Global memory tags: ";
+      // os << "Input memory tags: ";
+      // os << "Working memory tags: ";
+      // os << "Output memory tags: ";   
+      // Print state of global memory
+      os << "Global memory (size=" << global_mem.GetSize() << "):";
+      global_mem.Print(os);
+      os << "\n";
+      
+      // Print call stack
+      os << "Call stack (size=" << call_stack.size() << "):\n";
+      for (int ci = (int)call_stack.size()-1; ci >= 0; --ci) {
+        CallState & state = call_stack[ci];
+        os << "----------ID="<<ci<<"----------\n";
+        os << "  Attributes: {" << "returnable:" << state.IsReturnable() << "," << "circular:" << state.IsCircular() << "}\n";
+        os << "  Flow stack: [";
+        for (int fi = (int)state.GetFlowStack().size()-1; fi >= 0; --fi) {
+          Flow & flow = state.GetFlowStack()[fi];
+          os << "{";
+          os << "type:" << FlowTypeToString(flow.type) << ",";
+          os << "mp:" << flow.mptr << ",";
+          os << "ip:" << flow.iptr << ",";
+          os << "begin:" << flow.begin << ",";
+          os << "end:" << flow.end;
+          os << "}";
+          if (fi) os << ",";
+        }
+        os << "]\n";
+
+        os << "  Input memory (size=" << state.GetInputMem().GetSize() << "):";
+        state.GetInputMem().Print(os);
+        os << "\n";
+        os << "  Working memory (size=" << state.GetWorkingMem().GetSize() << "):";
+        state.GetWorkingMem().Print(os);
+        os << "\n";
+        os << "  Output memory (size=" << state.GetOutputMem().GetSize() << "):";
+        state.GetWorkingMem().Print(os);
+        os << "\n";
+      }
+      os << "----------BOTTOM----------\n"; 
+    }
+
   };
 
 }

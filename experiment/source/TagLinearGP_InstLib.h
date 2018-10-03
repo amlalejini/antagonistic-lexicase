@@ -1,4 +1,3 @@
-
 #ifndef TAG_LINEAR_GP_INSTLIB_H
 #define TAG_LINEAR_GP_INSTLIB_H
 
