@@ -81,6 +81,7 @@ namespace TagLGP {
       size_t end;
       size_t iptr;
       size_t mptr;
+      size_t iter;
 
       Flow(FlowType _type, size_t _begin, size_t _end,
            size_t _mptr, size_t _iptr) 
@@ -88,7 +89,8 @@ namespace TagLGP {
           begin(_begin), 
           end(_end), 
           iptr(_iptr),
-          mptr(_mptr)
+          mptr(_mptr),
+          iter(0)
       { ; }
     };
 
@@ -238,6 +240,20 @@ namespace TagLGP {
           return *this;
         }
 
+        bool operator==(const MemoryValue & in) const {
+          if (in.type == type) {
+            switch (type) {
+              case MemoryType::STR: return str == in.str;
+              case MemoryType::NUM: return num == in.num;
+            }
+          }
+          return false;
+        }
+
+        bool operator!=(const MemoryValue & in) const {
+          return !(*this == in);
+        }
+
         // If the union holds a non built-in type, we need to destroy it.
         ~MemoryValue() { 
           using std::string;
@@ -251,6 +267,7 @@ namespace TagLGP {
           if (type == MemoryType::STR) {
             return str;
           } else {
+            emp_assert(false, "Requesting string from non-string memory value.");
             return default_str;
           }
         }
@@ -260,6 +277,7 @@ namespace TagLGP {
             return num;
           } else {
             // TODO - Can str be converted to number?
+            emp_assert(false, "Requesting num from non-num memory value.");
             return default_num;
           }
         }
@@ -295,6 +313,15 @@ namespace TagLGP {
 
           MemoryPosition & operator=(const MemoryPosition &) = default;
           MemoryPosition & operator=(MemoryPosition &&) = default;
+
+          bool operator==(const MemoryPosition & in) const {
+            if (in.is_vector == is_vector) { return pos == in.pos; }
+            return false;
+          }
+
+          bool operator!=(const MemoryPosition & in) const {
+            return !(*this == in);
+          }
 
           void Print(std::ostream & os=std::cout) const {
             if (is_vector) {
@@ -343,8 +370,8 @@ namespace TagLGP {
 
         MemPosType GetPosType(size_t id) const {
           if (memory[id].is_vector) return MemPosType::VEC;
-          else if (memory[id].pos[0].type == mem_type_t::NUM) return MemPosType::NUM;
-          else if (memory[id].pos[0].type == mem_type_t::STR) return MemPosType::STR;
+          else if (memory[id].pos[0].GetType() == mem_type_t::NUM) return MemPosType::NUM;
+          else if (memory[id].pos[0].GetType() == mem_type_t::STR) return MemPosType::STR;
           return MemPosType::ANY;
         }
 
@@ -357,14 +384,22 @@ namespace TagLGP {
 
         MemoryValue & AccessVal(size_t id) {
           emp_assert(id < memory.size());
+          emp_assert(memory[id].pos.size());
           memory[id].set = true;          // Memory becomes set on access by reference.
           return memory[id].pos[0];          
         }
 
         emp::vector<MemoryValue> & AccessVec(size_t id) {
           emp_assert(id < memory.size());
+          emp_assert(memory[id].is_vector);
           memory[id].set = true;          // Memory becomes set on access by reference.
-          return memory[id];
+          return memory[id].pos;
+        }
+
+        void Swap(size_t a, size_t b) {
+          emp_assert(a < memory.size());
+          emp_assert(b < memory.size());
+          std::swap(memory[a], memory[b]);
         }
 
         /// Set memory[id] = other
@@ -377,6 +412,7 @@ namespace TagLGP {
         /// Set memory[id] = vector of MemoryValues
         void Set(size_t id, const emp::vector<MemoryValue> & val_vec) {
           emp_assert(id < memory.size());
+          emp_assert(val_vec.size());
           memory[id].pos = val_vec;
           memory[id].set = true;
           memory[id].is_vector = true;
@@ -401,6 +437,7 @@ namespace TagLGP {
 
         void Set(size_t id, const emp::vector<double> & val_vec) {
           emp_assert(id < memory.size());
+          emp_assert(val_vec.size());
           memory[id].pos.resize(val_vec.size());
           for (size_t i = 0; i < memory[id].pos.size(); ++i) memory[id].pos[i] = val_vec[i];
           memory[id].set = true;
@@ -417,6 +454,7 @@ namespace TagLGP {
 
         void Set(size_t id, const emp::vector<std::string> & str_vec) {
           emp_assert(id < memory.size());
+          emp_assert(str_vec.size());
           memory[id].pos.resize(str_vec.size());
           for (size_t i = 0; i < memory[id].pos.size(); ++i) memory[id].pos[i] = str_vec[i];
           memory[id].set = true;
@@ -550,6 +588,12 @@ namespace TagLGP {
 
       /// Is given position a valid position in this program?
       bool ValidPosition(size_t pos) const { return pos < GetSize(); }
+      bool ValidPosition(size_t mp, size_t ip) const {
+        if (mp < modules.size()) {
+          if (modules[mp].InModule(ip)) return true;
+        }
+        return false;
+      }
 
       /// Set program's instruction sequence to the one given.
       void SetProgram(const inst_seq_t & p) { program = p; }
@@ -656,9 +700,17 @@ namespace TagLGP {
     void CloseFlow_LOOP(CallState & state, bool implicit) {
       emp_assert(state.IsFlow());
       // Closing a LOOP flow:
-      // - In short, we don't. Loop ip back to flow.begin.
-      Flow & top = state.GetTopFlow();
-      top.iptr = top.begin;
+      const size_t loop_begin = state.GetTopFlow().iptr;
+      const size_t mp = state.GetTopFlow().mptr;
+      
+      state.GetFlowStack().pop_back();
+
+      if (state.IsFlow()) {
+        Flow & top = state.GetTopFlow();
+        top.iptr = loop_begin; // Loop parent flow back to beginning of while loop.
+        top.mptr = mp;
+        ++top.iter;
+      }
     }
 
     void CloseFlow_ROUTINE(CallState & state, bool implicit) {
@@ -685,6 +737,33 @@ namespace TagLGP {
         top.iptr = top.begin; // Wrap
       } else {
         state.GetFlowStack().pop_back();
+      }
+    }
+
+
+    void BreakFlow_BASIC(CallState & state) {
+      emp_assert(state.IsFlow());
+      // Break out of basic flow:
+      const size_t flow_end = state.GetTopFlow().end;
+      state.GetFlowStack().pop_back();
+      if (state.IsFlow()) {
+        Flow & top = state.GetTopFlow();
+        top.iptr = flow_end;
+        top.iter = 0;
+        if (ValidPosition(top.mptr, top.iptr)) state.AdvanceIP(); // Skip over Close
+      }
+    }
+
+    void BreakFlow_LOOP(CallState & state) {
+      emp_assert(state.IsFlow());
+      // Break out of loop flow:
+      const size_t flow_end = state.GetTopFlow().end;
+      state.GetFlowStack().pop_back();
+      if (state.IsFlow()) {
+        Flow & top = state.GetTopFlow();
+        top.iptr = flow_end;
+        top.iter = 0;
+        if (ValidPosition(top.mptr, top.iptr)) state.AdvanceIP(); // Skip over Close
       }
     }
 
@@ -754,19 +833,18 @@ namespace TagLGP {
       mem_size = size;
       global_mem.Resize(mem_size, default_mem_val);
       mem_tags.resize(mem_size, tag_t());
-      // global_mem_tags.resize(mem_size, tag_t());
       for (size_t i = 0; i < call_stack.size(); ++i) {
         CallState & state = call_stack[i];
         
         state.input_mem.Resize(mem_size, default_mem_val);
         state.working_mem.Resize(mem_size, default_mem_val);
         state.output_mem.Resize(mem_size, default_mem_val);
-
-        // input_mem_tags.resize(mem_size, tag_t());
-        // working_mem_tags.resize(mem_size, tag_t());
-        // output_mem_tags.resize(mem_size, tag_t());
-
       }
+    }
+
+    void SetMemTags(const emp::vector<tag_t> & tags) {
+      emp_assert(tags.size() == mem_size);
+      mem_tags = tags;
     }
 
     // ---------------------------- Hardware control ----------------------------
@@ -872,8 +950,8 @@ namespace TagLGP {
     }
 
     void OpenFlow(CallState & state, FlowType type, 
-                  size_t begin, size_t end, size_t iptr, size_t mptr) {
-      OpenFlow(state, {type, begin, end, iptr, mptr});
+                  size_t begin, size_t end, size_t mptr, size_t iptr) {
+      OpenFlow(state, {type, begin, end, mptr, iptr});
     }
 
     void OpenFlow(CallState & state, const Flow & new_flow) {
@@ -893,9 +971,28 @@ namespace TagLGP {
       }
     }
 
+    void BreakFlow(CallState & state) {
+      if (state.IsFlow()) {
+        switch (state.GetTopFlow().type) {
+          case BASIC: BreakFlow_BASIC(state); break;
+          case LOOP: BreakFlow_LOOP(state); break;
+          case ROUTINE: break;
+          case CALL: break;
+          default:
+            std::cout << "Uknown flow type (" << state.GetTopFlow().type << ")!" << std::endl;
+        }
+      }
+    }
+
+    void CallModule(const tag_t & tag, double threshold=0.0, bool returnable=true, bool circular=false) {
+      const size_t target_module = FindBestModuleMatch(tag, threshold);
+      if (target_module < modules.size()) {
+        CallModule(target_module, returnable, circular);
+      }
+    }
+
     void CallModule(size_t mID, bool returnable=true, bool circular=false) {
       emp_assert(mID < modules.size());
-      std::cout << ">> --- CALL MODULE ---" << std::endl;
       // Are we at max depth? If so, call fails.
       if (call_stack.size() >= max_call_depth) return;
       // Push new state onto stack.
@@ -948,7 +1045,8 @@ namespace TagLGP {
     
     // ---------------------------- Accessors ----------------------------
     /// Get instruction library associated with hardware's program.
-    emp::Ptr<const inst_lib_t> GetInstLib() const { return program.GetInstLib(); }
+    emp::Ptr<const inst_lib_t> GetInstLibPtr() const { return program.GetInstLibPtr(); }
+    const inst_lib_t & GetInstLib() const { return program.GetInstLib(); }
 
     /// Get random number generator.
     emp::Random & GetRandom() { return *random_ptr; }
@@ -971,6 +1069,8 @@ namespace TagLGP {
     /// Get memory size. How many memory positions are available in input, output,
     /// working, and global memory.
     size_t GetMemSize() const { return mem_size; }
+
+    size_t GetModuleCnt() const { return modules.size(); }
 
     /// Get global memory vector.
     memory_t & GetGlobalMem() { return global_mem; }
@@ -1005,10 +1105,10 @@ namespace TagLGP {
       random_ptr = emp::NewPtr<emp::Random>(seed);
       random_owner = true;
     }
-
+  
     /// Return best matching memory
     /// TODO - configurable tie-breaking procedure
-    size_t BestMemoryMatch(const Memory & mem, const tag_t & tag, double threshold=0.0, MemPosType mem_type=MemPosType::ANY) { 
+    size_t FindBestMemoryMatch(const Memory & mem, const tag_t & tag, double threshold=0.0, MemPosType mem_type=MemPosType::ANY) { 
       // TODO - type checking
       emp::vector<size_t> best_matches;
       for (size_t i = 0; i < mem_tags.size(); ++i) {
@@ -1030,7 +1130,29 @@ namespace TagLGP {
       }
     }
 
-    size_t BestModuleMatch(const tag_t & tag, double threshold=0.0) { 
+    size_t FindBestMemoryMatch(const Memory & mem, const tag_t & tag, std::unordered_set<MemPosType> mem_types, double threshold=0.0) { 
+      // TODO - type checking
+      emp::vector<size_t> best_matches;
+      for (size_t i = 0; i < mem_tags.size(); ++i) {
+        // ANY, VEC, STR, NUM
+        if (emp::Has(mem_types, mem.GetPosType(i))) {
+          double match = emp::SimpleMatchCoeff(tag, mem_tags[i]);
+          if (match == threshold) best_matches.emplace_back(i);
+          else if (match > threshold) {
+            best_matches.resize(1);
+            best_matches[0] = i;
+            threshold = match;
+          }
+        }
+      }
+      if (best_matches.size()) {
+        return best_matches[0];
+      } else {
+        return (size_t)-1;
+      }
+    }
+
+    size_t FindBestModuleMatch(const tag_t & tag, double threshold=0.0) { 
       emp::vector<size_t> best_matches;
       for (size_t i = 0; i < modules.size(); ++i) {
         double match = emp::SimpleMatchCoeff(tag, modules[i].tag);
@@ -1046,6 +1168,31 @@ namespace TagLGP {
       } else {
         return (size_t)-1;
       }
+    }
+
+    bool IsValidMemPos(size_t pos) const { return pos < mem_size; }
+
+    size_t FindEndOfFlow(size_t mp, size_t ip) {
+      emp_assert(mp < modules.size());
+      std::cout << "EOF(mp=" << mp << "," << "ip=" << ip << ")" << std::endl;
+      const inst_lib_t & ilib = program.GetInstLib();
+      int depth_counter = 1;
+      while (true) {
+        std::cout << ">> ip=" << ip << "; d=" << depth_counter << std::endl;
+        if (!ValidPosition(mp, ip)) break;
+        const inst_t & inst = program[ip];
+        if (inst_lib.HasProperty(inst.id, inst_prop_t::BEGIN_FLOW)) {
+          ++depth_counter;
+        } else if (inst_lib.HasProperty(inst.id, inst_prop_t::END_FLOW)) {
+          --depth_counter;
+          // If depth counter is ever 0 after subtracting, we've found the end
+          // to the initial flow.
+          if (depth_counter == 0) break;
+        }
+        ++ip; if (ip >= program.GetSize()) ip %= program.GetSize(); // Wrap ip around
+      }
+      std::cout << "EOF=" << ip << std::endl;
+      return ip;
     }
 
     // ---------------------------- Printing ----------------------------
@@ -1171,6 +1318,16 @@ namespace TagLGP {
         }
         os << "]\n";
 
+        if (state.IsFlow()) {
+          os << "  Inst: ";
+          if (state.GetTopFlow().iptr < program.GetSize()) {
+            program.PrintInst(program[state.GetTopFlow().iptr], os);
+          } else {
+            os << " INVALID";
+          }
+          os << "\n";
+        }
+
         os << "  Input memory (size=" << state.GetInputMem().GetSize() << "):\n";
         PrintMemoryVerbose(state.GetInputMem(), mem_tags, os, "    ");
         os << "  Working memory (size=" << state.GetWorkingMem().GetSize() << "):\n";
@@ -1224,7 +1381,797 @@ namespace TagLGP {
       os << "----------BOTTOM----------\n"; 
     }
 
+    // ------- Instructions --------
+
+    // - Numeric -
+
+    static void Inst_Add(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+
+      //  mem[C] = mem[A] + mem[B]
+      const double A = wmem.AccessVal(posA).GetNum();
+      const double B = wmem.AccessVal(posB).GetNum();
+      wmem.Set(posC, A + B);
+    }
+
+    static void Inst_Sub(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+
+      //  mem[C] = mem[A] - mem[B]
+      const double A = wmem.AccessVal(posA).GetNum();
+      const double B = wmem.AccessVal(posB).GetNum();
+      wmem.Set(posC, A - B);
+    }
+
+    static void Inst_Mult(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+
+      //  mem[C] = mem[A] * mem[B]
+      const double A = wmem.AccessVal(posA).GetNum();
+      const double B = wmem.AccessVal(posB).GetNum();
+      wmem.Set(posC, A * B);
+    }
+
+    static void Inst_Div(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+
+      //  mem[C] = mem[A] / mem[B]
+      const double A = wmem.AccessVal(posA).GetNum();
+      const double B = wmem.AccessVal(posB).GetNum();
+      if (B == 0) { wmem.Set(posC, A / B); }
+    }
+
+    static void Inst_Mod(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+
+      //  mem[C] = mem[A] % mem[B]
+      const int A = (int)wmem.AccessVal(posA).GetNum();
+      const int B = (int)wmem.AccessVal(posB).GetNum();
+      if (B == 0) { wmem.Set(posC, static_cast<int64_t>(A) % static_cast<int64_t>(B)); }
+    }
+
+    static void Inst_Inc(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posA)) return;
+
+      // mem[A] += 1;
+      const double A = wmem.AccessVal(posA).GetNum();
+      wmem.Set(posA, A+1.0);
+    }
+
+    static void Inst_Dec(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posA)) return;
+
+      // mem[A] -= 1;
+      const double A = wmem.AccessVal(posA).GetNum();
+      wmem.Set(posA, A-1.0);
+    }
+
+    static void Inst_Not(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posA)) return;
+
+      // mem[A] = !mem[A];
+      const double A = wmem.AccessVal(posA).GetNum();
+      wmem.Set(posA, (double)(!(bool)A));
+    }
+
+    static void Inst_TestNumEqu(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+
+      const double A = wmem.AccessVal(posA).GetNum();
+      const double B = wmem.AccessVal(posB).GetNum();
+
+      wmem.Set(posC, A == B);
+    }
+
+    static void Inst_TestNumNEqu(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+
+      const double A = wmem.AccessVal(posA).GetNum();
+      const double B = wmem.AccessVal(posB).GetNum();
+
+      wmem.Set(posC, A != B);
+    }
+
+    static void Inst_TestNumLess(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+
+      const double A = wmem.AccessVal(posA).GetNum();
+      const double B = wmem.AccessVal(posB).GetNum();
+      wmem.Set(posC, A < B);
+    }
+
+    static void Inst_Floor(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posA)) return;
+
+      // mem[A] -= 1;
+      const double A = wmem.AccessVal(posA).GetNum();
+      wmem.Set(posA, (double)((int)A));
+    }
+
+
+    // - Memory -
+    static void Inst_CopyMem(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+
+      wmem.Set(posB, wmem.GetPos(posA));
+    }
+
+    static void Inst_SwapMem(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+
+      wmem.Swap(posA, posB);
+    }
+
+    static void Inst_Input(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+      memory_t & imem = state.GetInputMem();
+
+      // Find arguments.
+      size_t iposA = hw.FindBestMemoryMatch(imem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(iposA)) return; // Do nothing
+      size_t wposB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(wposB)) return; // Do nothing
+
+      wmem.Set(wposB, imem.GetPos(iposA));
+    }
+
+    static void Inst_Output(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+      memory_t & omem = state.GetOutputMem();
+
+      // Find arguments.
+      size_t wposA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(wposA)) return; // Do nothing
+
+      size_t oposB = hw.FindBestMemoryMatch(omem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(oposB)) return; // Do nothing
+
+      omem.Set(oposB, wmem.GetPos(wposA));
+    }
+
+    static void Inst_CommitGlobal(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+      memory_t & gmem = hw.GetGlobalMem();
+
+      // Find arguments.
+      size_t wposA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(wposA)) return; // Do nothing
+      size_t gposB = hw.FindBestMemoryMatch(gmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(gposB)) return; // Do nothing
+
+      gmem.Set(gposB, wmem.GetPos(wposA));
+    }
+
+    static void Inst_PullGlobal(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+      memory_t & gmem = hw.GetGlobalMem();
+
+      // Find arguments.
+      size_t gposA = hw.FindBestMemoryMatch(gmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(gposA)) return; // Do nothing
+      size_t wposB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(wposB)) return; // Do nothing
+
+      wmem.Set(wposB, gmem.GetPos(gposA));
+    }
+
+    static void Inst_TestMemEqu(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+
+      wmem.Set(posC, wmem.GetPos(posA) == wmem.GetPos(posB));
+    }
+
+    static void Inst_TestMemNEqu(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+
+      wmem.Set(posC, wmem.GetPos(posA) != wmem.GetPos(posB));
+    }
+
+    // - Vectors -
+    /// Instruction: MakeVector (MemPos A, MemPos B, MemPos C)
+    /// - mem[C] = {mem[A:B]} || {mem[B:A]}
+    static void Inst_MakeVector(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+
+      posA = (posA <= posB) ? posA : posB;
+      emp_assert(posA <= posB);
+
+      emp::vector<MemoryValue> vec;
+      for (size_t i = posA; i <= posB; ++i) {
+        if (wmem.IsVec(i)) continue;
+        vec.emplace_back(wmem.AccessVal(i));
+      }
+      // We'll only set mem[posc] if there were values between [posA:posB]
+      if (vec.size()) { // If vec has members, assign mem[posc] = vec
+        wmem.Set(posC, vec);
+      }
+    }
+
+    /// Instruction: VecGet (VEC, NUM, POS)
+    /// mem[C] = mem[A][mem[B]]
+    static void Inst_VecGet(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::VEC);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+      
+      emp::vector<MemoryValue> & vec = wmem.AccessVec(posA);
+      size_t i = (size_t)wmem.AccessVal(posB).GetNum();
+      if (i < vec.size()) {
+        wmem.Set(posC, vec[i]);
+      }
+    }
+
+    /// Instruction: VecSet (VEC, NUM, POS)
+    /// mem[A][mem[B]] = mem[C]
+    static void Inst_VecSet(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::VEC);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], {MemPosType::NUM, MemPosType::STR}, hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+      
+      emp::vector<MemoryValue> & vec = wmem.AccessVec(posA);
+      size_t i = (size_t)wmem.AccessVal(posB).GetNum();
+      if (i < vec.size()) {
+        vec[i] = wmem.AccessVal(posC);
+      }
+    }
+
+    /// Instruction: VecLen (VEC, POS)
+    static void Inst_VecLen(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+      
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::VEC);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+
+      wmem.Set(posB, wmem.AccessVec(posA).size());
+    }
+
+    /// Instruction: VecAppend (VEC, NUM/STR)
+    static void Inst_VecAppend(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+      
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::VEC);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], {MemPosType::NUM, MemPosType::STR}, hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+
+      emp::vector<MemoryValue> & vec = wmem.AccessVec(posA);
+      vec.emplace_back(wmem.AccessVal(posB));
+    }
+
+    /// Instruction VecPop (VEC, POS)
+    static void Inst_VecPop(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+      
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::VEC);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+
+      emp::vector<MemoryValue> & vec = wmem.AccessVec(posA);
+      if (vec.size()) {
+        MemoryValue val(vec.back()); // Need to do things this way because vector could be overwritten with pop.
+        vec.pop_back();
+        wmem.Set(posB, val);
+      }
+    }
+
+    /// Instruction: VecRemove (VEC, NUM)
+    /// 
+    static void Inst_VecRemove(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+      
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::VEC);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+
+      emp::vector<MemoryValue> & vec = wmem.AccessVec(posA);
+      size_t i = (size_t)wmem.AccessVal(posB).GetNum();
+      if (i < vec.size()) {
+        vec.remove(i);
+      }
+    }
+
+    static void Inst_VecReplaceAll(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::VEC);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], {MemPosType::NUM, MemPosType::STR}, hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], {MemPosType::NUM, MemPosType::STR}, hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+      
+      emp::vector<MemoryValue> & vec = wmem.AccessVec(posA);
+      MemoryValue remove_val(wmem.AccessVal(posB));
+      MemoryValue replace_val(wmem.AccessVal(posC));
+      for (size_t i = 0; i < vec.size(); ++i) {
+        if (vec[i] == remove_val) vec[i] = replace_val; 
+      }
+    }
+
+    /// Instruction: VecIndexOf (VEC, VAL, POS)
+    static void Inst_VecIndexOf(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::VEC);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], {MemPosType::NUM, MemPosType::STR}, hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+      
+      emp::vector<MemoryValue> & vec = wmem.AccessVec(posA);
+      MemoryValue & val = wmem.AccessVal(posB);
+      bool found = false;
+      for (size_t i = 0; i < vec.size(); ++i) {
+        if (vec[i] == val) {
+          found = true;
+          wmem.Set(posC, vec[i]);
+        }
+      }
+      if (!found) wmem.Set(posC, vec.size());
+    }
+
+    static void Inst_VecOccurrencesOf(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::VEC);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], {MemPosType::NUM, MemPosType::STR}, hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+      
+      emp::vector<MemoryValue> & vec = wmem.AccessVec(posA);
+      MemoryValue & val = wmem.AccessVal(posB);
+      size_t cnt = 0;
+      for (size_t i = 0; i < vec.size(); ++i) {
+        if (vec[i] == val) {
+          cnt += 1;
+        }
+      }
+      if (!found) wmem.Set(posC, cnt);
+    }
+
+    static void Inst_VecReverse(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::VEC);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      
+      emp::vector<MemoryValue> & vec = wmem.AccessVec(posA);
+      std::reverse(std::begin(vec), std::end(vec));
+    }
+
+    static void Inst_VecSwapIfLess(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::VEC);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posC)) return;
+      
+      emp::vector<MemoryValue> & vec = wmem.AccessVec(posA);
+      const size_t ai = (size_t)vmem.AccessVal(posB).GetNum();
+      const size_t bi = (size_t)vmem.AccessVal(posC).GetNum();
+      if (ai < vec.size() && bi < vec.size()) {
+        if (vec[ai] < vec[bi]) std::swap(vec[ai], vec[bi]);
+      }
+    }
+
+    static void Inst_VecGetFront(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::VEC);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+
+      emp::vector<MemoryValue> & vec = wmem.AccessVec(posA);
+      if (vec.size()) {
+        wmem.Set(posB, vec.front());
+      }
+    }
+
+    static void Inst_VecGetBack(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::VEC);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+
+      emp::vector<MemoryValue> & vec = wmem.AccessVec(posA);
+      if (vec.size()) {
+        wmem.Set(posB, vec.back());
+      }
+    }
+
+    // - types -
+    static void Inst_IsStr(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+
+      wmem.Set(posB, (double)(wmem.GetPosType(posA) == MemPosType::STR));
+    }
+
+    static void Inst_IsNum(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+
+      wmem.Set(posB, (double)(wmem.GetPosType(posA) == MemPosType::NUM));
+    }
+
+    static void Inst_IsVec(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+
+      wmem.Set(posB, (double)(wmem.GetPosType(posA) == MemPosType::VEC));
+    }
+
+    // static void Inst_ToStr(hardware_t & hw, const inst_t & inst) {
+
+    // }
+
+    // static void Inst_ToNum(hardware_t & hw, const inst_t & inst) {
+
+    // }
+
+    // - Flow control -
+    /// Instruction: If ()
+    /// If (mem[A]) { }
+    static void Inst_If(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find the end of flow
+      const size_t cur_ip = state.GetIP();
+      const size_t cur_mp = state.GetMP();
+      size_t eof = hw.FindEndOfFlow(cur_mp, cur_ip);
+      size_t bof = (cur_ip == 0) ? hw.GetProgram().GetSize() - 1 : cur_ip - 1;
+      
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+
+      bool skip = false;
+      if (!hw.IsValidMemPos(posA)) skip = true;                       // SKip if failed to find valid mem pos
+      else if (hw.GetPosType(posA) != MemPosType::NUM) skip = true;    // Skip if best match is not a number
+      else if (wmem.AccessVal(posA).GetNum() == 0) skip = true;       // Skip if best match = 0 
+
+      if (skip) {
+        state.SetIP(eof);
+        // Advance past the flow close if not at end of module
+        if (hw.ValidPosition(state.GetMP(), eof)) state.AdvanceIP();
+      } else {
+        // Open flow
+        OpenFlow(state, FlowType::BASIC, bof, eof, cur_mp, cur_ip);
+      }
+    }
+
+    static void Inst_While(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find the end of flow
+      const size_t cur_ip = state.GetIP();
+      const size_t cur_mp = state.GetMP();
+      size_t eof = hw.FindEndOfFlow(cur_mp, cur_ip);
+      size_t bof = (cur_ip == 0) ? hw.GetProgram().GetSize() - 1 : cur_ip - 1;
+      
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+
+      bool skip = false;
+      if (!hw.IsValidMemPos(posA)) skip = true;                       // SKip if failed to find valid mem pos
+      else if (hw.GetPosType(posA) != MemPosType::NUM) skip = true;    // Skip if best match is not a number
+      else if (wmem.AccessVal(posA).GetNum() == 0) skip = true;       // Skip if best match = 0 
+
+      if (skip) {
+        state.SetIP(eof);
+        state.GetTopFlow().iter = 0;
+        // Advance past the flow close if not at end of module
+        if (hw.ValidPosition(state.GetMP(), eof)) state.AdvanceIP();
+      } else {
+        // Open flow
+        OpenFlow(state, FlowType::LOOP, bof, eof, cur_mp, cur_ip);
+      }
+    }
+
+    static void Inst_Countdown(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find the end of flow
+      const size_t cur_ip = state.GetIP();
+      const size_t cur_mp = state.GetMP();
+      size_t eof = hw.FindEndOfFlow(cur_mp, cur_ip);
+      size_t bof = (cur_ip == 0) ? hw.GetProgram().GetSize() - 1 : cur_ip - 1;
+      
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+
+      bool skip = false;
+      if (!hw.IsValidMemPos(posA)) skip = true;                       // SKip if failed to find valid mem pos
+      else if (hw.GetPosType(posA) != MemPosType::NUM) skip = true;    // Skip if best match is not a number
+      else if (wmem.AccessVal(posA).GetNum() == 0) skip = true;       // Skip if best match = 0 
+
+      if (skip) {
+        state.SetIP(eof);
+        state.GetTopFlow().iter = 0;
+        // Advance past the flow close if not at end of module
+        if (hw.ValidPosition(state.GetMP(), eof)) state.AdvanceIP();
+      } else {
+        emp_assert(wmem.GetPosType(posA) == MemPosType::NUM);
+        // Decrement
+        const double val = wmem.AccessVal(posA).GetNum();
+        wmem.Set(posA, val-1);
+        // Open flow
+        OpenFlow(state, FlowType::LOOP, bof, eof, cur_mp, cur_ip);
+      }
+    }
+
+
+    /// For each in vec
+    /// Foreach (POS, VEC)
+    static void Inst_Foreach(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find the end of flow
+      const size_t cur_ip = state.GetIP();
+      const size_t cur_mp = state.GetMP();
+      size_t eof = hw.FindEndOfFlow(cur_mp, cur_ip);
+      size_t bof = (cur_ip == 0) ? hw.GetProgram().GetSize() - 1 : cur_ip - 1;
+      
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::VEC);
+
+      // Skip if: posA or posB invalid
+
+      bool skip = false;
+      if (!hw.IsValidMemPos(posA) || !hw.IsValidMemPos(posB)) skip = true;                       // SKip if failed to find valid mem pos
+      else if (state.GetTopFlow().iter >= wmem.AccessVec(posB).size()) skip = true;
+  
+      if (skip) {
+        state.SetIP(eof);
+        state.GetTopFlow().iter = 0; // Loop's parent flow
+        // Advance past the flow close if not at end of module
+        if (hw.ValidPosition(state.GetMP(), eof)) state.AdvanceIP();
+      } else {
+        emp_assert(wmem.GetPosType(posA) == MemPosType::NUM);
+        // mem[posA] = vec[iter]
+        wmem.Set(posA, wmem.AccessVec(posA)[state.GetTopFlow().iter]);
+        // Open flow
+        OpenFlow(state, FlowType::LOOP, bof, eof, cur_mp, cur_ip);
+      }
+    }
+
+    static void Inst_Close(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      FlowType cur_flow_type = state.GetTopFlow().type;
+      if (cur_flow_type == FlowType::BASIC || cur_flow_type == FlowType::LOOP) {
+        hw.CloseFlow(state);
+      }
+    }
+
+    static void Inst_Break(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      FlowType cur_flow_type = state.GetTopFlow().type;
+      if (cur_flow_type == FlowType::BASIC || cur_flow_type == FlowType::LOOP) {
+        hw.BreakFlow(state);
+      }
+    }
+
+    static void Inst_Call(hardware_t & hw, const inst_t & inst) {
+      hw.CallModule(inst.arg_tags[0], hw.GetMinTagSpecificity());
+    }
+
+    static void Inst_Routine(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      const size_t target_module = hw.FindBestModuleMatch(inst.arg_tags[0], hw.GetMinTagSpecificity());
+      if (target_module < hw.GetModuleCnt()) {
+        hw.OpenFlowRoutine(state, target_module);
+      }
+    }
+
+    static void Inst_Return(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      while (state.IsFlow()) {
+        Flow & top = state.GetTopFlow();
+        if (top.type == FlowType::CALL || top.type == FlowType::ROUTINE) {
+          hw.CloseFlow(state);
+          break;
+        } else {
+          hw.CloseFlow(state);
+        }
+      }
+    }
+
+    
+    // - MISC -
+    static void Inst_Nop(hardware_t & hw, const inst_t & inst) { return; }
+    
+
   };
+
+  // TODO - make writing loop instructions way easier
+  // todo - make writing instructions in general way easier
 
 }
 
