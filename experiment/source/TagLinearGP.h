@@ -588,12 +588,6 @@ namespace TagLGP {
 
       /// Is given position a valid position in this program?
       bool ValidPosition(size_t pos) const { return pos < GetSize(); }
-      bool ValidPosition(size_t mp, size_t ip) const {
-        if (mp < modules.size()) {
-          if (modules[mp].InModule(ip)) return true;
-        }
-        return false;
-      }
 
       /// Set program's instruction sequence to the one given.
       void SetProgram(const inst_seq_t & p) { program = p; }
@@ -1172,26 +1166,36 @@ namespace TagLGP {
 
     bool IsValidMemPos(size_t pos) const { return pos < mem_size; }
 
+    bool ValidPosition(size_t mp, size_t ip) const {
+      if (mp < modules.size()) {
+        if (modules[mp].InModule(ip)) return true;
+      }
+      return false;
+    }
+
     size_t FindEndOfFlow(size_t mp, size_t ip) {
       emp_assert(mp < modules.size());
-      std::cout << "EOF(mp=" << mp << "," << "ip=" << ip << ")" << std::endl;
+      // std::cout << "EOF(mp=" << mp << "," << "ip=" << ip << ")" << std::endl;
       const inst_lib_t & ilib = program.GetInstLib();
       int depth_counter = 1;
+      std::unordered_set<size_t> seen;
       while (true) {
-        std::cout << ">> ip=" << ip << "; d=" << depth_counter << std::endl;
+        // std::cout << ">> ip=" << ip << "; d=" << depth_counter << std::endl;
         if (!ValidPosition(mp, ip)) break;
         const inst_t & inst = program[ip];
-        if (inst_lib.HasProperty(inst.id, inst_prop_t::BEGIN_FLOW)) {
+        if (ilib.HasProperty(inst.id, inst_prop_t::BEGIN_FLOW)) {
           ++depth_counter;
-        } else if (inst_lib.HasProperty(inst.id, inst_prop_t::END_FLOW)) {
+        } else if (ilib.HasProperty(inst.id, inst_prop_t::END_FLOW)) {
           --depth_counter;
           // If depth counter is ever 0 after subtracting, we've found the end
           // to the initial flow.
           if (depth_counter == 0) break;
         }
-        ++ip; if (ip >= program.GetSize()) ip %= program.GetSize(); // Wrap ip around
+        seen.emplace(ip); 
+        ++ip; 
+        if (ip >= program.GetSize() && seen.size() < modules[mp].GetLen()) ip %= program.GetSize(); // Wrap ip around
       }
-      std::cout << "EOF=" << ip << std::endl;
+      // std::cout << "EOF=" << ip << std::endl;
       return ip;
     }
 
@@ -1822,7 +1826,7 @@ namespace TagLGP {
       emp::vector<MemoryValue> & vec = wmem.AccessVec(posA);
       size_t i = (size_t)wmem.AccessVal(posB).GetNum();
       if (i < vec.size()) {
-        vec.remove(i);
+        vec.erase(vec.begin()+i);
       }
     }
 
@@ -1888,7 +1892,7 @@ namespace TagLGP {
           cnt += 1;
         }
       }
-      if (!found) wmem.Set(posC, cnt);
+      wmem.Set(posC, cnt);
     }
 
     static void Inst_VecReverse(hardware_t & hw, const inst_t & inst) {
@@ -1914,10 +1918,13 @@ namespace TagLGP {
       if (!hw.IsValidMemPos(posC)) return;
       
       emp::vector<MemoryValue> & vec = wmem.AccessVec(posA);
-      const size_t ai = (size_t)vmem.AccessVal(posB).GetNum();
-      const size_t bi = (size_t)vmem.AccessVal(posC).GetNum();
+      const size_t ai = (size_t)wmem.AccessVal(posB).GetNum();
+      const size_t bi = (size_t)wmem.AccessVal(posC).GetNum();
       if (ai < vec.size() && bi < vec.size()) {
-        if (vec[ai] < vec[bi]) std::swap(vec[ai], vec[bi]);
+        // Want numbers
+        double a = (vec[ai].GetType() == MemoryValue::MemoryType::NUM) ? vec[ai].GetNum() : 0;
+        double b = (vec[bi].GetType() == MemoryValue::MemoryType::NUM) ? vec[bi].GetNum() : 0;
+        if (a < b) std::swap(vec[ai], vec[bi]);
       }
     }
 
@@ -2013,7 +2020,7 @@ namespace TagLGP {
 
       bool skip = false;
       if (!hw.IsValidMemPos(posA)) skip = true;                       // SKip if failed to find valid mem pos
-      else if (hw.GetPosType(posA) != MemPosType::NUM) skip = true;    // Skip if best match is not a number
+      else if (wmem.GetPosType(posA) != MemPosType::NUM) skip = true;    // Skip if best match is not a number
       else if (wmem.AccessVal(posA).GetNum() == 0) skip = true;       // Skip if best match = 0 
 
       if (skip) {
@@ -2022,7 +2029,7 @@ namespace TagLGP {
         if (hw.ValidPosition(state.GetMP(), eof)) state.AdvanceIP();
       } else {
         // Open flow
-        OpenFlow(state, FlowType::BASIC, bof, eof, cur_mp, cur_ip);
+        hw.OpenFlow(state, FlowType::BASIC, bof, eof, cur_mp, cur_ip);
       }
     }
 
@@ -2040,7 +2047,7 @@ namespace TagLGP {
 
       bool skip = false;
       if (!hw.IsValidMemPos(posA)) skip = true;                       // SKip if failed to find valid mem pos
-      else if (hw.GetPosType(posA) != MemPosType::NUM) skip = true;    // Skip if best match is not a number
+      else if (wmem.GetPosType(posA) != MemPosType::NUM) skip = true;    // Skip if best match is not a number
       else if (wmem.AccessVal(posA).GetNum() == 0) skip = true;       // Skip if best match = 0 
 
       if (skip) {
@@ -2050,7 +2057,7 @@ namespace TagLGP {
         if (hw.ValidPosition(state.GetMP(), eof)) state.AdvanceIP();
       } else {
         // Open flow
-        OpenFlow(state, FlowType::LOOP, bof, eof, cur_mp, cur_ip);
+        hw.OpenFlow(state, FlowType::LOOP, bof, eof, cur_mp, cur_ip);
       }
     }
 
@@ -2068,7 +2075,7 @@ namespace TagLGP {
 
       bool skip = false;
       if (!hw.IsValidMemPos(posA)) skip = true;                       // SKip if failed to find valid mem pos
-      else if (hw.GetPosType(posA) != MemPosType::NUM) skip = true;    // Skip if best match is not a number
+      else if (wmem.GetPosType(posA) != MemPosType::NUM) skip = true;    // Skip if best match is not a number
       else if (wmem.AccessVal(posA).GetNum() == 0) skip = true;       // Skip if best match = 0 
 
       if (skip) {
@@ -2082,7 +2089,7 @@ namespace TagLGP {
         const double val = wmem.AccessVal(posA).GetNum();
         wmem.Set(posA, val-1);
         // Open flow
-        OpenFlow(state, FlowType::LOOP, bof, eof, cur_mp, cur_ip);
+        hw.OpenFlow(state, FlowType::LOOP, bof, eof, cur_mp, cur_ip);
       }
     }
 
@@ -2118,7 +2125,7 @@ namespace TagLGP {
         // mem[posA] = vec[iter]
         wmem.Set(posA, wmem.AccessVec(posA)[state.GetTopFlow().iter]);
         // Open flow
-        OpenFlow(state, FlowType::LOOP, bof, eof, cur_mp, cur_ip);
+        hw.OpenFlow(state, FlowType::LOOP, bof, eof, cur_mp, cur_ip);
       }
     }
 
