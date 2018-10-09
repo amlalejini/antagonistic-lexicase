@@ -101,7 +101,7 @@ void SortingNetwork::Print(std::ostream & out, std::string op_sep) const {
 void SortingNetwork::PrintVert(std::ostream & out) const {
   for (size_t i=0; i < network.size(); ++i) {
     if (i) out << "\n";
-    out << network[i][0] << " => " << network[i][1];
+    out << network[i][0] << " <=> " << network[i][1];
   }
 } 
 

@@ -77,11 +77,15 @@ bool SortingTest::Evaluate(const SortingNetwork & network) const {
   for (size_t ni = 0; ni < network.GetSize(); ++ni) {
     // if [j] < [i] => swap([i],[j])
     const size_t i = network[ni][0];
-    const size_t j = network[ni][1]; 
-    if (eval_test[j] < eval_test[i]) {
-      const int temp_i = eval_test[i];
-      eval_test[i] = eval_test[j];
-      eval_test[j] = temp_i;
+    const size_t j = network[ni][1];
+    
+    size_t head;
+    size_t tail;
+    if (i < j) { head = i; tail = j; } 
+    else { head = j; tail = i; }
+
+    if (eval_test[tail] < eval_test[head]) {
+      std::swap(eval_test[tail], eval_test[head]);
     }
   }
   // Is eval test sorted?
