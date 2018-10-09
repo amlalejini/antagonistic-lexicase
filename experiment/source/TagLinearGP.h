@@ -1379,7 +1379,6 @@ namespace TagLGP {
     static void Inst_Add(hardware_t & hw, const inst_t & inst) {
       CallState & state = hw.GetCurCallState();
       memory_t & wmem = state.GetWorkingMem();
-      hw.GetProgram().PrintInst(inst); std::cout << std::endl;
       // Find arguments.
       size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
       if (!hw.IsValidMemPos(posA)) return; // Do nothing
