@@ -400,7 +400,7 @@ namespace TagLGP {
         /// Set memory[id] = vector of MemoryValues
         void Set(size_t id, const emp::vector<MemoryValue> & val_vec) {
           emp_assert(id < memory.size());
-          emp_assert(val_vec.size());
+          // emp_assert(val_vec.size());
           memory[id].pos = val_vec;
           memory[id].set = true;
           memory[id].is_vector = true;
@@ -425,7 +425,7 @@ namespace TagLGP {
 
         void Set(size_t id, const emp::vector<double> & val_vec) {
           emp_assert(id < memory.size());
-          emp_assert(val_vec.size());
+          // emp_assert(val_vec.size());
           memory[id].pos.resize(val_vec.size());
           for (size_t i = 0; i < memory[id].pos.size(); ++i) memory[id].pos[i] = val_vec[i];
           memory[id].set = true;
@@ -1707,9 +1707,10 @@ namespace TagLGP {
         vec.emplace_back(wmem.AccessVal(i));
       }
       // We'll only set mem[posc] if there were values between [posA:posB]
-      if (vec.size()) { // If vec has members, assign mem[posc] = vec
-        wmem.Set(posC, vec);
-      }
+      // if (vec.size()) { // If vec has members, assign mem[posc] = vec
+      //   wmem.Set(posC, vec);
+      // }
+      wmem.Set(posC, vec);
     }
 
     /// Instruction: VecGet (VEC, NUM, POS)
