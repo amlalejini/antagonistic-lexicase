@@ -1904,13 +1904,18 @@ namespace TagLGP {
       if (!hw.IsValidMemPos(posC)) return;
       
       emp::vector<MemoryValue> & vec = wmem.AccessVec(posA);
+      
       const size_t ai = (size_t)wmem.AccessVal(posB).GetNum();
       const size_t bi = (size_t)wmem.AccessVal(posC).GetNum();
+
       if (ai < vec.size() && bi < vec.size()) {
         // Want numbers
         double a = (vec[ai].GetType() == MemoryValue::MemoryType::NUM) ? vec[ai].GetNum() : 0;
         double b = (vec[bi].GetType() == MemoryValue::MemoryType::NUM) ? vec[bi].GetNum() : 0;
-        if (a < b) std::swap(vec[ai], vec[bi]);
+        if (a < b) {
+          std::swap(vec[ai], vec[bi]);
+        } else {
+        }
       }
     }
 
