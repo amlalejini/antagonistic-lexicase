@@ -1853,7 +1853,7 @@ namespace TagLGP {
       for (size_t i = 0; i < vec.size(); ++i) {
         if (vec[i] == val) {
           found = true;
-          wmem.Set(posC, vec[i]);
+          wmem.Set(posC, i);
         }
       }
       if (!found) wmem.Set(posC, vec.size());

@@ -1626,28 +1626,487 @@ TEST_CASE("Inst_VecSet", "[taglgp]") {
 }
 */
 
+/*
 TEST_CASE("Inst_VecLen", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 12;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+  using mem_val_t = typename hardware_t::MemoryValue;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("VecLen", hardware_t::Inst_VecLen, 2, "mem-ANY[B] = LEN(mem-VEC[A])");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    size_t posA = random->GetUInt(0, matrix.size());
+    size_t posB = random->GetUInt(0, matrix.size());
+    size_t posC = random->GetUInt(0, matrix.size());
+    
+    prog.PushInst("VecLen", {matrix[posA], matrix[posB], matrix[posC]});
+    prog.PushInst("VecLen", {matrix[posA], matrix[posB], matrix[posC]});
+    
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+
+    emp::vector<mem_val_t> vec(random->GetUInt(128));
+    for (size_t vi = 0; vi < vec.size(); ++vi) {
+      if (random->P(0.5)) {
+        vec[vi] = random->GetDouble(-100, 100);
+      } else {
+        vec[vi] = emp::to_string(random->GetDouble(-100, 100));
+      }
+    }
+
+    wmem.Set(posA, vec);
+    cpu.SingleProcess();
+    REQUIRE(wmem.GetPosType(posB) == hardware_t::MemPosType::NUM);
+    REQUIRE(wmem.AccessVal(posB).GetNum() == vec.size());
+
+    // Get rid of vectors and make sure instruction did nothing
+    wmem.Set(0, 0);
+    wmem.Set(1, 0);
+    wmem.Set(2, 0);
+    wmem.Set(3, 0);
+    cpu.SingleProcess();
+    REQUIRE(wmem.AccessVal(0).GetNum() == 0);
+    REQUIRE(wmem.AccessVal(1).GetNum() == 0);
+    REQUIRE(wmem.AccessVal(2).GetNum() == 0);
+    REQUIRE(wmem.AccessVal(3).GetNum() == 0);
+  }
 }
+*/
 
+/*
 TEST_CASE("Inst_VecAppend", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 12;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+  using mem_val_t = typename hardware_t::MemoryValue;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("VecAppend", hardware_t::Inst_VecAppend, 2, "mem-VEC[A].append(mem-NUM,STR[B])");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    size_t posA = random->GetUInt(0, matrix.size());
+    size_t posB = random->GetUInt(0, matrix.size());
+    size_t posC = random->GetUInt(0, matrix.size());
+    
+    prog.PushInst("VecAppend", {matrix[posA], matrix[posB], matrix[posC]});
+    
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+
+    emp::vector<mem_val_t> vec(random->GetUInt(128));
+    for (size_t vi = 0; vi < vec.size(); ++vi) {
+      if (random->P(0.5)) {
+        vec[vi] = random->GetDouble(-100, 100);
+      } else {
+        vec[vi] = emp::to_string(random->GetDouble(-100, 100));
+      }
+    }
+
+    mem_val_t B;
+    if (random->P(0.5)) {
+      B = emp::to_string(random->GetDouble(-100, 100));
+    } else {
+      B = random->GetDouble(-100, 100);
+    }
+
+    wmem.Set(posA, vec);
+    wmem.Set(posB, B);
+
+    vec.emplace_back(B);
+    cpu.SingleProcess();
+
+    if (posA == posB) {
+      // No vectors, nothing should happen.
+      REQUIRE(wmem.IsVec(posA) == false);
+      REQUIRE(wmem.AccessVal(posA) == wmem.AccessVal(posB));
+
+    } else {
+      // Did an append happen?
+
+      if (wmem.AccessVec(posA) != vec) {
+        cpu.GetProgram().Print();
+        cpu.PrintHardwareState();
+      }
+
+      REQUIRE(wmem.IsVec(posA));
+      REQUIRE(wmem.AccessVec(posA) == vec);  
+    }
+  }
 }
+*/
 
+/*
 TEST_CASE("Inst_VecPop", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 12;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+  using mem_val_t = typename hardware_t::MemoryValue;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("VecPop", hardware_t::Inst_VecPop, 2, "mem-ANY[B] = mem-VEC[A].pop()");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    size_t posA = random->GetUInt(0, matrix.size());
+    size_t posB = random->GetUInt(0, matrix.size());
+    while (posB == posA) posB = random->GetUInt(0, matrix.size());
+    size_t posC = random->GetUInt(0, matrix.size());
+    
+    prog.PushInst("VecPop", {matrix[posA], matrix[posB], matrix[posC]});
+    
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+
+    emp::vector<mem_val_t> vec(random->GetUInt(128));
+    for (size_t vi = 0; vi < vec.size(); ++vi) {
+      if (random->P(0.5)) {
+        vec[vi] = random->GetDouble(-100, 100);
+      } else {
+        vec[vi] = emp::to_string(random->GetDouble(-100, 100));
+      }
+    }
+
+    wmem.Set(posA, vec);
+    wmem.Set(posB, 0);
+    mem_val_t B;
+    if (vec.size()) {
+      B = vec.back();  
+    } else {
+      B = 0;
+    }
+
+    cpu.SingleProcess();
+
+    if (vec.size()) {
+      vec.pop_back();
+      REQUIRE(wmem.IsVec(posA));
+      REQUIRE(wmem.AccessVec(posA) == vec);
+    } 
+    REQUIRE(!wmem.IsVec(posB));
+    REQUIRE(wmem.AccessVal(posB) == B);
+  }
 }
+*/
 
 TEST_CASE("Inst_VecRemove", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 12;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+  using mem_val_t = typename hardware_t::MemoryValue;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("VecRemove", hardware_t::Inst_VecRemove, 2, "mem-VEC[A].Remove(mem-NUM[A])");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    size_t posA = random->GetUInt(0, matrix.size());
+    size_t posB = random->GetUInt(0, matrix.size());
+    while (posB == posA) posB = random->GetUInt(0, matrix.size());
+    size_t posC = random->GetUInt(0, matrix.size());
+    
+    prog.PushInst("VecRemove", {matrix[posA], matrix[posB], matrix[posC]});
+    
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+
+    emp::vector<mem_val_t> vec(random->GetUInt(128));
+    for (size_t vi = 0; vi < vec.size(); ++vi) {
+      if (random->P(0.5)) {
+        vec[vi] = random->GetDouble(-100, 100);
+      } else {
+        vec[vi] = emp::to_string(random->GetDouble(-100, 100));
+      }
+    }
+
+    double B = (double)random->GetUInt(0, 128);
+    wmem.Set(posA, vec);
+    wmem.Set(posB, B);
+
+    cpu.SingleProcess();
+
+    if (B < vec.size()) {
+      // VecRemove should have actually removed element B.
+      vec.erase(vec.begin()+(size_t)B);
+      REQUIRE(wmem.IsVec(posA));
+      REQUIRE(wmem.AccessVec(posA) == vec);
+    } 
+    REQUIRE(wmem.IsVec(posA));
+    REQUIRE(wmem.AccessVec(posA) == vec);
+  }
 }
 
 TEST_CASE("Inst_VecReplaceAll", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 12;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+  using mem_val_t = typename hardware_t::MemoryValue;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("VecReplaceAll", hardware_t::Inst_VecReplaceAll, 3, "mem-VEC[A].Replace(mem-NUM,STR[B], mem-NUM[C])");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    size_t posA = random->GetUInt(0, matrix.size());
+    size_t posB = random->GetUInt(0, matrix.size());
+    while (posB == posA) posB = random->GetUInt(0, matrix.size());
+    size_t posC = random->GetUInt(0, matrix.size());
+    while (posC == posA || posC == posB) posC = random->GetUInt(0, matrix.size());
+    
+    prog.PushInst("VecReplaceAll", {matrix[posA], matrix[posB], matrix[posC]});
+
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+
+    emp::vector<mem_val_t> vec(random->GetUInt(128));
+    for (size_t vi = 0; vi < vec.size(); ++vi) {
+      if (random->P(0.5)) {
+        vec[vi] = random->GetUInt(0, 5);
+      } else {
+        vec[vi] = emp::to_string(random->GetUInt(0, 5));
+      }
+    }
+
+    mem_val_t B; 
+    B = random->GetUInt(0, 5);
+    mem_val_t C;
+    C = "REPLACE VAL";
+    
+    wmem.Set(posA, vec);
+    wmem.Set(posB, B);
+    wmem.Set(posC, C);
+
+    cpu.SingleProcess();
+
+    for (size_t vi = 0; vi < vec.size(); ++vi) {
+      if (vec[vi] == B) vec[vi] = C;
+    }
+
+    REQUIRE(wmem.IsVec(posA));
+    REQUIRE(vec == wmem.AccessVec(posA));
+  }
 }
 
 TEST_CASE("Inst_VecIndexOf", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 12;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+  using mem_val_t = typename hardware_t::MemoryValue;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("VecIndexOf", hardware_t::Inst_VecIndexOf, 3, "");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    size_t posA = random->GetUInt(0, matrix.size());
+    size_t posB = random->GetUInt(0, matrix.size());
+    while (posB == posA) posB = random->GetUInt(0, matrix.size());
+    size_t posC = random->GetUInt(0, matrix.size());
+    while (posC == posA || posC == posB) posC = random->GetUInt(0, matrix.size());
+    
+    prog.PushInst("VecIndexOf", {matrix[posA], matrix[posB], matrix[posC]});
+
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+
+    emp::vector<mem_val_t> vec(random->GetUInt(1,128));
+    for (size_t vi = 0; vi < vec.size(); ++vi) {
+      if (random->P(0.5)) {
+        vec[vi] = random->GetUInt(0, 5);
+      } else {
+        vec[vi] = emp::to_string(random->GetUInt(0, 5));
+      }
+    }
+
+    size_t pos = random->GetUInt(vec.size());
+    mem_val_t B;
+    B = "FIND ME";
+    vec[pos] = B;
+
+    wmem.Set(posA, vec);
+    wmem.Set(posB, B);
+
+    cpu.SingleProcess();
+
+    REQUIRE(wmem.AccessVal(posC).GetNum() == pos);
+  }
 }
 
 TEST_CASE("Inst_VecOccurrencesOf", "[taglgp]") {
