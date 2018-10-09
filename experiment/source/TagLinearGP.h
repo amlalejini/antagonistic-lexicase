@@ -16,19 +16,6 @@
 namespace TagLGP {
   /////////////
   // TODO:
-  // - [x] Work out how memory will be represented
-  // - [ ] Default instruction set
-  // - [ ] At the moment, function returns are likely broken (when returning from closed call).
-  //    - Closing from non-returnable function is broken
-  // - [ ] Utilities
-  //  - [ ] Random program
-  // - [ ] Tests
-  //  - [ ] Memory
-  //  - [ ] Calls
-  //  - [ ] Flows
-  //  - [ ] Execution
-  // - [ ] Caching
-  //  - memory search, module search
   // NOTES:
   // - WARNING - Can currently have infinitely recursing routine flows...
   /////////////
@@ -598,7 +585,7 @@ namespace TagLGP {
       }
 
       /// Push new instruction to program by instruction name.
-      void PushInst(std::string & name, const args_t & args) {
+      void PushInst(const std::string & name, const args_t & args) {
         emp_assert(inst_lib->IsInst(name), "Uknown instruction name", name);
         PushInst(inst_lib->GetID(name), args);
       }
@@ -854,7 +841,7 @@ namespace TagLGP {
     /// Not allowed to reset hardware during execution.
     void ResetHardware() {
       emp_assert(!is_executing);
-      global_mem.clear();
+      global_mem.Reset(default_mem_val);
       call_stack.clear();
       is_executing = false;
     }
@@ -1392,7 +1379,7 @@ namespace TagLGP {
     static void Inst_Add(hardware_t & hw, const inst_t & inst) {
       CallState & state = hw.GetCurCallState();
       memory_t & wmem = state.GetWorkingMem();
-
+      hw.GetProgram().PrintInst(inst); std::cout << std::endl;
       // Find arguments.
       size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
       if (!hw.IsValidMemPos(posA)) return; // Do nothing
@@ -1400,7 +1387,6 @@ namespace TagLGP {
       if (!hw.IsValidMemPos(posB)) return; // Do nothing
       size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
       if (!hw.IsValidMemPos(posC)) return;
-
       //  mem[C] = mem[A] + mem[B]
       const double A = wmem.AccessVal(posA).GetNum();
       const double B = wmem.AccessVal(posB).GetNum();

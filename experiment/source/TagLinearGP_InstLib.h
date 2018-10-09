@@ -85,14 +85,14 @@ namespace TagLGP {
     /// Get the number of instructions in this set.
     size_t GetSize() const { return inst_lib.size(); }
 
-    bool IsInst(const std::string name) const {
-        return Has(name_map, name);
+    bool IsInst(const std::string & name) const {
+        return emp::Has(name_map, name);
     }
 
     /// Return the ID of the instruction that has the specified name.
     size_t GetID(const std::string & name) const {
-      emp_assert(Has(name_map, name), name);
-      return Find(name_map, name, (size_t) -1);
+      emp_assert(emp::Has(name_map, name), name);
+      return emp::Find(name_map, name, (size_t) -1);
     }
 
     /// @brief Add a new instruction to the set.

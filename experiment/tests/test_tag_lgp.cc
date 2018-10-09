@@ -21,6 +21,254 @@
 
 // TODO - one test per instruction type
 
+TEST_CASE("Inst_Add", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 2;
+
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("Add", hardware_t::Inst_Add, 3, "mem[C] = mem[A] + mem[B]");
+  // RND + RND = (RND + RND)
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    const size_t posA = random->GetUInt(0, matrix.size());
+    const size_t posB = random->GetUInt(0, matrix.size());
+    const size_t posC = random->GetUInt(0, matrix.size());
+
+    prog.PushInst("Add", {matrix[posA], matrix[posB], matrix[posC]});
+    
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+    const double A = (double)random->GetInt(-1000, 1000);
+    const double B = (double)random->GetInt(-1000, 1000);
+    const double C = (posA != posB) ? A + B : B + B;
+    wmem.Set(posA, A);
+    wmem.Set(posB, B);
+    cpu.SingleProcess();
+    double memC = wmem.AccessVal(posC).GetNum();
+    if (memC != C) {
+      cpu.PrintHardwareState();
+      std::cout << "posA = " << posA << "; posB = " << posB << "; posC = " << posC << std::endl;
+      std::cout << "A = " << A << "; B = " << B << "; C = " << C << std::endl;
+    }
+    REQUIRE(memC == C);
+  }
+  /////////////////////////////////////
+
+  // Clean up
+  inst_lib.Delete();
+  random.Delete();
+}
+
+TEST_CASE("Inst_Sub", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_Mult", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_Inc", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_Dec", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_Div", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_Mod", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_TestNumEqu", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_TestNumNEqu", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_TestNumLess", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_Floor", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_CopyMem", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_SwapMem", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_Input", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_Output", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_CommitGlobal", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_PullGlobal", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_TestMemEqu", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_TestMemNEqu", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_MakeVector", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_VecGet", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_VecSet", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_VecLen", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_VecAppend", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_VecPop", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_VecRemove", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_VecReplaceAll", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_VecIndexOf", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_VecOccurrencesOf", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_VecReverse", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_VecSwapIfLess", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_VecGetFront", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_VecGetBack", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_IsStr", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_IsNum", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_IsVec", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_If", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_While", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_Countdown", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_Foreach", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_Close", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_Break", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_Call", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_Routine", "[taglgp]") {
+
+}
+
+TEST_CASE("Inst_Return", "[taglgp]") {
+
+}
+
+
+
+/*
 TEST_CASE("InstLib", "[taglgp]") {
 
   constexpr size_t TAG_WIDTH = 4;
@@ -101,8 +349,8 @@ TEST_CASE("InstLib", "[taglgp]") {
   for (size_t i = 0; i <= 16; ++i) {
     inst_lib->AddInst("Set-" + emp::to_string(i),
       [i](hardware_t & hw, const inst_t & inst) {
-        CallState & state = hw.GetCurCallState();
-        memory_t & wmem = state.GetWorkingMem();
+        hardware_t::CallState & state = hw.GetCurCallState();
+        hardware_t::Memory & wmem = state.GetWorkingMem();
         
         size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
         if (!hw.IsValidMemPos(posA)) return; // Do nothing
@@ -161,3 +409,4 @@ TEST_CASE("InstLib", "[taglgp]") {
     }
   }
 }
+*/
