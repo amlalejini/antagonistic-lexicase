@@ -4,6 +4,7 @@
 #include <string>
 #include <functional>
 #include <unordered_set>
+#include <cmath>
 
 #include "base/vector.h"
 #include "tools/BitSet.h"
@@ -1564,11 +1565,10 @@ namespace TagLGP {
       size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
       if (!hw.IsValidMemPos(posA)) return;
 
-      // mem[A] -= 1;
+      // floor(mem[A]);
       const double A = wmem.AccessVal(posA).GetNum();
-      wmem.Set(posA, (double)((int)A));
+      wmem.Set(posA, std::floor(A));
     }
-
 
     // - Memory -
     static void Inst_CopyMem(hardware_t & hw, const inst_t & inst) {
