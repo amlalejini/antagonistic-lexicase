@@ -1443,7 +1443,7 @@ namespace TagLGP {
       //  mem[C] = mem[A] / mem[B]
       const double A = wmem.AccessVal(posA).GetNum();
       const double B = wmem.AccessVal(posB).GetNum();
-      if (B == 0) { wmem.Set(posC, A / B); }
+      if (B != 0.0) { wmem.Set(posC, A / B); }
     }
 
     static void Inst_Mod(hardware_t & hw, const inst_t & inst) {
@@ -1461,7 +1461,7 @@ namespace TagLGP {
       //  mem[C] = mem[A] % mem[B]
       const int A = (int)wmem.AccessVal(posA).GetNum();
       const int B = (int)wmem.AccessVal(posB).GetNum();
-      if (B == 0) { wmem.Set(posC, static_cast<int64_t>(A) % static_cast<int64_t>(B)); }
+      if (B != 0) { wmem.Set(posC, static_cast<int64_t>(A) % static_cast<int64_t>(B)); }
     }
 
     static void Inst_Inc(hardware_t & hw, const inst_t & inst) {
