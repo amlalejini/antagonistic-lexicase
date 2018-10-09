@@ -695,6 +695,7 @@ TEST_CASE("Inst_TestNumLess", "[taglgp]") {
 }
 */
 
+/*
 TEST_CASE("Inst_Floor", "[taglgp]") {
   // Constants
   constexpr size_t TAG_WIDTH = 4;
@@ -754,37 +755,615 @@ TEST_CASE("Inst_Floor", "[taglgp]") {
     REQUIRE(memA == std::floor(A));
   }
 }
+*/
 
+/*
 TEST_CASE("Inst_CopyMem", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 11;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+  using mem_val_t = typename hardware_t::MemoryValue;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("CopyMem", hardware_t::Inst_CopyMem, 3, "mem-ANY[B] = mem-ANY[A]");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    const size_t posA = random->GetUInt(0, matrix.size());
+    const size_t posB = random->GetUInt(0, matrix.size());
+    const size_t posC = random->GetUInt(0, matrix.size());
+    prog.PushInst("CopyMem", {matrix[posA], matrix[posB], matrix[posC]});
+    
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+
+    size_t sA = random->GetUInt(0, 3);
+    size_t sB = random->GetUInt(0, 3);
+    size_t sC = random->GetUInt(0, 3);
+    size_t sD = random->GetUInt(0, 3);
+
+    double baseA = random->GetDouble(-1000, 1000);
+    double baseB = random->GetDouble(-1000, 1000);
+    double baseC = random->GetDouble(-1000, 1000);
+    double baseD = random->GetDouble(-1000, 1000);
+
+    // Set wmem to base values
+    (sA == 1) ? wmem.Set(0, emp::to_string(baseA)) : wmem.Set(0, baseA);
+    (sB == 1) ? wmem.Set(1, emp::to_string(baseB)) : wmem.Set(1, baseB);
+    (sC == 1) ? wmem.Set(2, emp::to_string(baseC)) : wmem.Set(2, baseC);
+    (sD == 1) ? wmem.Set(3, emp::to_string(baseD)) : wmem.Set(3, baseD);
+    // drop some vectors in
+    if (sA == 2) wmem.Set(0, emp::vector<std::string>{"hello", "world"});
+    if (sB == 2) wmem.Set(1, emp::vector<mem_val_t>{wmem.AccessVal(0)});
+    if (sC == 2) wmem.Set(2, emp::vector<mem_val_t>{wmem.AccessVal(1), wmem.AccessVal(2), wmem.AccessVal(3)});
+    if (sD == 2) wmem.Set(3, emp::vector<std::string>{"blah", "blah", "blah"});
+
+    cpu.SingleProcess();
+    REQUIRE(wmem.GetPos(posA) == wmem.GetPos(posB));
+  }
 }
+*/
 
+/*
 TEST_CASE("Inst_SwapMem", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 12;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+  using mem_val_t = typename hardware_t::MemoryValue;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("SwapMem", hardware_t::Inst_SwapMem, 3, "SWAP(mem-ANY[A], mem-ANY[B])");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    const size_t posA = random->GetUInt(0, matrix.size());
+    const size_t posB = random->GetUInt(0, matrix.size());
+    const size_t posC = random->GetUInt(0, matrix.size());
+    prog.PushInst("SwapMem", {matrix[posA], matrix[posB], matrix[posC]});
+    
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+
+    size_t sA = random->GetUInt(0, 3);
+    size_t sB = random->GetUInt(0, 3);
+    size_t sC = random->GetUInt(0, 3);
+    size_t sD = random->GetUInt(0, 3);
+
+    double baseA = random->GetDouble(-1000, 1000);
+    double baseB = random->GetDouble(-1000, 1000);
+    double baseC = random->GetDouble(-1000, 1000);
+    double baseD = random->GetDouble(-1000, 1000);
+
+    // Set wmem to base values
+    (sA == 1) ? wmem.Set(0, emp::to_string(baseA)) : wmem.Set(0, baseA);
+    (sB == 1) ? wmem.Set(1, emp::to_string(baseB)) : wmem.Set(1, baseB);
+    (sC == 1) ? wmem.Set(2, emp::to_string(baseC)) : wmem.Set(2, baseC);
+    (sD == 1) ? wmem.Set(3, emp::to_string(baseD)) : wmem.Set(3, baseD);
+    // drop some vectors in
+    if (sA == 2) wmem.Set(0, emp::vector<std::string>{"hello", "world"});
+    if (sB == 2) wmem.Set(1, emp::vector<mem_val_t>{wmem.AccessVal(0)});
+    if (sC == 2) wmem.Set(2, emp::vector<mem_val_t>{wmem.AccessVal(1), wmem.AccessVal(2), wmem.AccessVal(3)});
+    if (sD == 2) wmem.Set(3, emp::vector<std::string>{"blah", "blah", "blah"});
+    
+    auto A(wmem.GetPos(posA));
+    auto B(wmem.GetPos(posB));
+
+    cpu.SingleProcess();
+
+    REQUIRE(wmem.GetPos(posA) == B);
+    REQUIRE(wmem.GetPos(posB) == A);
+  }
 }
+*/
 
+/*
 TEST_CASE("Inst_Input", "[taglgp]") {
+ // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 14;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("Input", hardware_t::Inst_Input, 2, "wmem-ANY[B] = imem-ANY[A]");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    const size_t posA = random->GetUInt(0, matrix.size());
+    const size_t posB = random->GetUInt(0, matrix.size());
+    const size_t posC = random->GetUInt(0, matrix.size());
+    prog.PushInst("Input", {matrix[posA], matrix[posB], matrix[posC]});
+    
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+    memory_t & imem = state.GetInputMem();
+
+    size_t sA = random->GetUInt(0, 3);
+    size_t sB = random->GetUInt(0, 3);
+    
+    double baseA = random->GetDouble(-1000, 1000);
+    double baseB = random->GetDouble(-1000, 1000);
+    
+    // Set wmem to base values
+    (sA == 1) ? imem.Set(posA, emp::to_string(baseA)) : imem.Set(posA, baseA);
+    (sB == 1) ? wmem.Set(posB, emp::to_string(baseB)) : wmem.Set(posB, baseB);
+
+    // drop some vectors in
+    if (sA == 2) imem.Set(posA, emp::vector<std::string>{"hello", "world"});
+    if (sB == 2) wmem.Set(posB, emp::vector<double>{random->GetDouble(-100, 100), random->GetDouble(-100, 100), random->GetDouble(-100, 100), random->GetDouble(-100, 100), random->GetDouble(-100, 100)});
+
+    cpu.SingleProcess();
+
+    REQUIRE(imem.GetPos(posA) == wmem.GetPos(posB));
+  }
 }
+*/
 
+/*
 TEST_CASE("Inst_Output", "[taglgp]") {
+ // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 14;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("Output", hardware_t::Inst_Output, 2, "omem-ANY[B] = wmem-ANY[A]");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    const size_t posA = random->GetUInt(0, matrix.size());
+    const size_t posB = random->GetUInt(0, matrix.size());
+    const size_t posC = random->GetUInt(0, matrix.size());
+    prog.PushInst("Output", {matrix[posA], matrix[posB], matrix[posC]});
+    
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & omem = state.GetOutputMem();
+    memory_t & wmem = state.GetWorkingMem();
+
+    size_t sA = random->GetUInt(0, 3);
+    size_t sB = random->GetUInt(0, 3);
+    
+    double baseA = random->GetDouble(-1000, 1000);
+    double baseB = random->GetDouble(-1000, 1000);
+    
+    // Set wmem to base values
+    (sA == 1) ? wmem.Set(posA, emp::to_string(baseA)) : wmem.Set(posA, baseA);
+    (sB == 1) ? omem.Set(posB, emp::to_string(baseB)) : omem.Set(posB, baseB);
+
+    // drop some vectors in
+    if (sA == 2) wmem.Set(posA, emp::vector<std::string>{"hello", "world"});
+    if (sB == 2) omem.Set(posB, emp::vector<double>{random->GetDouble(-100, 100), random->GetDouble(-100, 100), random->GetDouble(-100, 100), random->GetDouble(-100, 100), random->GetDouble(-100, 100)});
+
+    cpu.SingleProcess();
+
+    if (wmem.GetPos(posA) != omem.GetPos(posB)) {
+      cpu.GetProgram().Print();
+      cpu.PrintHardwareState();
+      break;
+    }
+    
+    REQUIRE(wmem.GetPos(posA) == omem.GetPos(posB));
+  }
 }
+*/
 
+/*
 TEST_CASE("Inst_CommitGlobal", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 15;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("CommitGlobal", hardware_t::Inst_CommitGlobal, 2, "gmem-ANY[B] = wmem-ANY[A]");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    const size_t posA = random->GetUInt(0, matrix.size());
+    const size_t posB = random->GetUInt(0, matrix.size());
+    const size_t posC = random->GetUInt(0, matrix.size());
+    prog.PushInst("CommitGlobal", {matrix[posA], matrix[posB], matrix[posC]});
+    
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & gmem = cpu.GetGlobalMem();
+    memory_t & wmem = state.GetWorkingMem();
+
+    size_t sA = random->GetUInt(0, 3);
+    size_t sB = random->GetUInt(0, 3);
+    
+    double baseA = random->GetDouble(-1000, 1000);
+    double baseB = random->GetDouble(-1000, 1000);
+    
+    // Set wmem to base values
+    (sA == 1) ? wmem.Set(posA, emp::to_string(baseA)) : wmem.Set(posA, baseA);
+    (sB == 1) ? gmem.Set(posB, emp::to_string(baseB)) : gmem.Set(posB, baseB);
+
+    // drop some vectors in
+    if (sA == 2) wmem.Set(posA, emp::vector<std::string>{"hello", "world"});
+    if (sB == 2) gmem.Set(posB, emp::vector<double>{random->GetDouble(-100, 100), random->GetDouble(-100, 100), random->GetDouble(-100, 100), random->GetDouble(-100, 100), random->GetDouble(-100, 100)});
+
+    cpu.SingleProcess();
+
+    if (wmem.GetPos(posA) != gmem.GetPos(posB)) {
+      cpu.GetProgram().Print();
+      cpu.PrintHardwareState();
+      break;
+    }
+    
+    REQUIRE(wmem.GetPos(posA) == gmem.GetPos(posB));
+  }
 }
+*/
 
+/*
 TEST_CASE("Inst_PullGlobal", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 21;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("PullGlobal", hardware_t::Inst_PullGlobal, 2, "wmem-ANY[B] = gmem-ANY[A]");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    const size_t posA = random->GetUInt(0, matrix.size());
+    const size_t posB = random->GetUInt(0, matrix.size());
+    const size_t posC = random->GetUInt(0, matrix.size());
+    prog.PushInst("PullGlobal", {matrix[posA], matrix[posB], matrix[posC]});
+    
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+    memory_t & gmem = cpu.GetGlobalMem();
+
+    size_t sA = random->GetUInt(0, 3);
+    size_t sB = random->GetUInt(0, 3);
+    
+    double baseA = random->GetDouble(-1000, 1000);
+    double baseB = random->GetDouble(-1000, 1000);
+    
+    // Set wmem to base values
+    (sA == 1) ? gmem.Set(posA, emp::to_string(baseA)) : gmem.Set(posA, baseA);
+    (sB == 1) ? wmem.Set(posB, emp::to_string(baseB)) : wmem.Set(posB, baseB);
+
+    // drop some vectors in
+    if (sA == 2) gmem.Set(posA, emp::vector<std::string>{"hello", "world"});
+    if (sB == 2) wmem.Set(posB, emp::vector<double>{random->GetDouble(-100, 100), random->GetDouble(-100, 100), random->GetDouble(-100, 100), random->GetDouble(-100, 100), random->GetDouble(-100, 100)});
+
+    cpu.SingleProcess();
+
+    REQUIRE(gmem.GetPos(posA) == wmem.GetPos(posB));
+  }
 }
+*/
 
 TEST_CASE("Inst_TestMemEqu", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 12;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+  using mem_val_t = typename hardware_t::MemoryValue;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("TestMemEqu", hardware_t::Inst_TestMemEqu, 3, "mem-ANY[C] = mem-ANY[A] == mem-ANY[B])");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    const size_t posA = random->GetUInt(0, matrix.size());
+    const size_t posB = random->GetUInt(0, matrix.size());
+    const size_t posC = random->GetUInt(0, matrix.size());
+    prog.PushInst("TestMemEqu", {matrix[posA], matrix[posB], matrix[posC]});
+    prog.PushInst("TestMemEqu", {matrix[posC], matrix[posC], matrix[posA]});
+    
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+
+    size_t sA = random->GetUInt(0, 3);
+    size_t sB = random->GetUInt(0, 3);
+    size_t sC = random->GetUInt(0, 3);
+    size_t sD = random->GetUInt(0, 3);
+
+    double baseA = random->GetDouble(-1000, 1000);
+    double baseB = random->GetDouble(-1000, 1000);
+    double baseC = random->GetDouble(-1000, 1000);
+    double baseD = random->GetDouble(-1000, 1000);
+
+    // Set wmem to base values
+    (sA == 1) ? wmem.Set(0, emp::to_string(baseA)) : wmem.Set(0, baseA);
+    (sB == 1) ? wmem.Set(1, emp::to_string(baseB)) : wmem.Set(1, baseB);
+    (sC == 1) ? wmem.Set(2, emp::to_string(baseC)) : wmem.Set(2, baseC);
+    (sD == 1) ? wmem.Set(3, emp::to_string(baseD)) : wmem.Set(3, baseD);
+    // drop some vectors in
+    if (sA == 2) wmem.Set(0, emp::vector<std::string>{"hello", "world"});
+    if (sB == 2) wmem.Set(1, emp::vector<mem_val_t>{wmem.AccessVal(0)});
+    if (sC == 2) wmem.Set(2, emp::vector<mem_val_t>{wmem.AccessVal(1), wmem.AccessVal(2), wmem.AccessVal(3)});
+    if (sD == 2) wmem.Set(3, emp::vector<std::string>{"blah", "blah", "blah"});
+    
+    double correct = (double)(wmem.GetPos(posA) == wmem.GetPos(posB));
+
+    cpu.SingleProcess();
+    REQUIRE(correct == wmem.AccessVal(posC).GetNum());
+    
+    cpu.SingleProcess();
+    REQUIRE(wmem.AccessVal(posA).GetNum() == 1.0);
+  }
 }
 
 TEST_CASE("Inst_TestMemNEqu", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 12;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+  using mem_val_t = typename hardware_t::MemoryValue;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("TestMemNEqu", hardware_t::Inst_TestMemNEqu, 3, "mem-ANY[C] = mem-ANY[A] != mem-ANY[B])");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    const size_t posA = random->GetUInt(0, matrix.size());
+    const size_t posB = random->GetUInt(0, matrix.size());
+    const size_t posC = random->GetUInt(0, matrix.size());
+    prog.PushInst("TestMemNEqu", {matrix[posA], matrix[posB], matrix[posC]});
+    prog.PushInst("TestMemNEqu", {matrix[posC], matrix[posC], matrix[posA]});
+    
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+
+    size_t sA = random->GetUInt(0, 3);
+    size_t sB = random->GetUInt(0, 3);
+    size_t sC = random->GetUInt(0, 3);
+    size_t sD = random->GetUInt(0, 3);
+
+    double baseA = random->GetDouble(-1000, 1000);
+    double baseB = random->GetDouble(-1000, 1000);
+    double baseC = random->GetDouble(-1000, 1000);
+    double baseD = random->GetDouble(-1000, 1000);
+
+    // Set wmem to base values
+    (sA == 1) ? wmem.Set(0, emp::to_string(baseA)) : wmem.Set(0, baseA);
+    (sB == 1) ? wmem.Set(1, emp::to_string(baseB)) : wmem.Set(1, baseB);
+    (sC == 1) ? wmem.Set(2, emp::to_string(baseC)) : wmem.Set(2, baseC);
+    (sD == 1) ? wmem.Set(3, emp::to_string(baseD)) : wmem.Set(3, baseD);
+    // drop some vectors in
+    if (sA == 2) wmem.Set(0, emp::vector<std::string>{"hello", "world"});
+    if (sB == 2) wmem.Set(1, emp::vector<mem_val_t>{wmem.AccessVal(0)});
+    if (sC == 2) wmem.Set(2, emp::vector<mem_val_t>{wmem.AccessVal(1), wmem.AccessVal(2), wmem.AccessVal(3)});
+    if (sD == 2) wmem.Set(3, emp::vector<std::string>{"blah", "blah", "blah"});
+    
+    double correct = (double)(wmem.GetPos(posA) != wmem.GetPos(posB));
+
+    cpu.SingleProcess();
+    REQUIRE(correct == wmem.AccessVal(posC).GetNum());
+    
+    cpu.SingleProcess();
+    REQUIRE(wmem.AccessVal(posA).GetNum() == 0.0);
+  }
 }
 
 TEST_CASE("Inst_MakeVector", "[taglgp]") {
