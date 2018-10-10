@@ -17,9 +17,17 @@
 namespace TagLGP {
   /////////////
   // TODO:
+  // - Instruction asserts for instruction argument counts.
   // NOTES:
   // - WARNING - Can currently have infinitely recursing routine flows...
+  // - FUTURE:
+  //   - To solve problems with looping: make Flows condition-aware. Never need
+  //     to close/reopen a flow for a loop. Instruction just passes lambda that
+  //     defines the condition for the loop.
+  //     - Should flows have an 'in-flow' ip map?
   /////////////
+
+
 
   /// TagLinearGP class.
   ///  - Description: 'Simple' lgp designed to handle program synthesis benchmarking
@@ -898,14 +906,18 @@ namespace TagLGP {
         // todo - check validity of ip/mp
         if (state.IsFlow()) { // TODO - may need to switch this to flag (e.g., state.done)
           Flow & top_flow = state.GetTopFlow();
-          const size_t ip = top_flow.iptr;
-          const size_t mp = top_flow.mptr;
+          size_t ip = top_flow.iptr;
+          size_t mp = top_flow.mptr;
           emp_assert(mp < modules.size());
           if (modules[mp].InModule(ip)) { // Valid IP
             // First, increment flow's IP by 1. This may invalidate the IP, but
             // that's okay.
             ++top_flow.iptr;
             // Next, run instruction @ ip.
+            GetInstLib().ProcessInst(*this, program[ip]);
+          } else if (ip >= program.GetSize() && modules[mp].InModule(0) && modules[mp].end < modules[mp].begin) {  // If module wraps.
+            ip = 0;
+            top_flow.iptr = 1;
             GetInstLib().ProcessInst(*this, program[ip]);
           } else { 
             CloseFlow(state, true);

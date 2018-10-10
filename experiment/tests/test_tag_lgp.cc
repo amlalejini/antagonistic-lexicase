@@ -3410,26 +3410,142 @@ TEST_CASE("Inst_Foreach", "[taglgp]") {
 
 }
 
-TEST_CASE("Inst_Close", "[taglgp]") {
-
-}
-
-TEST_CASE("Inst_Break", "[taglgp]") {
-
-}
-
 TEST_CASE("Inst_Call", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 13;
+
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  // InstProperty BEGIN_FLOW END_FLOW MODULE
+  inst_lib->AddInst("Inc", hardware_t::Inst_Inc, 1, "");
+  inst_lib->AddInst("Dec", hardware_t::Inst_Dec, 1, "");
+  inst_lib->AddInst("Nop", hardware_t::Inst_Nop, 0, "");
+  inst_lib->AddInst("If", hardware_t::Inst_If, 1, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  inst_lib->AddInst("Call", hardware_t::Inst_Call, 1, "");
+  inst_lib->AddInst("Return", hardware_t::Inst_Return, 0, "");
+  inst_lib->AddInst("Output", hardware_t::Inst_Output, 2, "");
+  inst_lib->AddInst("ModuleDef", hardware_t::Inst_Nop, 1, "", {inst_lib_t::InstProperty::MODULE});
+  inst_lib->AddInst("Close", hardware_t::Inst_Close, 0, "", {inst_lib_t::InstProperty::END_FLOW});
+  inst_lib->AddInst("Break", hardware_t::Inst_Break, 0, "");
+
+  // ---------------------------------------
+  // - TEST: If(true) ... Close ...
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Nop", {});
+  prog.PushInst("Return", {matrix[2]});
+  prog.PushInst("Output", {matrix[2], matrix[3]});
+  prog.PushInst("ModuleDef", {matrix[0]});
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("Call", {matrix[1]});
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("Call", {matrix[2]});
+  prog.PushInst("Nop", {matrix[2]});
+  prog.PushInst("ModuleDef", {matrix[1]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Output", {matrix[1], matrix[1]});
+  prog.PushInst("ModuleDef", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Output", {matrix[2], matrix[2]});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  std::cout << "\n\n---PROGRAM---\n\n";
+  cpu.GetProgram().Print();
+  std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  cpu.PrintHardwareState();
+  for (size_t i = 0; i < 12; ++i) {
+    std::cout << "\n\n--- AFTER CYCLE " << i << std::endl;
+    cpu.SingleProcess();
+    cpu.PrintHardwareState();
+  }
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(0).GetNum() == 2);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(1).GetNum() == 1);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(2).GetNum() == 2);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(3).GetNum() == 0);
+  // ---------------------------------------
+
 
 }
 
+// TODO
 TEST_CASE("Inst_Routine", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 13;
+
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  // InstProperty BEGIN_FLOW END_FLOW MODULE
+  inst_lib->AddInst("Inc", hardware_t::Inst_Inc, 1, "");
+  inst_lib->AddInst("Dec", hardware_t::Inst_Dec, 1, "");
+  inst_lib->AddInst("Nop", hardware_t::Inst_Nop, 0, "");
+  inst_lib->AddInst("If", hardware_t::Inst_If, 1, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  inst_lib->AddInst("Call", hardware_t::Inst_Call, 1, "");
+  inst_lib->AddInst("Routine", hardware_t::Inst_Routine, 1, "");
+  inst_lib->AddInst("Return", hardware_t::Inst_Return, 0, "");
+  inst_lib->AddInst("Output", hardware_t::Inst_Output, 2, "");
+  inst_lib->AddInst("ModuleDef", hardware_t::Inst_Nop, 1, "", {inst_lib_t::InstProperty::MODULE});
+  inst_lib->AddInst("Close", hardware_t::Inst_Close, 0, "", {inst_lib_t::InstProperty::END_FLOW});
+  inst_lib->AddInst("Break", hardware_t::Inst_Break, 0, "");
 
 }
 
-TEST_CASE("Inst_Return", "[taglgp]") {
-
-}
-
+// TEST_CASE("Inst_Return", "[taglgp]") {
+// 
+// }
 
 
 /*
