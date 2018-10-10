@@ -2188,6 +2188,7 @@ TEST_CASE("Inst_VecOccurrencesOf", "[taglgp]") {
 }
 */
 
+/*
 TEST_CASE("Inst_VecReverse", "[taglgp]") {
   // Constants
   constexpr size_t TAG_WIDTH = 4;
@@ -2340,40 +2341,1072 @@ TEST_CASE("Inst_VecSwapIfLess", "[taglgp]") {
     REQUIRE(vec == wmem.AccessVec(posA));
   }
 }
+*/
 
+/*
 TEST_CASE("Inst_VecGetFront", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 12;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+  using mem_val_t = typename hardware_t::MemoryValue;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("VecGetFront", hardware_t::Inst_VecGetFront, 2, "");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    size_t posA = random->GetUInt(0, matrix.size());
+    size_t posB = random->GetUInt(0, matrix.size());
+    size_t posC = random->GetUInt(0, matrix.size());
+    
+    prog.PushInst("VecGetFront", {matrix[posA], matrix[posB], matrix[posC]});
+
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+
+    emp::vector<mem_val_t> vec(random->GetUInt(1,128));
+    for (size_t vi = 0; vi < vec.size(); ++vi) {
+      if (random->P(0.5)) {
+        vec[vi] = random->GetUInt(0, 5);
+      } else {
+        vec[vi] = emp::to_string(random->GetUInt(0, 5));
+      }
+    }
+
+    mem_val_t B(vec.front());
+    
+    wmem.Set(posA, vec);
+    
+    cpu.SingleProcess();
+
+    REQUIRE(wmem.AccessVal(posB) == B);
+  }
 }
 
 TEST_CASE("Inst_VecGetBack", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 13;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+  using mem_val_t = typename hardware_t::MemoryValue;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("VecGetBack", hardware_t::Inst_VecGetBack, 2, "");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    size_t posA = random->GetUInt(0, matrix.size());
+    size_t posB = random->GetUInt(0, matrix.size());
+    size_t posC = random->GetUInt(0, matrix.size());
+    
+    prog.PushInst("VecGetBack", {matrix[posA], matrix[posB], matrix[posC]});
+
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+
+    emp::vector<mem_val_t> vec(random->GetUInt(1,128));
+    for (size_t vi = 0; vi < vec.size(); ++vi) {
+      if (random->P(0.5)) {
+        vec[vi] = random->GetUInt(0, 5);
+      } else {
+        vec[vi] = emp::to_string(random->GetUInt(0, 5));
+      }
+    }
+
+    mem_val_t B(vec.back());
+    
+    wmem.Set(posA, vec);
+    
+    cpu.SingleProcess();
+
+    REQUIRE(wmem.AccessVal(posB) == B);
+  }
 }
 
 TEST_CASE("Inst_IsStr", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 13;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("IsStr", hardware_t::Inst_IsStr, 2, "");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    size_t posA = random->GetUInt(0, matrix.size());
+    size_t posB = random->GetUInt(0, matrix.size());
+    size_t posC = random->GetUInt(0, matrix.size());
+    
+    prog.PushInst("IsStr", {matrix[posA], matrix[posB], matrix[posC]});
+
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+
+    size_t sA = random->GetUInt(3);
+    if (sA == 0) {
+      wmem.Set(posA, random->GetUInt(0, 5));
+    } else if (sA == 1) {
+      wmem.Set(posA, emp::to_string(random->GetUInt(0, 5)));
+    } else {
+      wmem.Set(posA, emp::vector<std::string>{emp::to_string(random->GetUInt(0, 5)), emp::to_string(random->GetUInt(0, 5)), emp::to_string(random->GetUInt(0, 5)), emp::to_string(random->GetUInt(0, 5)), emp::to_string(random->GetUInt(0, 5))});
+    }
+
+    cpu.SingleProcess();
+
+    if (sA == 1) {
+      REQUIRE(wmem.AccessVal(posB).GetNum() == 1.0);
+    } else {
+      REQUIRE(wmem.AccessVal(posB).GetNum() == 0.0);
+    } 
+  }
 }
 
 TEST_CASE("Inst_IsNum", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 13;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("IsNum", hardware_t::Inst_IsNum, 2, "");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    size_t posA = random->GetUInt(0, matrix.size());
+    size_t posB = random->GetUInt(0, matrix.size());
+    size_t posC = random->GetUInt(0, matrix.size());
+    
+    prog.PushInst("IsNum", {matrix[posA], matrix[posB], matrix[posC]});
+
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+
+    size_t sA = random->GetUInt(3);
+    if (sA == 0) {
+      wmem.Set(posA, random->GetUInt(0, 5));
+    } else if (sA == 1) {
+      wmem.Set(posA, emp::to_string(random->GetUInt(0, 5)));
+    } else {
+      wmem.Set(posA, emp::vector<std::string>{emp::to_string(random->GetUInt(0, 5)), emp::to_string(random->GetUInt(0, 5)), emp::to_string(random->GetUInt(0, 5)), emp::to_string(random->GetUInt(0, 5)), emp::to_string(random->GetUInt(0, 5))});
+    }
+
+    cpu.SingleProcess();
+
+    if (sA == 0) {
+      REQUIRE(wmem.AccessVal(posB).GetNum() == 1.0);
+    } else {
+      REQUIRE(wmem.AccessVal(posB).GetNum() == 0.0);
+    } 
+  }
 }
 
 TEST_CASE("Inst_IsVec", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 13;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  inst_lib->AddInst("IsVec", hardware_t::Inst_IsVec, 2, "");
+  for (size_t i = 0; i < 1000; ++i) {
+    cpu.Reset(); // Hard reset on virtual CPU
+    prog.Clear();
+    
+    size_t posA = random->GetUInt(0, matrix.size());
+    size_t posB = random->GetUInt(0, matrix.size());
+    size_t posC = random->GetUInt(0, matrix.size());
+    
+    prog.PushInst("IsVec", {matrix[posA], matrix[posB], matrix[posC]});
+
+    cpu.SetProgram(prog);
+    cpu.CallModule(0);
+
+    callstate_t & state = cpu.GetCurCallState();
+    memory_t & wmem = state.GetWorkingMem();
+
+    size_t sA = random->GetUInt(3);
+    if (sA == 0) {
+      wmem.Set(posA, random->GetUInt(0, 5));
+    } else if (sA == 1) {
+      wmem.Set(posA, emp::to_string(random->GetUInt(0, 5)));
+    } else {
+      wmem.Set(posA, emp::vector<std::string>{emp::to_string(random->GetUInt(0, 5)), emp::to_string(random->GetUInt(0, 5)), emp::to_string(random->GetUInt(0, 5)), emp::to_string(random->GetUInt(0, 5)), emp::to_string(random->GetUInt(0, 5))});
+    }
+
+    cpu.SingleProcess();
+
+    if (sA == 2) {
+      REQUIRE(wmem.AccessVal(posB).GetNum() == 1.0);
+    } else {
+      REQUIRE(wmem.AccessVal(posB).GetNum() == 0.0);
+    } 
+  }
 }
+*/
 
 TEST_CASE("Inst_If", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 13;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  // InstProperty BEGIN_FLOW END_FLOW MODULE
+  inst_lib->AddInst("Inc", hardware_t::Inst_Inc, 1, "");
+  inst_lib->AddInst("Dec", hardware_t::Inst_Dec, 1, "");
+  inst_lib->AddInst("Nop", hardware_t::Inst_Nop, 0, "");
+  inst_lib->AddInst("If", hardware_t::Inst_If, 1, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  inst_lib->AddInst("Close", hardware_t::Inst_Close, 0, "", {inst_lib_t::InstProperty::END_FLOW});
+  inst_lib->AddInst("Break", hardware_t::Inst_Break, 0, "");
+  
+  // ---------------------------------------
+  // - TEST: If(true) ... Close ...
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("If", {matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Close", {matrix[0]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 9; ++i) {
+  //   std::cout << "\n\n--- AFTER CYCLE " << i << std::endl;
+    cpu.SingleProcess();
+  //   cpu.PrintHardwareState();
+  }
+  callstate_t & state = cpu.GetCurCallState();
+  memory_t & wmem = state.GetWorkingMem();
+  REQUIRE(wmem.AccessVal(0).GetNum() == 1);
+  REQUIRE(wmem.AccessVal(1).GetNum() == 2);
+  REQUIRE(wmem.AccessVal(2).GetNum() == 4);
+  // ---------------------------------------
+
+
+  // ---------------------------------------
+  // - TEST: If(false) ... Close ...
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Nop", {matrix[0]});
+  prog.PushInst("If", {matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Close", {matrix[0]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 6; ++i) {
+    // std::cout << "\n\n--- AFTER CYCLE " << i << std::endl;
+    cpu.SingleProcess();
+    // cpu.PrintHardwareState();
+  }
+  callstate_t & state0 = cpu.GetCurCallState();
+  memory_t & wmem0 = state0.GetWorkingMem();
+  REQUIRE(wmem0.AccessVal(0).GetNum() == 0);
+  REQUIRE(wmem0.AccessVal(1).GetNum() == 0);
+  REQUIRE(wmem0.AccessVal(2).GetNum() == 4);
+  // ---------------------------------------
+
+
+  // ---------------------------------------
+  // - TEST: If(true) ... - Implicit close
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("If", {matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 8; ++i) {
+    // std::cout << "\n\n--- AFTER CYCLE " << i << "---" << std::endl;
+    cpu.SingleProcess();
+    // cpu.PrintHardwareState();
+  }
+  callstate_t & state1 = cpu.GetCurCallState();
+  memory_t & wmem1 = state1.GetWorkingMem();
+  REQUIRE(wmem1.AccessVal(0).GetNum() == 1);
+  REQUIRE(wmem1.AccessVal(1).GetNum() == 2);
+  REQUIRE(wmem1.AccessVal(2).GetNum() == 4);
+  // ---------------------------------------
+
+
+  // ---------------------------------------
+  // - TEST: If(false) ... - Implicit close
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Nop", {matrix[0]});
+  prog.PushInst("Nop", {matrix[0]});
+  prog.PushInst("If", {matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0, true, true);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 16; ++i) {
+    // std::cout << "\n\n--- AFTER CYCLE " << i << "---" << std::endl;
+    cpu.SingleProcess();
+    // cpu.PrintHardwareState();
+  }
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(0).GetNum() == 0);
+  // ---------------------------------------
+
+  // ---------------------------------------
+  // - TEST: If(true) .. break .. - Implicit close
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("If", {matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Break", {});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 4; ++i) {
+    // std::cout << "\n\n--- AFTER CYCLE " << i << "---" << std::endl;
+    cpu.SingleProcess();
+    // cpu.PrintHardwareState();
+  }
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(0).GetNum() == 1);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(1).GetNum() == 1);
+  // ---------------------------------------
+
+  // ---------------------------------------
+  // - TEST: If(true) .. break .. Close
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("If", {matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Break", {});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Close", {});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 8; ++i) {
+    // std::cout << "\n\n--- AFTER CYCLE " << i << "---" << std::endl;
+    cpu.SingleProcess();
+    // cpu.PrintHardwareState();
+  }
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(0).GetNum() == 1);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(1).GetNum() == 1);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(2).GetNum() == 4);
+  // ---------------------------------------
+
+  // ---------------------------------------
+  // - TEST: nested ifs
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("If", {matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("If", {matrix[1]});
+  prog.PushInst("Nop", {});
+  prog.PushInst("Break", {});
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("Close", {});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Close", {});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 12; ++i) {
+    // std::cout << "\n\n--- AFTER CYCLE " << i << "---" << std::endl;
+    cpu.SingleProcess();
+    // cpu.PrintHardwareState();
+  }
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(0).GetNum() == 1);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(1).GetNum() == 2);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(2).GetNum() == 4);
+  // ---------------------------------------
+
+  /////////////////////////////////////
 }
 
 TEST_CASE("Inst_While", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 13;
 
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  // InstProperty BEGIN_FLOW END_FLOW MODULE
+  inst_lib->AddInst("Inc", hardware_t::Inst_Inc, 1, "");
+  inst_lib->AddInst("Dec", hardware_t::Inst_Dec, 1, "");
+  inst_lib->AddInst("Nop", hardware_t::Inst_Nop, 0, "");
+  inst_lib->AddInst("If", hardware_t::Inst_If, 1, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  inst_lib->AddInst("While", hardware_t::Inst_While, 1, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  inst_lib->AddInst("Close", hardware_t::Inst_Close, 0, "", {inst_lib_t::InstProperty::END_FLOW});
+  inst_lib->AddInst("Break", hardware_t::Inst_Break, 0, "");
+
+  // ---------------------------------------
+  // - TEST: If(true) ... Close ...
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("While", {matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Dec", {matrix[0]});
+  prog.PushInst("Close", {matrix[0]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 20; ++i) {
+    // std::cout << "\n\n--- AFTER CYCLE " << i << std::endl;
+    cpu.SingleProcess();
+    // cpu.PrintHardwareState();
+  }
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(0).GetNum() == 0);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(1).GetNum() == 3);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(2).GetNum() == 4);
+  // ---------------------------------------
+
+  // ---------------------------------------
+  // - TEST: If(false) ... Close ...
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Nop", {matrix[0]});
+  prog.PushInst("Nop", {matrix[0]});
+  prog.PushInst("Nop", {matrix[0]});
+  prog.PushInst("While", {matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Dec", {matrix[0]});
+  prog.PushInst("Close", {matrix[0]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 8; ++i) {
+    // std::cout << "\n\n--- AFTER CYCLE " << i << std::endl;
+    cpu.SingleProcess();
+    // cpu.PrintHardwareState();
+  }
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(0).GetNum() == 0);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(1).GetNum() == 0);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(2).GetNum() == 4);
+  // ---------------------------------------
+
+  // ---------------------------------------
+  // - TEST: If(true) ... Implicit close
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("While", {matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Dec", {matrix[0]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 25; ++i) {
+    // std::cout << "\n\n--- AFTER CYCLE " << i << std::endl;
+    cpu.SingleProcess();
+    // cpu.PrintHardwareState();
+  }
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(0).GetNum() == 0);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(1).GetNum() == 3);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(2).GetNum() == 12);
+  // ---------------------------------------
+
+  // ---------------------------------------
+  // - TEST: If(false) ... Implicit close
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Nop", {matrix[0]});
+  prog.PushInst("Nop", {matrix[0]});
+  prog.PushInst("Nop", {matrix[0]});
+  prog.PushInst("While", {matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Dec", {matrix[0]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 4; ++i) {
+    // std::cout << "\n\n--- AFTER CYCLE " << i << std::endl;
+    cpu.SingleProcess();
+    // cpu.PrintHardwareState();
+  }
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(0).GetNum() == 0);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(1).GetNum() == 0);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(2).GetNum() == 0);
+  // ---------------------------------------
+
+  // ---------------------------------------
+  // - TEST: while(true) ... break ... Close ...
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("While", {matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Dec", {matrix[0]});
+  prog.PushInst("Break", {});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Close", {matrix[0]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 11; ++i) {
+    // std::cout << "\n\n--- AFTER CYCLE " << i << std::endl;
+    cpu.SingleProcess();
+    // cpu.PrintHardwareState();
+  }
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(0).GetNum() == 2);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(1).GetNum() == 1);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(2).GetNum() == 4);
+  // ---------------------------------------
+
+  // ---------------------------------------
+  // - TEST: while(true) ... break ... Close ...
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("While", {matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Dec", {matrix[0]});
+  prog.PushInst("While", {matrix[1]});
+  prog.PushInst("Nop", {});
+  prog.PushInst("Dec", {matrix[1]});
+  prog.PushInst("Break", {});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Close", {matrix[0]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 37; ++i) {
+    // std::cout << "\n\n--- AFTER CYCLE " << i << std::endl;
+    cpu.SingleProcess();
+    // cpu.PrintHardwareState();
+  }
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(0).GetNum() == 0);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(1).GetNum() == 0);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(2).GetNum() == 12);
+  // ---------------------------------------
+
+  ///////////////////////////////////////////
 }
 
 TEST_CASE("Inst_Countdown", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 13;
+
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  // InstProperty BEGIN_FLOW END_FLOW MODULE
+  inst_lib->AddInst("Inc", hardware_t::Inst_Inc, 1, "");
+  inst_lib->AddInst("Dec", hardware_t::Inst_Dec, 1, "");
+  inst_lib->AddInst("Nop", hardware_t::Inst_Nop, 0, "");
+  inst_lib->AddInst("If", hardware_t::Inst_If, 1, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  inst_lib->AddInst("Countdown", hardware_t::Inst_Countdown, 1, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  inst_lib->AddInst("Close", hardware_t::Inst_Close, 0, "", {inst_lib_t::InstProperty::END_FLOW});
+  inst_lib->AddInst("Break", hardware_t::Inst_Break, 0, "");
+
+  // ---------------------------------------
+  // - TEST: If(true) ... Close ...
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("Inc", {matrix[0]});
+  prog.PushInst("Countdown", {matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Close", {matrix[0]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  prog.PushInst("Inc", {matrix[2]});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 17; ++i) {
+    // std::cout << "\n\n--- AFTER CYCLE " << i << std::endl;
+    cpu.SingleProcess();
+    // cpu.PrintHardwareState();
+  }
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(0).GetNum() == 0);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(1).GetNum() == 3);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(2).GetNum() == 4);
+  // ---------------------------------------
 
 }
 
 TEST_CASE("Inst_Foreach", "[taglgp]") {
+  // Constants
+  constexpr size_t TAG_WIDTH = 4;
+  constexpr int seed = 13;
+
+  // Convenient aliases
+  using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+  using program_t = typename hardware_t::program_t;
+  using inst_lib_t = TagLGP::InstLib<hardware_t>;
+  using callstate_t = typename hardware_t::CallState;
+  using memory_t = typename hardware_t::Memory;
+
+  // Create new random number generator
+  emp::Ptr<emp::Random> random = emp::NewPtr<emp::Random>(seed);
+
+  // Create new instruction library
+  emp::Ptr<inst_lib_t> inst_lib = emp::NewPtr<inst_lib_t>();
+  
+  // Create virtual hardware w/inst_lib
+  hardware_t cpu(inst_lib, random);
+
+  // Configure CPU
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  cpu.SetMemSize(TAG_WIDTH);
+  cpu.SetMemTags(matrix);
+
+  // Create new program
+  program_t prog(inst_lib);
+
+  /////////////////////////////////////
+  // Instruction testing
+  // InstProperty BEGIN_FLOW END_FLOW MODULE
+  inst_lib->AddInst("Inc", hardware_t::Inst_Inc, 1, "");
+  inst_lib->AddInst("Dec", hardware_t::Inst_Dec, 1, "");
+  inst_lib->AddInst("Nop", hardware_t::Inst_Nop, 0, "");
+  inst_lib->AddInst("If", hardware_t::Inst_If, 1, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  inst_lib->AddInst("MakeVector", hardware_t::Inst_MakeVector, 3, "");
+  inst_lib->AddInst("Foreach", hardware_t::Inst_Foreach, 1, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  inst_lib->AddInst("Close", hardware_t::Inst_Close, 0, "", {inst_lib_t::InstProperty::END_FLOW});
+  inst_lib->AddInst("Break", hardware_t::Inst_Break, 0, "");
+
+  // ---------------------------------------
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Dec", {matrix[0]});
+  prog.PushInst("Dec", {matrix[1]});
+  prog.PushInst("Dec", {matrix[1]});
+  prog.PushInst("Dec", {matrix[2]});
+  prog.PushInst("Dec", {matrix[2]});
+  prog.PushInst("Dec", {matrix[2]});
+  prog.PushInst("Dec", {matrix[3]});
+  prog.PushInst("Dec", {matrix[3]});
+  prog.PushInst("Dec", {matrix[3]});
+  prog.PushInst("Dec", {matrix[3]});
+  prog.PushInst("MakeVector", {matrix[0], matrix[3], matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Foreach", {matrix[3], matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Close", {});
+  prog.PushInst("Nop", {});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 27; ++i) {
+    // std::cout << "\n\n--- AFTER CYCLE " << i << std::endl;
+    cpu.SingleProcess();
+    // cpu.PrintHardwareState();
+  }
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(1).GetNum() ==  4);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(2).GetNum() == -3);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(3).GetNum() == -4);
+  // ---------------------------------------
+
+  // ---------------------------------------
+  // - TEST: If(true) ... Close ...
+  cpu.Reset(); // Hard reset on virtual CPU
+  prog.Clear();
+
+  prog.PushInst("Dec", {matrix[0]});
+  prog.PushInst("Dec", {matrix[1]});
+  prog.PushInst("Dec", {matrix[1]});
+  prog.PushInst("Dec", {matrix[2]});
+  prog.PushInst("Dec", {matrix[2]});
+  prog.PushInst("Dec", {matrix[2]});
+  prog.PushInst("Dec", {matrix[3]});
+  prog.PushInst("Dec", {matrix[3]});
+  prog.PushInst("Dec", {matrix[3]});
+  prog.PushInst("Dec", {matrix[3]});
+  prog.PushInst("MakeVector", {matrix[0], matrix[3], matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Foreach", {matrix[0], matrix[0]});
+  prog.PushInst("Inc", {matrix[1]});
+  prog.PushInst("Close", {});
+  prog.PushInst("Nop", {});
+  
+  cpu.SetProgram(prog);
+  cpu.CallModule(0);
+
+  // std::cout << "\n\n---PROGRAM---\n\n";
+  // cpu.GetProgram().Print();
+  // std::cout << "\n\n--- INITIAL STATE ---" << std::endl;
+  // cpu.PrintHardwareState();
+  for (size_t i = 0; i < 18; ++i) {
+    // std::cout << "\n\n--- AFTER CYCLE " << i << std::endl;
+    cpu.SingleProcess();
+    // cpu.PrintHardwareState();
+  }
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(0).GetNum() ==  -1);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(1).GetNum() ==  1);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(2).GetNum() == -3);
+  REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(3).GetNum() == -4);
+  // ---------------------------------------
+  
 
 }
 

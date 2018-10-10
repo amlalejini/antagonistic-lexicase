@@ -682,7 +682,7 @@ namespace TagLGP {
     void CloseFlow_LOOP(CallState & state, bool implicit) {
       emp_assert(state.IsFlow());
       // Closing a LOOP flow:
-      const size_t loop_begin = state.GetTopFlow().iptr;
+      const size_t loop_begin = state.GetTopFlow().begin;
       const size_t mp = state.GetTopFlow().mptr;
       
       state.GetFlowStack().pop_back();
@@ -1304,7 +1304,8 @@ namespace TagLGP {
           os << "mp:" << flow.mptr << ",";
           os << "ip:" << flow.iptr << ",";
           os << "begin:" << flow.begin << ",";
-          os << "end:" << flow.end;
+          os << "end:" << flow.end << ",";
+          os << "iter:" << flow.iter; 
           os << "}";
           if (fi) os << ",";
         }
@@ -2112,9 +2113,9 @@ namespace TagLGP {
         // Advance past the flow close if not at end of module
         if (hw.ValidPosition(state.GetMP(), eof)) state.AdvanceIP();
       } else {
-        emp_assert(wmem.GetPosType(posA) == MemPosType::NUM);
+        // emp_assert(wmem.GetPosType(posA) == MemPosType::NUM);
         // mem[posA] = vec[iter]
-        wmem.Set(posA, wmem.AccessVec(posA)[state.GetTopFlow().iter]);
+        wmem.Set(posA, wmem.AccessVec(posB)[state.GetTopFlow().iter]);
         // Open flow
         hw.OpenFlow(state, FlowType::LOOP, bof, eof, cur_mp, cur_ip);
       }
