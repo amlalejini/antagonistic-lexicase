@@ -2037,6 +2037,33 @@ namespace TagLGP {
       }
     }
 
+    static void Inst_IfNot(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find the end of flow
+      const size_t cur_ip = state.GetIP();
+      const size_t cur_mp = state.GetMP();
+      size_t eof = hw.FindEndOfFlow(cur_mp, cur_ip);
+      size_t bof = (cur_ip == 0) ? hw.GetProgram().GetSize() - 1 : cur_ip - 1;
+      
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+
+      bool skip = false;
+      if (!hw.IsValidMemPos(posA)) skip = true;                       // SKip if failed to find valid mem pos
+      else if (wmem.GetPosType(posA) != MemPosType::NUM) skip = true; // Skip if best match is not a number
+      else if (wmem.AccessVal(posA).GetNum() != 0) skip = true;       // Skip if best match != 0 
+
+      if (skip) {
+        state.SetIP(eof);
+        // Advance past the flow close if not at end of module
+        if (hw.ValidPosition(state.GetMP(), eof)) state.AdvanceIP();
+      } else {
+        // Open flow
+        hw.OpenFlow(state, FlowType::BASIC, bof, eof, cur_mp, cur_ip);
+      }
+    }
+
     static void Inst_While(hardware_t & hw, const inst_t & inst) {
       CallState & state = hw.GetCurCallState();
       memory_t & wmem = state.GetWorkingMem();
