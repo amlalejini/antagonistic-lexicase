@@ -7,15 +7,16 @@
 #include "config/ArgManager.h"
 #include "config/command_line.h"
 
-#include "../SortingNetworkExperiment.h"
+#include "../ProgSynthExperiment.h"
+#include "../ProgSynthConfig.h"
 
 int main(int argc, char* argv[])
 {
-  std::string config_fname = "configs.cfg";
-  SortingNetworkConfig config;
+  std::string config_fname = "prog_synth_configs.cfg";
+  ProgramSynthesisConfig config;
   auto args = emp::cl::ArgManager(argc, argv);
   config.Read(config_fname);
-  if (args.ProcessConfigOptions(config, std::cout, config_fname, "SortingNetworkConfig-macros.h") == false) exit(0);
+  if (args.ProcessConfigOptions(config, std::cout, config_fname, "ProgSynthConfig-macros.h") == false) exit(0);
   if (args.TestUnknown() == false) exit(0); // If there are leftover args, throw an error. 
 
   // Write to screen how the experiment is configured
@@ -25,8 +26,8 @@ int main(int argc, char* argv[])
   config.Write(std::cout);
   std::cout << "==============================\n" << std::endl;
 
-  SortingNetworkExperiment e;
-  e.Setup(config);
-  e.Run();
+  ProgramSynthesisExperiment e;
+  // e.Setup(config);
+  // e.Run();
 
 }
