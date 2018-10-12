@@ -3476,7 +3476,6 @@ TEST_CASE("Inst_Call", "[taglgp]") {
   REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(3).GetNum() == 0);
   // ---------------------------------------
 
-
 }
 
 TEST_CASE("Inst_Routine", "[taglgp]") {
