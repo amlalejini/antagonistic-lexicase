@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
   std::cout << "==============================\n" << std::endl;
 
   ProgramSynthesisExperiment e;
-  // e.Setup(config);
+  e.Setup(config);
   // e.Run();
 
 }

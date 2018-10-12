@@ -27,19 +27,61 @@
 
 #include "ProgOrg.h"
 #include "ProgSynthConfig.h"
+#include "ProgSynthBenchmarks_InputReps.h"
 #include "TestCaseSet.h"
 #include "TagLinearGP.h"
 #include "TagLinearGP_InstLib.h"
 
 constexpr size_t TAG_WIDTH = 32;
 
+enum PROBLEM_ID { NumberIO=0,
+                  SmallOrLarge,
+                  ForLoopIndex,
+                  CompareStringLengths,
+                  DoubleLetters,
+                  CollatzNumbers,
+                  ReplaceSpaceWithNewline,
+                  StringDifferences,
+                  EvenSquares,
+                  WallisPi,
+                  StringLengthsBackwards,
+                  LastIndexOfZero,
+                  VectorAverage,
+                  CountOdds,
+                  MirrorImage,
+                  SuperAnagrams,
+                  SumOfSquares,
+                  VectorsSummed,
+                  XWordLines,
+                  PigLatin,
+                  NegativeToZero,
+                  ScrabbleScore,
+                  Checksum,
+                  Digits,
+                  Grade,
+                  Median,
+                  Smallest,
+                  Syllables
+};
+
 struct ProblemInfo {
+  PROBLEM_ID id; 
   std::string tests_fname;
-  ProblemInfo(const std::string & tfname) : tests_fname(tfname) { ; }
+
+  ProblemInfo(PROBLEM_ID _id, const std::string & tfname) 
+    : id(_id), tests_fname(tfname) 
+  { ; }
+  
+  ProblemInfo(const ProblemInfo &) = default;
+  ProblemInfo(ProblemInfo &&) = default;
+
+  ProblemInfo & operator=(const ProblemInfo &) = default;
+  ProblemInfo & operator=(ProblemInfo &&) = default;
+
 };
 
 std::unordered_map<std::string, ProblemInfo> problems = {
-  {"number-io", {"examples-number-io.csv"}}
+  {"number-io", {PROBLEM_ID::NumberIO, "examples-number-io.csv"}}
 };
 
 class ProgramSynthesisExperiment {
@@ -50,6 +92,9 @@ public:
   using prog_org_t = ProgOrg<TAG_WIDTH>;
 
   using prog_world_t = emp::World<prog_org_t>;
+
+  // test world aliases
+  using numio_world_t = emp::World<TestOrg_NumberIO>;
 
 protected:
 
@@ -139,6 +184,8 @@ protected:
   size_t PROG_COHORT_SIZE;
   size_t TEST_COHORT_SIZE;
   size_t TEST_MODE;
+  std::string PROBLEM;
+  std::string BENCHMARK_DATA_DIR;
 
   // Experiment variables
   bool setup;
@@ -155,6 +202,12 @@ protected:
   emp::Ptr<hardware_t> eval_hardware;
   
   emp::Ptr<prog_world_t> prog_world;
+
+  // Test worlds
+  emp::Ptr<numio_world_t> numio_world;
+
+  // Problem utilities
+  ProblemUtilities_NumberIO numio_utils;
 
   Cohorts prog_cohorts;
   Cohorts test_cohorts;
@@ -182,18 +235,50 @@ protected:
   // Internal function signatures.
   void InitConfigs(const ProgramSynthesisConfig & config);
 
-  void InitProgPop_Random(); ///< Randomly initialize the program population.
-
-  void SetupEvaluation();
+  void InitProgPop_Random();    ///< Randomly initialize the program population.
   
-  void SetupProgramSelection();
+  void SetupEvaluation();       ///< Setup evaluation
 
-  void SetupProgramMutation();
+  void SetupProgramSelection(); ///< Setup program selection scheme
+  void SetupProgramMutation();  ///< Setup program mutations
 
-  void SetupDataCollection();
+  void SetupProblem();
+  void SetupProblem_NumberIO();
+  void SetupProblem_SmallOrLarge();
+  void SetupProblem_ForLoopIndex();
+  void SetupProblem_CompareStringLengths();
+  void SetupProblem_DoubleLetters();
+  void SetupProblem_CollatzNumbers();
+  void SetupProblem_ReplaceSpaceWithNewline();
+  void SetupProblem_StringDifferences();
+  void SetupProblem_EvenSquares();
+  void SetupProblem_WallisPi();
+  void SetupProblem_StringLengthsBackwards();
+  void SetupProblem_LastIndexOfZero();
+  void SetupProblem_VectorAverage();
+  void SetupProblem_CountOdds();
+  void SetupProblem_MirrorImage();
+  void SetupProblem_SuperAnagrams();
+  void SetupProblem_SumOfSquares();
+  void SetupProblem_VectorsSummed();
+  void SetupProblem_XWordLines();
+  void SetupProblem_PigLatin();
+  void SetupProblem_NegativeToZero();
+  void SetupProblem_ScrabbleScore();
+  void SetupProblem_Checksum();
+  void SetupProblem_Digits();
+  void SetupProblem_Grade();
+  void SetupProblem_Median();
+  void SetupProblem_Smallest();
+  void SetupProblem_Syllables();
+
+  void SetupDataCollection();   ///< Setup data collection
 
 public:
-  ProgramSynthesisExperiment() {
+  ProgramSynthesisExperiment() 
+    : setup(false), update(0)
+
+  {
     std::cout << "Problem info:" << std::endl;
     for (const auto & info : problems) {
       std::cout << "  - Problem name: " << info.first << std::endl;
@@ -201,6 +286,253 @@ public:
     }
   }
 
+  ~ProgramSynthesisExperiment() {
+    if (setup) {
+      eval_hardware.Delete();
+      inst_lib.Delete();
+      prog_world.Delete();
+
+      if (numio_world != nullptr) numio_world.Delete();
+
+      random.Delete();
+    }
+  }
+
+  /// Configure the experiment.
+  void Setup(const ProgramSynthesisConfig & config);
+
+  /// Run the experiment start->finish.
+  void Run();
+
+  /// Progress experiment by a single time step (generation):
+  /// - (1) evaluate population(s)
+  /// - (2) select individuals for reproduction
+  /// - (3) update world(s)
+  void RunStep();
+
+  /// -- Accessors --
+  emp::Random & GetRandom() { return *random; }
+  prog_world_t & GetProgramWorld() { return *prog_world; }
+
 };
+
+/// ================ Public facing implementations ================
+
+/// Configure the experiment.
+void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
+  std::cout << "Running ProgramSynthesisExperiment setup." << std::endl;
+  emp_assert(setup == false, "Can only run setup once because I'm lazy.");
+  // Localize experiment configuration.
+  InitConfigs(config);
+  // Initialization/cleanup depending on whether or not this is the first call to setup.
+  if (!setup) { // First call to Setup.
+    // Create a random number generator.
+    random = emp::NewPtr<emp::Random>(SEED);
+    // Create the program world.
+    prog_world = emp::NewPtr<prog_world_t>(*random, "program world");
+  } else {
+    // Fail!
+    std::cout << "Setup only allowed once per experiment! (because I'm too lazy to handle multiple setups) Exiting." << std::endl;
+    exit(-1);
+  }
+
+  // Configure the program world.
+  prog_world->SetPopStruct_Mixed(true);
+
+  SetupProblem();  
+}
+
+/// ================ Internal function implementations ================
+void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & config) {
+  SEED = config.SEED();
+  GENERATIONS = config.GENERATIONS();
+  PROG_POP_SIZE = config.PROG_POP_SIZE();
+  TEST_POP_SIZE = config.TEST_POP_SIZE();
+  PROG_COHORT_SIZE = config.PROG_COHORT_SIZE();
+  TEST_COHORT_SIZE = config.TEST_COHORT_SIZE();
+  TEST_MODE = config.TEST_MODE();
+  PROBLEM = config.PROBLEM();
+  BENCHMARK_DATA_DIR = config.BENCHMARK_DATA_DIR();
+}
+
+void ProgramSynthesisExperiment::SetupProblem() {
+  emp_assert(emp::Has(problems, PROBLEM), "Unknown problem!", PROBLEM);
+
+  switch (problems.at(PROBLEM).id) {
+    case PROBLEM_ID::NumberIO: { SetupProblem_NumberIO(); break; }
+    case PROBLEM_ID::SmallOrLarge: { SetupProblem_SmallOrLarge(); break; }
+    case PROBLEM_ID::ForLoopIndex: { SetupProblem_ForLoopIndex(); break; }
+    case PROBLEM_ID::CompareStringLengths: { SetupProblem_CompareStringLengths(); break; }
+    case PROBLEM_ID::DoubleLetters: { SetupProblem_DoubleLetters(); break; }
+    case PROBLEM_ID::CollatzNumbers: { SetupProblem_CollatzNumbers(); break; }
+    case PROBLEM_ID::ReplaceSpaceWithNewline: { SetupProblem_ReplaceSpaceWithNewline(); break; }
+    case PROBLEM_ID::StringDifferences: { SetupProblem_StringDifferences(); break; }
+    case PROBLEM_ID::EvenSquares: { SetupProblem_EvenSquares(); break; }
+    case PROBLEM_ID::WallisPi: { SetupProblem_WallisPi(); break; }
+    case PROBLEM_ID::StringLengthsBackwards: { SetupProblem_StringLengthsBackwards(); break; }
+    case PROBLEM_ID::LastIndexOfZero: { SetupProblem_LastIndexOfZero(); break; }
+    case PROBLEM_ID::VectorAverage: { SetupProblem_VectorAverage(); break; }
+    case PROBLEM_ID::CountOdds: { SetupProblem_CountOdds(); break; }
+    case PROBLEM_ID::MirrorImage: { SetupProblem_MirrorImage(); break; }
+    case PROBLEM_ID::SuperAnagrams: { SetupProblem_SuperAnagrams(); break; }
+    case PROBLEM_ID::SumOfSquares: { SetupProblem_SumOfSquares(); break; }
+    case PROBLEM_ID::VectorsSummed: { SetupProblem_VectorsSummed(); break; }
+    case PROBLEM_ID::XWordLines: { SetupProblem_XWordLines(); break; }
+    case PROBLEM_ID::PigLatin: { SetupProblem_PigLatin(); break; }
+    case PROBLEM_ID::NegativeToZero: { SetupProblem_NegativeToZero(); break; }
+    case PROBLEM_ID::ScrabbleScore: { SetupProblem_ScrabbleScore(); break; }
+    case PROBLEM_ID::Checksum: { SetupProblem_Checksum(); break; }
+    case PROBLEM_ID::Digits: { SetupProblem_Digits(); break; }
+    case PROBLEM_ID::Grade: { SetupProblem_Grade(); break; }
+    case PROBLEM_ID::Median: { SetupProblem_Median(); break; }
+    case PROBLEM_ID::Smallest: { SetupProblem_Smallest(); break; }
+    case PROBLEM_ID::Syllables: { SetupProblem_Syllables(); break; }
+    default: {
+      std::cout << "Unknown problem (" << PROBLEM << "). Exiting." << std::endl;
+      exit(-1);
+    }
+  }
+}
+
+// ================= PROBLEM SETUPS ======================
+
+void ProgramSynthesisExperiment::SetupProblem_NumberIO() { 
+  std::cout << "todo.." << std::endl; 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_ForLoopIndex() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_CompareStringLengths() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_DoubleLetters() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_CollatzNumbers() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_ReplaceSpaceWithNewline() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_StringDifferences() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_EvenSquares() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_WallisPi() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_StringLengthsBackwards() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_LastIndexOfZero() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_VectorAverage() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_CountOdds() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_MirrorImage() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_SuperAnagrams() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_SumOfSquares() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_VectorsSummed() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_XWordLines() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_PigLatin() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_NegativeToZero() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_ScrabbleScore() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_Checksum() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_Digits() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_Grade() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_Median() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_Smallest() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
+
+void ProgramSynthesisExperiment::SetupProblem_Syllables() { 
+  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  exit(-1); 
+}
 
 #endif
