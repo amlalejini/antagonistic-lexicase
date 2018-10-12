@@ -78,6 +78,8 @@ struct ProblemInfo {
   ProblemInfo & operator=(const ProblemInfo &) = default;
   ProblemInfo & operator=(ProblemInfo &&) = default;
 
+  const std::string & GetTestsFilename() const { return tests_fname; }
+
 };
 
 std::unordered_map<std::string, ProblemInfo> problems = {
@@ -94,7 +96,34 @@ public:
   using prog_world_t = emp::World<prog_org_t>;
 
   // test world aliases
-  using numio_world_t = emp::World<TestOrg_NumberIO>;
+  using prob_NumberIO_world_t = emp::World<TestOrg_NumberIO>;
+  using prob_SmallOrLarge_world_t = emp::World<TestOrg_SmallOrLarge>;
+  using prob_ForLoopIndex_world_t = emp::World<TestOrg_ForLoopIndex>;
+  using prob_CompareStringLengths_world_t = emp::World<TestOrg_CompareStringLengths>;
+  using prob_DoubleLetters_world_t = emp::World<TestOrg_DoubleLetters>;
+  using prob_CollatzNumbers_world_t = emp::World<TestOrg_CollatzNumbers>;
+  using prob_ReplaceSpaceWithNewline_world_t = emp::World<TestOrg_ReplaceSpaceWithNewline>;
+  using prob_StringDifferences_world_t = emp::World<TestOrg_StringDifferences>;
+  using prob_EvenSquares_world_t = emp::World<TestOrg_EvenSquares>;
+  using prob_WallisPi_world_t = emp::World<TestOrg_WallisPi>;
+  using prob_StringLengthsBackwards_world_t = emp::World<TestOrg_StringLengthsBackwards>;
+  using prob_LastIndexOfZero_world_t = emp::World<TestOrg_LastIndexOfZero>;
+  using prob_VectorAverage_world_t = emp::World<TestOrg_VectorAverage>;
+  using prob_CountOdds_world_t = emp::World<TestOrg_CountOdds>;
+  using prob_MirrorImage_world_t = emp::World<TestOrg_MirrorImage>;
+  using prob_SuperAnagrams_world_t = emp::World<TestOrg_SuperAnagrams>;
+  using prob_SumOfSquares_world_t = emp::World<TestOrg_SumOfSquares>;
+  using prob_VectorsSummed_world_t = emp::World<TestOrg_VectorsSummed>;
+  using prob_XWordLines_world_t = emp::World<TestOrg_XWordLines>;
+  using prob_PigLatin_world_t = emp::World<TestOrg_PigLatin>;
+  using prob_NegativeToZero_world_t = emp::World<TestOrg_NegativeToZero>;
+  using prob_ScrabbleScore_world_t = emp::World<TestOrg_ScrabbleScore>;
+  using prob_Checksum_world_t = emp::World<TestOrg_Checksum>;
+  using prob_Digits_world_t = emp::World<TestOrg_Digits>;
+  using prob_Grade_world_t = emp::World<TestOrg_Grade>;
+  using prob_Median_world_t = emp::World<TestOrg_Median>;
+  using prob_Smallest_world_t = emp::World<TestOrg_Smallest>;
+  using prob_Syllables_world_t = emp::World<TestOrg_Syllables>;
 
 protected:
 
@@ -204,10 +233,37 @@ protected:
   emp::Ptr<prog_world_t> prog_world;
 
   // Test worlds
-  emp::Ptr<numio_world_t> numio_world;
+  emp::Ptr<prob_NumberIO_world_t> prob_NumberIO_world;
+  emp::Ptr<prob_SmallOrLarge_world_t> prob_SmallOrLarge_world;
+  emp::Ptr<prob_ForLoopIndex_world_t> prob_ForLoopIndex_world;
+  emp::Ptr<prob_CompareStringLengths_world_t> prob_CompareStringLengths_world;
+  emp::Ptr<prob_DoubleLetters_world_t> prob_DoubleLetters_world;
+  emp::Ptr<prob_CollatzNumbers_world_t> prob_CollatzNumbers_world;
+  emp::Ptr<prob_ReplaceSpaceWithNewline_world_t> prob_ReplaceSpaceWithNewline_world;
+  emp::Ptr<prob_StringDifferences_world_t> prob_StringDifferences_world;
+  emp::Ptr<prob_EvenSquares_world_t> prob_EvenSquares_world;
+  emp::Ptr<prob_WallisPi_world_t> prob_WallisPi_world;
+  emp::Ptr<prob_StringLengthsBackwards_world_t> prob_StringLengthsBackwards_world;
+  emp::Ptr<prob_LastIndexOfZero_world_t> prob_LastIndexOfZero_world;
+  emp::Ptr<prob_VectorAverage_world_t> prob_VectorAverage_world;
+  emp::Ptr<prob_CountOdds_world_t> prob_CountOdds_world;
+  emp::Ptr<prob_MirrorImage_world_t> prob_MirrorImage_world;
+  emp::Ptr<prob_SuperAnagrams_world_t> prob_SuperAnagrams_world;
+  emp::Ptr<prob_SumOfSquares_world_t> prob_SumOfSquares_world;
+  emp::Ptr<prob_VectorsSummed_world_t> prob_VectorsSummed_world;
+  emp::Ptr<prob_XWordLines_world_t> prob_XWordLines_world;
+  emp::Ptr<prob_PigLatin_world_t> prob_PigLatin_world;
+  emp::Ptr<prob_NegativeToZero_world_t> prob_NegativeToZero_world;
+  emp::Ptr<prob_ScrabbleScore_world_t> prob_ScrabbleScore_world;
+  emp::Ptr<prob_Checksum_world_t> prob_Checksum_world;
+  emp::Ptr<prob_Digits_world_t> prob_Digits_world;
+  emp::Ptr<prob_Grade_world_t> prob_Grade_world;
+  emp::Ptr<prob_Median_world_t> prob_Median_world;
+  emp::Ptr<prob_Smallest_world_t> prob_Smallest_world;
+  emp::Ptr<prob_Syllables_world_t> prob_Syllables_world;
 
   // Problem utilities
-  ProblemUtilities_NumberIO numio_utils;
+  ProblemUtilities_NumberIO prob_utils_NumberIO;
 
   Cohorts prog_cohorts;
   Cohorts test_cohorts;
@@ -292,7 +348,34 @@ public:
       inst_lib.Delete();
       prog_world.Delete();
 
-      if (numio_world != nullptr) numio_world.Delete();
+      if (prob_NumberIO_world != nullptr) prob_NumberIO_world.Delete();
+      if (prob_SmallOrLarge_world != nullptr) prob_SmallOrLarge_world.Delete();
+      if (prob_ForLoopIndex_world != nullptr) prob_ForLoopIndex_world.Delete();
+      if (prob_CompareStringLengths_world != nullptr) prob_CompareStringLengths_world.Delete();
+      if (prob_DoubleLetters_world != nullptr) prob_DoubleLetters_world.Delete();
+      if (prob_CollatzNumbers_world != nullptr) prob_CollatzNumbers_world.Delete();
+      if (prob_ReplaceSpaceWithNewline_world != nullptr) prob_ReplaceSpaceWithNewline_world.Delete();
+      if (prob_StringDifferences_world != nullptr) prob_StringDifferences_world.Delete();
+      if (prob_EvenSquares_world != nullptr) prob_EvenSquares_world.Delete();
+      if (prob_WallisPi_world != nullptr) prob_WallisPi_world.Delete();
+      if (prob_StringLengthsBackwards_world != nullptr) prob_StringLengthsBackwards_world.Delete();
+      if (prob_LastIndexOfZero_world != nullptr) prob_LastIndexOfZero_world.Delete();
+      if (prob_VectorAverage_world != nullptr) prob_VectorAverage_world.Delete();
+      if (prob_CountOdds_world != nullptr) prob_CountOdds_world.Delete();
+      if (prob_MirrorImage_world != nullptr) prob_MirrorImage_world.Delete();
+      if (prob_SuperAnagrams_world != nullptr) prob_SuperAnagrams_world.Delete();
+      if (prob_SumOfSquares_world != nullptr) prob_SumOfSquares_world.Delete();
+      if (prob_VectorsSummed_world != nullptr) prob_VectorsSummed_world.Delete();
+      if (prob_XWordLines_world != nullptr) prob_XWordLines_world.Delete();
+      if (prob_PigLatin_world != nullptr) prob_PigLatin_world.Delete();
+      if (prob_NegativeToZero_world != nullptr) prob_NegativeToZero_world.Delete();
+      if (prob_ScrabbleScore_world != nullptr) prob_ScrabbleScore_world.Delete();
+      if (prob_Checksum_world != nullptr) prob_Checksum_world.Delete();
+      if (prob_Digits_world != nullptr) prob_Digits_world.Delete();
+      if (prob_Grade_world != nullptr) prob_Grade_world.Delete();
+      if (prob_Median_world != nullptr) prob_Median_world.Delete();
+      if (prob_Smallest_world != nullptr) prob_Smallest_world.Delete();
+      if (prob_Syllables_world != nullptr) prob_Syllables_world.Delete();
 
       random.Delete();
     }
@@ -398,6 +481,13 @@ void ProgramSynthesisExperiment::SetupProblem() {
 
 void ProgramSynthesisExperiment::SetupProblem_NumberIO() { 
   std::cout << "todo.." << std::endl; 
+  // (1) Load testing examples from file (used to evaluate 'true' performance of programs).
+  if (BENCHMARK_DATA_DIR.back() != '/') BENCHMARK_DATA_DIR += '/';  
+  std::string examples_fpath = BENCHMARK_DATA_DIR + problems[PROBLEM].GetTestsFilename();
+  
+  // prob_utils_NumberIO.GetTestCaseSet().LoadTestCases();
+
+  // (2) ... 
 }
 
 void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() { 
