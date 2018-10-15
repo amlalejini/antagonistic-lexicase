@@ -36,6 +36,8 @@
 //////////////////////////////////////////
 // --- Notes/Todos ---
 // - May need to generate more training examples for problems(?)
+// - SELECTION
+//  - Pools (as in Cliff's implementation of lexicase) (?)
 //////////////////////////////////////////
 
 constexpr size_t TAG_WIDTH = 32;
@@ -45,6 +47,7 @@ constexpr size_t TAG_WIDTH = 32;
 // - static - training examples are static
 // - random - training examples randomly change over time
 enum TRAINING_EXAMPLE_MODE_TYPE { COEVOLUTION=0, STATIC, RANDOM };
+enum EVALUATION_TYPE { COHORT=0, FULL=1 };
 
 enum PROBLEM_ID { NumberIO=0,
                   SmallOrLarge,
@@ -224,6 +227,7 @@ protected:
   size_t GENERATIONS;
   size_t PROG_POP_SIZE;
   size_t TEST_POP_SIZE;
+  size_t EVALUATION_MODE;
   size_t PROG_COHORT_SIZE;
   size_t TEST_COHORT_SIZE;
   size_t TRAINING_EXAMPLE_MODE;
@@ -249,7 +253,8 @@ protected:
   size_t dominant_prog_id;
   size_t dominant_test_id;
 
-  size_t MAX_PASSES;
+  size_t PROGRAM_MAX_PASSES;
+  size_t PROGRAM_EVALUATION_TESTCASE_CNT; ///< How many test cases are organisms evaluated on during evaluation?
 
   emp::Ptr<emp::Random> random;
 
@@ -500,14 +505,15 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
     update_testcase_world();
   });
 
-  std::cout << "EXPERIMENT SETUP => Setting up evaluation." << std::endl;
-  // todo
-  
-  std::cout << "EXPERIMENT SETUP => Setting up program selection." << std::endl;
-  // todo
   
   std::cout << "EXPERIMENT SETUP => Setting up problem." << std::endl;
   SetupProblem();  //...many many todos embedded in this one...
+
+  std::cout << "EXPERIMENT SETUP => Setting up evaluation." << std::endl;
+  SetupEvaluation();
+  
+  std::cout << "EXPERIMENT SETUP => Setting up program selection." << std::endl;
+  // todo
 
   #ifndef EMSCRIPTEN
   std::cout << "EXPERIMENT SETUP => Setting up data collection." << std::endl;
@@ -520,7 +526,7 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
   end_setup_sig.Trigger();
 
   setup = true;
-  std::COUT << "EXPERIMENT SETUP => DONE!" << std::endl;
+  std::cout << "EXPERIMENT SETUP => DONE!" << std::endl;
 }
 
 /// ================ Internal function implementations ================
@@ -529,6 +535,7 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   GENERATIONS = config.GENERATIONS();
   PROG_POP_SIZE = config.PROG_POP_SIZE();
   TEST_POP_SIZE = config.TEST_POP_SIZE();
+  EVALUATION_MODE = config.EVALUATION_MODE();
   PROG_COHORT_SIZE = config.PROG_COHORT_SIZE();
   TEST_COHORT_SIZE = config.TEST_COHORT_SIZE();
   TRAINING_EXAMPLE_MODE = config.TRAINING_EXAMPLE_MODE();
@@ -547,6 +554,7 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
 
   SNAPSHOT_INTERVAL = config.SNAPSHOT_INTERVAL();
   SOLUTION_SCREEN_INTERVAL = config.SOLUTION_SCREEN_INTERVAL();
+
 }
 
 void ProgramSynthesisExperiment::SetupProblem() {
@@ -588,6 +596,34 @@ void ProgramSynthesisExperiment::SetupProblem() {
   }
 }
 
+void ProgramSynthesisExperiment::SetupEvaluation() {
+  // PROGRAM_EVALUATION_TESTCASE_CNT
+  switch (EVALUATION_MODE) {
+    case (size_t)EVALUATION_TYPE::COHORT: {
+      emp_assert(PROG_POP_SIZE % PROG_COHORT_SIZE == 0, "Program population size must be evenly divisible by program cohort size.");
+      emp_assert(TEST_POP_SIZE % TEST_COHORT_SIZE == 0, "Test population size must be evenly divisible by test cohort size.");
+      std::cout << ">> Setting up cohorts." << std::endl;
+      std::cout << "   - Test cohorts" << std::endl;
+      test_cohorts.Setup(TEST_POP_SIZE, TEST_COHORT_SIZE); // --- BOOKMARK ---
+      std::cout << "   - Program cohorts" << std::endl;
+      prog_cohorts.Setup(PROG_POP_SIZE, PROG_COHORT_SIZE);
+      std::cout << "     # test cohorts = " << test_cohorts.GetCohortCnt() << std::endl;
+      std::cout << "     # program cohorts = " << prog_cohorts.GetCohortCnt() << std::endl;
+      emp_assert(test_cohorts.GetCohortCnt() == prog_cohorts.GetCohortCnt());
+
+      PROGRAM_MAX_PASSES = TEST_COHORT_SIZE;
+      break;
+    }
+    case (size_t)EVALUATION_TYPE::FULL: {
+      break;
+    }
+    default: {
+      std::cout << "Unknown EVALUATION_MODE (" << EVALUATION_MODE << "). Exiting." << std::endl;
+      exit(-1);
+    }
+  }
+}
+
 // ================= PROGRAM-RELATED FUNCTIONS ===========
 void ProgramSynthesisExperiment::InitProgPop_Random() {
   std::cout << "Randomly initializing program population." << std::endl;
@@ -616,6 +652,8 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
   
   // Configure how population should be initialized -- TODO - maybe move this into functor(?)
   if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC) {
+    TEST_POP_SIZE = prob_utils_NumberIO.GetTrainingSet().GetSize();
+    std::cout << "In static training example mode, adjusting TEST_POP_SIZE to: " << TEST_POP_SIZE << std::endl;
     end_setup_sig.AddAction([this]() {
       InitTestCasePop_TrainingSet(prob_NumberIO_world, prob_utils_NumberIO.GetTrainingSet());
     });
