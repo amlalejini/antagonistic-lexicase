@@ -406,6 +406,11 @@ class TestOrg_Base {
 // - Output type: double 
 ////////////////////////////////////////////////////////////////
 
+Problem_NumberIO_input_t GenRandomTestInput_NumberIO(emp::Random & rand, const std::pair<int, int> & int_range, const std::pair<double, double> & double_range) {
+  emp_assert(double_range.first < double_range.second);
+  emp_assert(int_range.first < int_range.second);
+  return Problem_NumberIO_input_t{rand.GetInt(int_range.first, int_range.second), rand.GetDouble(double_range.first, double_range.second)};
+}
   
 Problem_NumberIO_output_t GenCorrectOut_NumberIO(const Problem_NumberIO_input_t & input) {
   return input.first + input.second;
@@ -462,6 +467,8 @@ class TestOrg_NumberIO : public TestOrg_Base {
 
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void SetOut(const out_t & _out) { out = _out; }
 
     void CalcOut() { SetCorrectOut_NumberIO(genome, out); }
 };

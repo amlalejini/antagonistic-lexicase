@@ -32,7 +32,18 @@
 #include "TagLinearGP.h"
 #include "TagLinearGP_InstLib.h"
 
+//////////////////////////////////////////
+// --- Notes/Todos ---
+// - May need to generate more training examples for problems(?)
+//////////////////////////////////////////
+
 constexpr size_t TAG_WIDTH = 32;
+
+// How do training examples change over time?
+// - coevolution - training examples co-evolve with programs
+// - static - training examples are static
+// - random - training examples randomly change over time
+enum TRAINING_EXAMPLE_MODE_TYPE { COEVOLUTION=0, STATIC, RANDOM };
 
 enum PROBLEM_ID { NumberIO=0,
                   SmallOrLarge,
@@ -214,9 +225,14 @@ protected:
   size_t TEST_POP_SIZE;
   size_t PROG_COHORT_SIZE;
   size_t TEST_COHORT_SIZE;
-  size_t TEST_MODE;
+  size_t TRAINING_EXAMPLE_MODE;
   std::string PROBLEM;
   std::string BENCHMARK_DATA_DIR;
+
+  double PROB_NUMBER_IO__DOUBLE_MIN;
+  double PROB_NUMBER_IO__DOUBLE_MAX;
+  int PROB_NUMBER_IO__INT_MIN;
+  int PROB_NUMBER_IO__INT_MAX;
 
   // Experiment variables
   bool setup;
@@ -290,12 +306,17 @@ protected:
   emp::Signal<void(void)> end_setup_sig;
   emp::Signal<void(void)> on_destruction; ///< Triggered on experiment destruction
 
+  // Functions to be setup depending on experiment configuration (e.g., what problem we're solving)
+  // std::function<void(void)> InitTestCasePop_TrainingSet;
+
   // Internal function signatures.
   void InitConfigs(const ProgramSynthesisConfig & config);
 
   void InitProgPop_Random();    ///< Randomly initialize the program population.
   
   void SetupEvaluation();       ///< Setup evaluation
+
+  void SetupDataCollection();   ///< Setup data collection
 
   void SetupProgramSelection(); ///< Setup program selection scheme
   void SetupProgramMutation();  ///< Setup program mutations
@@ -330,7 +351,34 @@ protected:
   void SetupProblem_Smallest();
   void SetupProblem_Syllables();
 
-  void SetupDataCollection();   ///< Setup data collection
+  // ---- Some useful world-type generic setup functions ----
+
+  // Create a new world and do initial configuration.
+  template<typename WORLD_ORG_TYPE>
+  void NewTestCaseWorld(emp::Ptr<emp::World<WORLD_ORG_TYPE>> & w, emp::Random & rnd, const std::string & wname) {
+    if (w != nullptr) { w.Delete(); }
+    w.New(rnd, wname);
+    w->SetPopStruct_Mixed(true);
+  }
+
+  // Initialize given world's population with training examples in given test case set.
+  template<typename WORLD_ORG_TYPE, typename TEST_IN_TYPE, typename TEST_OUT_TYPE>
+  void InitTestCasePop_TrainingSet(emp::Ptr<emp::World<WORLD_ORG_TYPE>> w, TestCaseSet<TEST_IN_TYPE, TEST_OUT_TYPE> & test_set) {
+    std::cout << "Initializing test case population from a training set." << std::endl;
+    for (size_t i = 0; i < test_set.GetSize(); ++i) {
+      w->Inject(test_set.GetInput(i), 1);
+    }
+  }
+
+  // Initialize given world's population randomly.
+  template<typename WORLD_ORG_TYPE>
+  void InitTestCasePop_Random(emp::Ptr<emp::World<WORLD_ORG_TYPE>> w, const std::function<typename emp::World<WORLD_ORG_TYPE>::genome_t(void)> & fun) {
+    std::cout << "Initializing test case population randomly." << std::endl;
+    for (size_t i = 0; i < TEST_POP_SIZE; ++i) {
+      w->Inject(fun(), 1);
+    }
+  }
+
 
 public:
   ProgramSynthesisExperiment() 
@@ -426,6 +474,8 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
   prog_world->SetPopStruct_Mixed(true);
 
   SetupProblem();  
+
+  end_setup_sig.Trigger();
 }
 
 /// ================ Internal function implementations ================
@@ -436,9 +486,15 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   TEST_POP_SIZE = config.TEST_POP_SIZE();
   PROG_COHORT_SIZE = config.PROG_COHORT_SIZE();
   TEST_COHORT_SIZE = config.TEST_COHORT_SIZE();
-  TEST_MODE = config.TEST_MODE();
+  TRAINING_EXAMPLE_MODE = config.TRAINING_EXAMPLE_MODE();
   PROBLEM = config.PROBLEM();
   BENCHMARK_DATA_DIR = config.BENCHMARK_DATA_DIR();
+
+  // -- Number IO settings --
+  PROB_NUMBER_IO__DOUBLE_MIN = config.PROB_NUMBER_IO__DOUBLE_MIN();
+  PROB_NUMBER_IO__DOUBLE_MAX = config.PROB_NUMBER_IO__DOUBLE_MAX();
+  PROB_NUMBER_IO__INT_MIN = config.PROB_NUMBER_IO__INT_MIN();
+  PROB_NUMBER_IO__INT_MAX = config.PROB_NUMBER_IO__INT_MAX();
 }
 
 void ProgramSynthesisExperiment::SetupProblem() {
@@ -484,7 +540,8 @@ void ProgramSynthesisExperiment::SetupProblem() {
 
 void ProgramSynthesisExperiment::SetupProblem_NumberIO() { 
   std::cout << "Setting up problem - NumberIO" << std::endl; 
-  // (1) Load testing examples from file (used to evaluate 'true' performance of programs).
+  
+  // Load testing examples from file (used to evaluate 'true' performance of programs).
   if (BENCHMARK_DATA_DIR.back() != '/') BENCHMARK_DATA_DIR += '/';  
   std::string training_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTrainingSetFilename();  
   std::string testing_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTestingSetFilename();  
@@ -494,7 +551,35 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
   std::cout << ">> Training example set size = " << prob_utils_NumberIO.GetTrainingSet().GetSize() << std::endl;
   std::cout << ">> Testing example set size = " << prob_utils_NumberIO.GetTestingSet().GetSize() << std::endl;
 
-  // (2) ... 
+  // Setup world.
+  NewTestCaseWorld(prob_NumberIO_world, *random, "NumberIO Test Case World");
+  
+  // Configure how population should be initialized -- TODO - maybe move this into functor(?)
+  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC) {
+    end_setup_sig.AddAction([this]() {
+      InitTestCasePop_TrainingSet(prob_NumberIO_world, prob_utils_NumberIO.GetTrainingSet());
+    });
+  } else {
+    end_setup_sig.AddAction([this]() {
+      InitTestCasePop_Random(prob_NumberIO_world, 
+        [this]() { 
+          return GenRandomTestInput_NumberIO(*random, {PROB_NUMBER_IO__INT_MIN, PROB_NUMBER_IO__INT_MAX}, {PROB_NUMBER_IO__DOUBLE_MIN, PROB_NUMBER_IO__DOUBLE_MAX});
+        });
+    });
+  }
+  end_setup_sig.AddAction([this]() { std::cout << ">> TestCase world size = " << prob_NumberIO_world->GetSize() << std::endl; });
+  
+
+  // Setup how population will be initialized.
+  // - Setup population initialization method.
+  // prob_utils_NumberIO.GetTrainingSet()
+  // InitTestCasePop_TrainingSet = [this]() {
+  //   std::cout << "Initializing test case population." << std::endl;
+  //   auto & training_set = prob_utils_NumberIO.GetTrainingSet();
+  //   for (size_t i = 0; i < training_set.GetSize(); ++i) {
+  //     prob_NumberIO_world->Inject(training_set.GetInput(i), 1);
+  //   }
+  // };
 }
 
 void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() { 
