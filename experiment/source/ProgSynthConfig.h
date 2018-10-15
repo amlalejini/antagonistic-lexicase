@@ -15,11 +15,19 @@ EMP_BUILD_CONFIG(ProgramSynthesisConfig,
   VALUE(PROBLEM, std::string, "number-io", "Which problem to use?"),
   VALUE(BENCHMARK_DATA_DIR, std::string, "../data/prog-synth-examples", "Location to look for problem test case data."),
 
+  GROUP(PROGRAM_GROUP, "Settings specific to programs."),
+  VALUE(MIN_PROG_SIZE, size_t, 1, "Minimum program size"),
+  VALUE(MAX_PROG_SIZE, size_t, 128, "Maximum program size"),
+
   GROUP(PROB_NUMBER_IO_GROUP, "Settings specific to NumberIO problem."),
   VALUE(PROB_NUMBER_IO__DOUBLE_MIN, double, -100.0, "Min value for input double."),
   VALUE(PROB_NUMBER_IO__DOUBLE_MAX, double, 100.0, "Max value for input double."),
   VALUE(PROB_NUMBER_IO__INT_MIN, int, -100, "Min value for input int."),
   VALUE(PROB_NUMBER_IO__INT_MAX, int, 100, "Max value for input int."),
+
+  GROUP(DATA_COLLECTION_GROUP, "Settings specific to data collection."),
+  VALUE(SNAPSHOT_INTERVAL, size_t, 1000, "How often should we take population snapshots?"),
+  VALUE(SOLUTION_SCREEN_INTERVAL, size_t, 1000, "How often should we screen entire population for solutions?")
   
 
 

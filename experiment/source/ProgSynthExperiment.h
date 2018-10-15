@@ -31,6 +31,7 @@
 #include "TestCaseSet.h"
 #include "TagLinearGP.h"
 #include "TagLinearGP_InstLib.h"
+#include "TagLinearGP_Utilities.h"
 
 //////////////////////////////////////////
 // --- Notes/Todos ---
@@ -229,10 +230,17 @@ protected:
   std::string PROBLEM;
   std::string BENCHMARK_DATA_DIR;
 
+  size_t MIN_PROG_SIZE;
+  size_t MAX_PROG_SIZE;
+
   double PROB_NUMBER_IO__DOUBLE_MIN;
   double PROB_NUMBER_IO__DOUBLE_MAX;
   int PROB_NUMBER_IO__INT_MIN;
   int PROB_NUMBER_IO__INT_MAX;
+
+  // - Data collection group -
+  size_t SNAPSHOT_INTERVAL;
+  size_t SOLUTION_SCREEN_INTERVAL;
 
   // Experiment variables
   bool setup;
@@ -308,6 +316,7 @@ protected:
 
   // Functions to be setup depending on experiment configuration (e.g., what problem we're solving)
   // std::function<void(void)> InitTestCasePop_TrainingSet;
+  std::function<void(void)> update_testcase_world;
 
   // Internal function signatures.
   void InitConfigs(const ProgramSynthesisConfig & config);
@@ -472,10 +481,46 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
 
   // Configure the program world.
   prog_world->SetPopStruct_Mixed(true);
+  // Configure how programs should be initialized.
+  end_setup_sig.AddAction([this]() {
+    // Initialize program population.
+    // InitProgPop_Random(); TODO - Add this back in when I've constructed instruction set.
+    std::cout << ">> Program population size=" << prog_world->GetSize() << std::endl;
+  });
+  // Configure On Update signal.
+  do_update_sig.AddAction([this]() {
+    std::cout << "Update: " << update << ", ";
+    std::cout << "best-program score=" << prog_world->CalcFitnessID(dominant_prog_id) << std::endl;
 
-  SetupProblem();  
+    if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger();
+
+    prog_world->Update();
+    prog_world->ClearCache();
+
+    update_testcase_world();
+  });
+
+  std::cout << "EXPERIMENT SETUP => Setting up evaluation." << std::endl;
+  // todo
+  
+  std::cout << "EXPERIMENT SETUP => Setting up program selection." << std::endl;
+  // todo
+  
+  std::cout << "EXPERIMENT SETUP => Setting up problem." << std::endl;
+  SetupProblem();  //...many many todos embedded in this one...
+
+  #ifndef EMSCRIPTEN
+  std::cout << "EXPERIMENT SETUP => Setting up data collection." << std::endl;
+  // todo
+  #endif
+
+  // Configure fitness function(s)
+
 
   end_setup_sig.Trigger();
+
+  setup = true;
+  std::COUT << "EXPERIMENT SETUP => DONE!" << std::endl;
 }
 
 /// ================ Internal function implementations ================
@@ -490,11 +535,18 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   PROBLEM = config.PROBLEM();
   BENCHMARK_DATA_DIR = config.BENCHMARK_DATA_DIR();
 
+  // -- Program settings --
+  MIN_PROG_SIZE = config.MIN_PROG_SIZE();
+  MAX_PROG_SIZE = config.MAX_PROG_SIZE();
+
   // -- Number IO settings --
   PROB_NUMBER_IO__DOUBLE_MIN = config.PROB_NUMBER_IO__DOUBLE_MIN();
   PROB_NUMBER_IO__DOUBLE_MAX = config.PROB_NUMBER_IO__DOUBLE_MAX();
   PROB_NUMBER_IO__INT_MIN = config.PROB_NUMBER_IO__INT_MIN();
   PROB_NUMBER_IO__INT_MAX = config.PROB_NUMBER_IO__INT_MAX();
+
+  SNAPSHOT_INTERVAL = config.SNAPSHOT_INTERVAL();
+  SOLUTION_SCREEN_INTERVAL = config.SOLUTION_SCREEN_INTERVAL();
 }
 
 void ProgramSynthesisExperiment::SetupProblem() {
@@ -536,6 +588,14 @@ void ProgramSynthesisExperiment::SetupProblem() {
   }
 }
 
+// ================= PROGRAM-RELATED FUNCTIONS ===========
+void ProgramSynthesisExperiment::InitProgPop_Random() {
+  std::cout << "Randomly initializing program population." << std::endl;
+  for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
+    prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
+  }
+}
+
 // ================= PROBLEM SETUPS ======================
 
 void ProgramSynthesisExperiment::SetupProblem_NumberIO() { 
@@ -569,6 +629,11 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
   }
   end_setup_sig.AddAction([this]() { std::cout << ">> TestCase world size = " << prob_NumberIO_world->GetSize() << std::endl; });
   
+  // Tell experiment how to update the world (i.e., which world to update).
+  update_testcase_world = [this]() {
+    prob_NumberIO_world->Update();
+    prob_NumberIO_world->ClearCache();
+  };
 
   // Setup how population will be initialized.
   // - Setup population initialization method.

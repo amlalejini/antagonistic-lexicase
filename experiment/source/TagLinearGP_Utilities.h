@@ -1,10 +1,32 @@
 #ifndef TAG_LINEAR_GP_UTILITIES_H
 #define TAG_LINEAR_GP_UTILITIES_H
 
+#include "tools/Random.h"
+#include "TagLinearGP.h"
+#include "Utilities.h"
 
 namespace TagLGP {
 
   /// ====== Generators ======
+
+  template<size_t TAG_WIDTH, size_t MAX_ARG_CNT>
+  typename TagLinearGP_TW<TAG_WIDTH>::Program GenRandTagGPProgram(emp::Random & rnd,
+                                                                  emp::Ptr<InstLib<TagLinearGP_TW<TAG_WIDTH>, MAX_ARG_CNT>> inst_lib,
+                                                                  size_t MIN_LEN=1, size_t MAX_LEN=100) 
+  {
+    emp_assert(MIN_LEN < MAX_LEN);
+    emp_assert(inst_lib->GetSize());
+    using hardware_t = TagLGP::TagLinearGP_TW<TAG_WIDTH>;
+    using program_t = typename hardware_t::program_t;
+    
+    program_t prog(inst_lib);
+    size_t N = rnd.GetUInt(MIN_LEN, MAX_LEN+1);
+    for (size_t i = 0; i < N; ++i) {
+      prog.PushInst(GenRandTagGPInst(rnd, *inst_lib));
+    }
+    return prog;
+  }
+
 
   template<size_t TAG_WIDTH, size_t MAX_ARG_CNT> 
   typename TagLinearGP_TW<TAG_WIDTH>::Instruction GenRandTagGPInst(emp::Random & rnd, 

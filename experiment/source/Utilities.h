@@ -61,7 +61,6 @@ emp::vector<emp::BitSet<TAG_WIDTH>> GenRandTags(emp::Random & rnd, size_t count,
   return new_tags;
 }
 
-
 template<size_t TAG_WIDTH>
 emp::vector<emp::BitSet<TAG_WIDTH>> GenHadamardMatrix() {
   emp_assert((TAG_WIDTH & (TAG_WIDTH - 1)) == 0, "Bit set width must be power of 2", TAG_WIDTH);

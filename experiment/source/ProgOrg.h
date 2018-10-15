@@ -34,7 +34,7 @@ protected:
 public:
 
   ProgOrg(const genome_t & _g) 
-    : genome(_g), phenotype() { ; }
+    : phenotype(), genome(_g) { ; }
 
   ProgOrg(const ProgOrg &) = default;
   ProgOrg(ProgOrg &&) = default;
