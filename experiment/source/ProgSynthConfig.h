@@ -13,7 +13,7 @@ EMP_BUILD_CONFIG(ProgramSynthesisConfig,
   VALUE(TEST_COHORT_SIZE, size_t, 32, "How big should random cohorts be (only relevant when evaluating with random cohort method)?"),
   VALUE(TEST_MODE, size_t, 0, "How do we test programs? \n0: co-evolution \n1: static \n2: random \n3: drift"),
   VALUE(PROBLEM, std::string, "number-io", "Which problem to use?"),
-  VALUE(BENCHMARK_DATA_DIR, std::string, "/Users/amlalejini/devo_ws/Program-Synthesis-Benchmark-Data/csv", "Location to look for problem test case data.") 
+  VALUE(BENCHMARK_DATA_DIR, std::string, "../data/prog-synth-examples", "Location to look for problem test case data.") 
 )
 
 #endif

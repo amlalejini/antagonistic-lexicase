@@ -46,6 +46,8 @@ public:
     test_case_t & operator[](size_t id) { return test_cases[id]; }
     const test_case_t & operator[](size_t id) const { return test_cases[id]; }
     
+    size_t GetSize() const { return test_cases.size(); }
+    
     /// Get input for testcase given by testID.
     input_t & GetInput(size_t testID) {
         emp_assert(testID < test_cases.size());
@@ -76,6 +78,11 @@ public:
             test_cases.emplace_back(fun_load_test_case(line));
         }
         infile.close();
+    }
+
+    bool EvaluateOnTest(size_t testID, const output_t & out) {
+        emp_assert(testID < test_cases.size());
+        return out == GetOutput(testID);
     }
 
 };

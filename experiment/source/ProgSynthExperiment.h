@@ -66,10 +66,11 @@ enum PROBLEM_ID { NumberIO=0,
 
 struct ProblemInfo {
   PROBLEM_ID id; 
-  std::string tests_fname;
-
-  ProblemInfo(PROBLEM_ID _id, const std::string & tfname) 
-    : id(_id), tests_fname(tfname) 
+  std::string training_fname;
+  std::string testing_fname;
+  
+  ProblemInfo(PROBLEM_ID _id, const std::string & _training_fname, const std::string & _testing_fname) 
+    : id(_id), training_fname(_training_fname), testing_fname(_testing_fname)
   { ; }
   
   ProblemInfo(const ProblemInfo &) = default;
@@ -78,12 +79,13 @@ struct ProblemInfo {
   ProblemInfo & operator=(const ProblemInfo &) = default;
   ProblemInfo & operator=(ProblemInfo &&) = default;
 
-  const std::string & GetTestsFilename() const { return tests_fname; }
+  const std::string & GetTestingSetFilename() const { return testing_fname; }
+  const std::string & GetTrainingSetFilename() const { return training_fname; }
 
 };
 
 std::unordered_map<std::string, ProblemInfo> problems = {
-  {"number-io", {PROBLEM_ID::NumberIO, "examples-number-io.csv"}}
+  {"number-io", {PROBLEM_ID::NumberIO, "training-examples-number-io.csv", "testing-examples-number-io.csv"}}
 };
 
 class ProgramSynthesisExperiment {
@@ -338,7 +340,8 @@ public:
     std::cout << "Problem info:" << std::endl;
     for (const auto & info : problems) {
       std::cout << "  - Problem name: " << info.first << std::endl;
-      std::cout << "    - Examples file: " << info.second.tests_fname << std::endl;
+      std::cout << "    - Training examples file: " << info.second.GetTrainingSetFilename() << std::endl;
+      std::cout << "    - Testing examples file: " << info.second.GetTestingSetFilename() << std::endl;
     }
   }
 
@@ -480,12 +483,16 @@ void ProgramSynthesisExperiment::SetupProblem() {
 // ================= PROBLEM SETUPS ======================
 
 void ProgramSynthesisExperiment::SetupProblem_NumberIO() { 
-  std::cout << "todo.." << std::endl; 
+  std::cout << "Setting up problem - NumberIO" << std::endl; 
   // (1) Load testing examples from file (used to evaluate 'true' performance of programs).
   if (BENCHMARK_DATA_DIR.back() != '/') BENCHMARK_DATA_DIR += '/';  
-  std::string examples_fpath = BENCHMARK_DATA_DIR + problems[PROBLEM].GetTestsFilename();
-  
-  // prob_utils_NumberIO.GetTestCaseSet().LoadTestCases();
+  std::string training_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTrainingSetFilename();  
+  std::string testing_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTestingSetFilename();  
+  prob_utils_NumberIO.GetTrainingSet().LoadTestCases(training_examples_fpath);
+  prob_utils_NumberIO.GetTestingSet().LoadTestCases(testing_examples_fpath);
+
+  std::cout << ">> Training example set size = " << prob_utils_NumberIO.GetTrainingSet().GetSize() << std::endl;
+  std::cout << ">> Testing example set size = " << prob_utils_NumberIO.GetTestingSet().GetSize() << std::endl;
 
   // (2) ... 
 }

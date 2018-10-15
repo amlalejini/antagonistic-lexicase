@@ -418,15 +418,19 @@ void SetCorrectOut_NumberIO(const Problem_NumberIO_input_t & input, Problem_Numb
 struct ProblemUtilities_NumberIO {
   using input_t = Problem_NumberIO_input_t;
   using output_t = Problem_NumberIO_output_t;
+  
   using testcase_set_t = TestCaseSet<input_t,output_t>;
   
-  testcase_set_t testcase_set;
+  testcase_set_t testing_set;
+  testcase_set_t training_set;
 
   ProblemUtilities_NumberIO() 
-    : testcase_set(ProblemUtilities_NumberIO::LoadTestCaseFromLine)
+    : testing_set(ProblemUtilities_NumberIO::LoadTestCaseFromLine),
+      training_set(ProblemUtilities_NumberIO::LoadTestCaseFromLine)
   { ; }
 
-  testcase_set_t & GetTestCaseSet() { return testcase_set; }
+  testcase_set_t & GetTestingSet() { return testing_set; }
+  testcase_set_t & GetTrainingSet() { return training_set; }
 
   static std::pair<input_t, output_t> LoadTestCaseFromLine(const std::string & line) {
     emp::vector<std::string> split_line = emp::slice(line, ',');
