@@ -9,17 +9,20 @@
 #include <sys/stat.h>
 #include <utility>
 #include <unordered_set>
+#include <tuple>
+#include <variant>
+#include <cassert>
 
 #include "base/Ptr.h"
 #include "base/vector.h"
 #include "control/Signal.h"
 #include "Evolve/World.h"
-#include "tools/Binomial.h"
 #include "tools/Random.h"
 #include "tools/random_utils.h"
 #include "tools/math.h"
 #include "tools/string_utils.h"
 #include "tools/stats.h"
+#include "tools/tuple_utils.h"
 
 #include "TagLinearGP.h"
 #include "Selection.h"
@@ -33,14 +36,49 @@
 #include "TagLinearGP_InstLib.h"
 #include "TagLinearGP_Utilities.h"
 
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// template <size_t I>
+// struct visit_impl
+// {
+//     template <typename T, typename F>
+//     static void visit(T& tup, size_t idx, F fun)
+//     {
+//         if (idx == I - 1) fun(std::get<I - 1>(tup));
+//         else visit_impl<I - 1>::visit(tup, idx, fun);
+//     }
+// };
+  
+// template <>
+// struct visit_impl<0>
+// {
+//     template <typename T, typename F>
+//     static void visit(T& tup, size_t idx, F fun) { assert(false); }
+// };
+  
+// template <typename F, typename... Ts>
+// void visit_at(std::tuple<Ts...> const& tup, size_t idx, F fun)
+// {
+//     visit_impl<sizeof...(Ts)>::visit(tup, idx, fun);
+// }
+  
+// template <typename F, typename... Ts>
+// void visit_at(std::tuple<Ts...>& tup, size_t idx, F fun)
+// {
+//     visit_impl<sizeof...(Ts)>::visit(tup, idx, fun);
+// }
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
 //////////////////////////////////////////
 // --- Notes/Todos ---
 // - May need to generate more training examples for problems(?)
+// - INSTRUCTION SET
+//  - Add LoadAllSetInputs
 // - SELECTION
 //  - Pools (as in Cliff's implementation of lexicase) (?)
 //////////////////////////////////////////
 
 constexpr size_t TAG_WIDTH = 32;
+constexpr size_t MEM_SIZE = TAG_WIDTH;
 
 // How do training examples change over time?
 // - coevolution - training examples co-evolve with programs
@@ -107,10 +145,14 @@ class ProgramSynthesisExperiment {
 public:
   using hardware_t = typename TagLGP::TagLinearGP_TW<TAG_WIDTH>;
   using inst_lib_t = typename TagLGP::InstLib<hardware_t>;
+  using inst_t = typename hardware_t::inst_t;
 
   using prog_org_t = ProgOrg<TAG_WIDTH>;
+  using prog_org_phen_t = typename prog_org_t::Phenotype;
 
   using prog_world_t = emp::World<prog_org_t>;
+
+  using test_org_phen_t = TestOrg_Base::Phenotype;
 
   // test world aliases
   using prob_NumberIO_world_t = emp::World<TestOrg_NumberIO>;
@@ -174,12 +216,12 @@ protected:
         const size_t num_cohorts = _pop_size / _cohort_size;
         // Initialize population IDS
         for (size_t i = 0; i < _pop_size; ++i) population_ids.emplace_back(i);
+        init = true;
         // Initialize cohort vectors
         for (size_t cID = 0; cID < num_cohorts; ++cID) {
           cohorts.emplace_back(cohort_size);
           for (size_t i = 0; i < cohort_size; ++i) cohorts[cID][i] = population_ids[GetOrgPopID(cID, i)];
         }
-        init = true;
       }
 
       size_t GetCohortCnt() const { return cohorts.size(); }
@@ -236,6 +278,10 @@ protected:
 
   size_t MIN_PROG_SIZE;
   size_t MAX_PROG_SIZE;
+  size_t PROG_EVAL_TIME;
+
+  double MIN_TAG_SPECIFICITY;
+  size_t MAX_CALL_DEPTH;
 
   double PROB_NUMBER_IO__DOUBLE_MIN;
   double PROB_NUMBER_IO__DOUBLE_MAX;
@@ -255,11 +301,15 @@ protected:
 
   size_t PROGRAM_MAX_PASSES;
   size_t PROGRAM_EVALUATION_TESTCASE_CNT; ///< How many test cases are organisms evaluated on during evaluation?
+  size_t NUM_COHORTS;
 
   emp::Ptr<emp::Random> random;
 
   emp::Ptr<inst_lib_t> inst_lib;
   emp::Ptr<hardware_t> eval_hardware;
+  size_t eval_time;
+
+  emp::BitSet<TAG_WIDTH> call_tag;
   
   emp::Ptr<prog_world_t> prog_world;
 
@@ -293,6 +343,42 @@ protected:
   emp::Ptr<prob_Smallest_world_t> prob_Smallest_world;
   emp::Ptr<prob_Syllables_world_t> prob_Syllables_world;
 
+  // Tuple
+  std::tuple<
+    emp::Ptr<prob_NumberIO_world_t>,
+    emp::Ptr<prob_SmallOrLarge_world_t>,
+    emp::Ptr<prob_ForLoopIndex_world_t>,
+    emp::Ptr<prob_CompareStringLengths_world_t>,
+    emp::Ptr<prob_DoubleLetters_world_t>,
+    emp::Ptr<prob_CollatzNumbers_world_t>,
+    emp::Ptr<prob_ReplaceSpaceWithNewline_world_t>,
+    emp::Ptr<prob_StringDifferences_world_t>,
+    emp::Ptr<prob_EvenSquares_world_t>,
+    emp::Ptr<prob_WallisPi_world_t>,
+    emp::Ptr<prob_StringLengthsBackwards_world_t>,
+    emp::Ptr<prob_LastIndexOfZero_world_t>,
+    emp::Ptr<prob_VectorAverage_world_t>,
+    emp::Ptr<prob_CountOdds_world_t>,
+    emp::Ptr<prob_MirrorImage_world_t>,
+    emp::Ptr<prob_SuperAnagrams_world_t>,
+    emp::Ptr<prob_SumOfSquares_world_t>,
+    emp::Ptr<prob_VectorsSummed_world_t>,
+    emp::Ptr<prob_XWordLines_world_t>,
+    emp::Ptr<prob_PigLatin_world_t>,
+    emp::Ptr<prob_NegativeToZero_world_t>,
+    emp::Ptr<prob_ScrabbleScore_world_t>,
+    emp::Ptr<prob_Checksum_world_t>,
+    emp::Ptr<prob_Digits_world_t>,
+    emp::Ptr<prob_Grade_world_t>,
+    emp::Ptr<prob_Median_world_t>,
+    emp::Ptr<prob_Smallest_world_t>,
+    emp::Ptr<prob_Syllables_world_t>
+  > test_world_tuple;
+
+  // using test_world_var_t = std::variant<emp::Ptr<prob_NumberIO_world_t>,emp::Ptr<prob_SmallOrLarge_world_t>,emp::Ptr<prob_ForLoopIndex_world_t>,emp::Ptr<prob_CompareStringLengths_world_t>,emp::Ptr<prob_DoubleLetters_world_t>,emp::Ptr<prob_CollatzNumbers_world_t>,emp::Ptr<prob_ReplaceSpaceWithNewline_world_t>,emp::Ptr<prob_StringDifferences_world_t>,emp::Ptr<prob_EvenSquares_world_t>,emp::Ptr<prob_WallisPi_world_t>,emp::Ptr<prob_StringLengthsBackwards_world_t>,emp::Ptr<prob_LastIndexOfZero_world_t>,emp::Ptr<prob_VectorAverage_world_t>,emp::Ptr<prob_CountOdds_world_t>,emp::Ptr<prob_MirrorImage_world_t>,emp::Ptr<prob_SuperAnagrams_world_t>,emp::Ptr<prob_SumOfSquares_world_t>,emp::Ptr<prob_VectorsSummed_world_t>,emp::Ptr<prob_XWordLines_world_t>,emp::Ptr<prob_PigLatin_world_t>,emp::Ptr<prob_NegativeToZero_world_t>,emp::Ptr<prob_ScrabbleScore_world_t>,emp::Ptr<prob_Checksum_world_t>,emp::Ptr<prob_Digits_world_t>,emp::Ptr<prob_Grade_world_t>,emp::Ptr<prob_Median_world_t>,emp::Ptr<prob_Smallest_world_t>,emp::Ptr<prob_Syllables_world_t>>;
+  // emp::vector<test_world_var_t> test_world_var_vec;
+  
+
   // Problem utilities
   ProblemUtilities_NumberIO prob_utils_NumberIO;
 
@@ -319,14 +405,28 @@ protected:
   emp::Signal<void(void)> end_setup_sig;
   emp::Signal<void(void)> on_destruction; ///< Triggered on experiment destruction
 
+  // Program evaluation signals.
+  emp::Signal<void(prog_org_t &)> begin_program_eval;
+  emp::Signal<void(prog_org_t &)> end_program_eval;
+
+  emp::Signal<void(prog_org_t &, size_t)> begin_program_test;
+  emp::Signal<void(prog_org_t &, size_t)> do_program_test;
+  emp::Signal<void(prog_org_t &, size_t)> end_program_test;
+
+  emp::Signal<void(prog_org_t &)> do_program_advance;
+
   // Functions to be setup depending on experiment configuration (e.g., what problem we're solving)
   // std::function<void(void)> InitTestCasePop_TrainingSet;
-  std::function<void(void)> update_testcase_world;
+  std::function<void(void)> UpdateTestCaseWorld;
+  std::function<double(prog_org_t &, size_t)> CalcProgramScoreOnTest;
+  std::function<test_org_phen_t&(size_t)> GetTestPhenotype;
 
   // Internal function signatures.
   void InitConfigs(const ProgramSynthesisConfig & config);
 
   void InitProgPop_Random();    ///< Randomly initialize the program population.
+  
+  void SetupHardware();         ///< Setup virtual hardware.
   
   void SetupEvaluation();       ///< Setup evaluation
 
@@ -375,9 +475,84 @@ protected:
     w->SetPopStruct_Mixed(true);
   }
 
+  // template<typename WORLD_TYPE>
+  // struct OnPlacement_TestCaseWorld {
+  //   static void Run(emp::Ptr<WORLD_TYPE> w) {
+  //     if (w == nullptr) {
+  //       std::cout << ">> Nullptr!" << std::endl;
+  //     } else {
+  //       std::cout << ">> Found a world!" << std::endl;
+  //       // w->OnPlacement(...)
+  //     }
+  //   }
+  // };
+
+  // // Set on org placement function.
+  // void OnPlacement_ActiveTestCaseWorld(const std::function<void(size_t)> & fun) {
+  //   // Loop through all test case worlds
+  //   // for (size_t i = 0; i < 10; ++i) {
+  //   //   visit_at(test_world_tuple, i, [](auto & arg) {
+  //   //     if (arg == nullptr) { std::cout << "Nullptr!" << std::endl; }
+  //   //     else std::cout << "Found a world!" << std::endl;
+  //   //   });
+  //   // }
+  //   emp::TupleIterateTemplate<decltype(test_world_tuple), OnPlacement_TestCaseWorld>(test_world_tuple);
+  // }
+
+  void OnPlacement_ActiveTestCaseWorld(const std::function<void(size_t)> & fun) {
+      if (prob_NumberIO_world != nullptr) prob_NumberIO_world->OnPlacement(fun);
+      else if (prob_SmallOrLarge_world != nullptr) prob_SmallOrLarge_world->OnPlacement(fun);
+      else if (prob_ForLoopIndex_world != nullptr) prob_ForLoopIndex_world->OnPlacement(fun);
+      else if (prob_CompareStringLengths_world != nullptr) prob_CompareStringLengths_world->OnPlacement(fun);
+      else if (prob_DoubleLetters_world != nullptr) prob_DoubleLetters_world->OnPlacement(fun);
+      else if (prob_CollatzNumbers_world != nullptr) prob_CollatzNumbers_world->OnPlacement(fun);
+      else if (prob_ReplaceSpaceWithNewline_world != nullptr) prob_ReplaceSpaceWithNewline_world->OnPlacement(fun);
+      else if (prob_StringDifferences_world != nullptr) prob_StringDifferences_world->OnPlacement(fun);
+      else if (prob_EvenSquares_world != nullptr) prob_EvenSquares_world->OnPlacement(fun);
+      else if (prob_WallisPi_world != nullptr) prob_WallisPi_world->OnPlacement(fun);
+      else if (prob_StringLengthsBackwards_world != nullptr) prob_StringLengthsBackwards_world->OnPlacement(fun);
+      else if (prob_LastIndexOfZero_world != nullptr) prob_LastIndexOfZero_world->OnPlacement(fun);
+      else if (prob_VectorAverage_world != nullptr) prob_VectorAverage_world->OnPlacement(fun);
+      else if (prob_CountOdds_world != nullptr) prob_CountOdds_world->OnPlacement(fun);
+      else if (prob_MirrorImage_world != nullptr) prob_MirrorImage_world->OnPlacement(fun);
+      else if (prob_SuperAnagrams_world != nullptr) prob_SuperAnagrams_world->OnPlacement(fun);
+      else if (prob_SumOfSquares_world != nullptr) prob_SumOfSquares_world->OnPlacement(fun);
+      else if (prob_VectorsSummed_world != nullptr) prob_VectorsSummed_world->OnPlacement(fun);
+      else if (prob_XWordLines_world != nullptr) prob_XWordLines_world->OnPlacement(fun);
+      else if (prob_PigLatin_world != nullptr) prob_PigLatin_world->OnPlacement(fun);
+      else if (prob_NegativeToZero_world != nullptr) prob_NegativeToZero_world->OnPlacement(fun);
+      else if (prob_ScrabbleScore_world != nullptr) prob_ScrabbleScore_world->OnPlacement(fun);
+      else if (prob_Checksum_world != nullptr) prob_Checksum_world->OnPlacement(fun);
+      else if (prob_Digits_world != nullptr) prob_Digits_world->OnPlacement(fun);
+      else if (prob_Grade_world != nullptr) prob_Grade_world->OnPlacement(fun);
+      else if (prob_Median_world != nullptr) prob_Median_world->OnPlacement(fun);
+      else if (prob_Smallest_world != nullptr) prob_Smallest_world->OnPlacement(fun);
+      else if (prob_Syllables_world != nullptr) prob_Syllables_world->OnPlacement(fun);
+      else { std::cout << "AHH! More than one test case world has been created. Exiting." << std::endl; exit(-1); }
+  }
+  
+  /// Test set is test set to use if doing static initialization
+  /// rand gen fun is used to generate random genome
+  template<typename WORLD_ORG_TYPE, typename TEST_IN_TYPE, typename TEST_OUT_TYPE>
+  void SetupTestCasePop_Init(emp::Ptr<emp::World<WORLD_ORG_TYPE>> w, TestCaseSet<TEST_IN_TYPE, TEST_OUT_TYPE> & test_set,
+                             const std::function<typename emp::World<WORLD_ORG_TYPE>::genome_t(void)> & gen_rand_test) {
+    // Configure how population should be initialized -- TODO - maybe move this into functor(?)
+    if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC) {
+      TEST_POP_SIZE = test_set.GetSize();
+      std::cout << ">> In static training example mode, adjusting TEST_POP_SIZE to: " << TEST_POP_SIZE << std::endl;
+      end_setup_sig.AddAction([this, w, test_set]() {                     // TODO - test that this is actually working!
+        InitTestCasePop_TrainingSet(w, test_set);
+      });
+    } else {
+      end_setup_sig.AddAction([this, w, test_set, gen_rand_test]() {      // TODO - test that this is actually working!
+        InitTestCasePop_Random(w, gen_rand_test);
+      });
+    }
+  }
+
   // Initialize given world's population with training examples in given test case set.
   template<typename WORLD_ORG_TYPE, typename TEST_IN_TYPE, typename TEST_OUT_TYPE>
-  void InitTestCasePop_TrainingSet(emp::Ptr<emp::World<WORLD_ORG_TYPE>> w, TestCaseSet<TEST_IN_TYPE, TEST_OUT_TYPE> & test_set) {
+  void InitTestCasePop_TrainingSet(emp::Ptr<emp::World<WORLD_ORG_TYPE>> w, const TestCaseSet<TEST_IN_TYPE, TEST_OUT_TYPE> & test_set) {
     std::cout << "Initializing test case population from a training set." << std::endl;
     for (size_t i = 0; i < test_set.GetSize(); ++i) {
       w->Inject(test_set.GetInput(i), 1);
@@ -393,10 +568,46 @@ protected:
     }
   }
 
+  // ---- Some useful experiment-running functions ----
+  double EvaluateTest(prog_org_t & prog_org, size_t testID) {
+    begin_program_test.Trigger(prog_org, testID);
+    do_program_test.Trigger(prog_org, testID);
+    end_program_test.Trigger(prog_org, testID);
+    return CalcProgramScoreOnTest(prog_org, testID);
+  }
 
 public:
   ProgramSynthesisExperiment() 
-    : setup(false), update(0)
+    : setup(false), update(0),
+      test_world_tuple(prob_NumberIO_world,
+                       prob_SmallOrLarge_world,
+                       prob_ForLoopIndex_world,
+                       prob_CompareStringLengths_world,
+                       prob_DoubleLetters_world,
+                       prob_CollatzNumbers_world,
+                       prob_ReplaceSpaceWithNewline_world,
+                       prob_StringDifferences_world,
+                       prob_EvenSquares_world,
+                       prob_WallisPi_world,
+                       prob_StringLengthsBackwards_world,
+                       prob_LastIndexOfZero_world,
+                       prob_VectorAverage_world,
+                       prob_CountOdds_world,
+                       prob_MirrorImage_world,
+                       prob_SuperAnagrams_world,
+                       prob_SumOfSquares_world,
+                       prob_VectorsSummed_world,
+                       prob_XWordLines_world,
+                       prob_PigLatin_world,
+                       prob_NegativeToZero_world,
+                       prob_ScrabbleScore_world,
+                       prob_Checksum_world,
+                       prob_Digits_world,
+                       prob_Grade_world,
+                       prob_Median_world,
+                       prob_Smallest_world,
+                       prob_Syllables_world
+      )
 
   {
     std::cout << "Problem info:" << std::endl;
@@ -502,9 +713,11 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
     prog_world->Update();
     prog_world->ClearCache();
 
-    update_testcase_world();
+    UpdateTestCaseWorld();
   });
 
+  std::cout << "EXPERIMENT SETUP => Setting up evaluation hardware." << std::endl;
+  SetupHardware();
   
   std::cout << "EXPERIMENT SETUP => Setting up problem." << std::endl;
   SetupProblem();  //...many many todos embedded in this one...
@@ -526,7 +739,13 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
   end_setup_sig.Trigger();
 
   setup = true;
+
+  // TODO - assert that only one test world ptr is not nullptr
+
   std::cout << "EXPERIMENT SETUP => DONE!" << std::endl;
+
+  // std::cout << "--- Instruction set: ---" << std::endl;
+  // inst_lib->Print();
 }
 
 /// ================ Internal function implementations ================
@@ -542,9 +761,14 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   PROBLEM = config.PROBLEM();
   BENCHMARK_DATA_DIR = config.BENCHMARK_DATA_DIR();
 
+  // -- Hardware settings --
+  MIN_TAG_SPECIFICITY = config.MIN_TAG_SPECIFICITY();
+  MAX_CALL_DEPTH = config.MAX_CALL_DEPTH();
+
   // -- Program settings --
   MIN_PROG_SIZE = config.MIN_PROG_SIZE();
   MAX_PROG_SIZE = config.MAX_PROG_SIZE();
+  PROG_EVAL_TIME  = config.PROG_EVAL_TIME();
 
   // -- Number IO settings --
   PROB_NUMBER_IO__DOUBLE_MIN = config.PROB_NUMBER_IO__DOUBLE_MIN();
@@ -596,22 +820,183 @@ void ProgramSynthesisExperiment::SetupProblem() {
   }
 }
 
+void ProgramSynthesisExperiment::SetupHardware() {
+  // Create new instruction library.
+  inst_lib = emp::NewPtr<inst_lib_t>();
+  // Create evaluation hardware.
+  eval_hardware = emp::NewPtr<hardware_t>(inst_lib, random);
+  // Configure the CPU.
+  // - MemSize
+  eval_hardware->SetMemSize(MEM_SIZE);
+  // - MinBindThresh
+  eval_hardware->SetMinTagSpecificity(MIN_TAG_SPECIFICITY);
+  // - MaxCallDepth
+  eval_hardware->SetMaxCallDepth(MAX_CALL_DEPTH);
+  // - MemTags
+  //  - HadamardMatrix
+  eval_hardware->SetMemTags(GenHadamardMatrix<TAG_WIDTH>());
+
+  // Configure call tag
+  call_tag.Clear(); // Set initial call tag to all 0s.
+
+  // Configure default instructions
+  // Math
+  inst_lib->AddInst("Add", hardware_t::Inst_Add, 3, "wmemANY[C] = wmemNUM[A] + wmemNUM[B]");
+  inst_lib->AddInst("Sub", hardware_t::Inst_Sub, 3, "wmemANY[C] = wmemNUM[A] - wmemNUM[B]");
+  inst_lib->AddInst("Mult", hardware_t::Inst_Mult, 3, "wmemANY[C] = wmemNUM[A] * wmemNUM[B]");
+  inst_lib->AddInst("Div", hardware_t::Inst_Div, 3, "if (wmemNUM[B] != 0) wmemANY[C] = wmemNUM[A] / wmemNUM[B]; else NOP");
+  inst_lib->AddInst("Mod", hardware_t::Inst_Mod, 3, "if (wmemNUM[B] != 0) wmemANY[C] = int(wmemNUM[A]) % int(wmemNUM[B]); else NOP");
+  inst_lib->AddInst("TestNumEqu", hardware_t::Inst_TestNumEqu, 3, "wmemANY[C] = wmemNUM[A] == wmemNUM[B]");
+  inst_lib->AddInst("TestNumNEqu", hardware_t::Inst_TestNumNEqu, 3, "wmemANY[C] = wmemNUM[A] != wmemNUM[B]");
+  inst_lib->AddInst("TestNumLess", hardware_t::Inst_TestNumLess, 3, "wmemANY[C] = wmemNUM[A] < wmemNUM[B]");
+  inst_lib->AddInst("Floor", hardware_t::Inst_Floor, 1, "wmemNUM[A] = floor(wmemNUM[A])");
+  inst_lib->AddInst("Not", hardware_t::Inst_Not, 1, "wmemNUM[A] = !wmemNUM[A]"); 
+  inst_lib->AddInst("Inc", hardware_t::Inst_Inc, 1, "wmemNUM[A] = wmemNUM[A] + 1");
+  inst_lib->AddInst("Dec", hardware_t::Inst_Dec, 1, "wmemNUM[A] = wmemNUM[A] - 1");
+  
+  // Memory manipulation
+  inst_lib->AddInst("CopyMem", hardware_t::Inst_CopyMem, 2, "wmemANY[B] = wmemANY[A] // Copy mem[A] to mem[B]");
+  inst_lib->AddInst("SwapMem", hardware_t::Inst_SwapMem, 2, "swap(wmemANY[A], wmemANY[B])");
+  inst_lib->AddInst("Input", hardware_t::Inst_Input, 2, "wmemANY[B] = imemANY[A]");
+  inst_lib->AddInst("Output", hardware_t::Inst_Output, 2, "omemANY[B] = wmemANY[A]");
+  inst_lib->AddInst("CommitGlobal", hardware_t::Inst_CommitGlobal, 2, "gmemANY[B] = wmemANY[A]");
+  inst_lib->AddInst("PullGlobal", hardware_t::Inst_PullGlobal, 2, "wmemANY[B] = gmemANY[A]");
+  inst_lib->AddInst("TestMemEqu", hardware_t::Inst_TestMemEqu, 3, "wmemANY[C] = wmemANY[A] == wmemANY[B]");
+  inst_lib->AddInst("TestMemNEqu", hardware_t::Inst_TestMemNEqu, 3, "wmemANY[C] = wmemANY[A] != wmemANY[B]");
+
+  // Vector-related instructions
+  inst_lib->AddInst("MakeVector", hardware_t::Inst_MakeVector, 3, "");  // TODO - more descriptions
+  inst_lib->AddInst("VecGet", hardware_t::Inst_VecGet, 3, "");
+  inst_lib->AddInst("VecSet", hardware_t::Inst_VecSet, 3, "");
+  inst_lib->AddInst("VecLen", hardware_t::Inst_VecLen, 3, "");
+  inst_lib->AddInst("VecAppend", hardware_t::Inst_VecAppend, 3, "");
+  inst_lib->AddInst("VecPop", hardware_t::Inst_VecPop, 3, "");
+  inst_lib->AddInst("VecRemove", hardware_t::Inst_VecRemove, 3, "");
+  inst_lib->AddInst("VecReplaceAll", hardware_t::Inst_VecReplaceAll, 3, "");
+  inst_lib->AddInst("VecIndexOf", hardware_t::Inst_VecIndexOf, 3, "");
+  inst_lib->AddInst("VecOccurrencesOf", hardware_t::Inst_VecOccurrencesOf, 3, "");
+  inst_lib->AddInst("VecReverse", hardware_t::Inst_VecReverse, 3, "");
+  inst_lib->AddInst("VecSwapIfLess", hardware_t::Inst_VecSwapIfLess, 3, "");
+  inst_lib->AddInst("VecGetFront", hardware_t::Inst_VecGetFront, 3, "");
+  inst_lib->AddInst("VecGetBack", hardware_t::Inst_VecGetBack, 3, "");
+
+  // Memory-type
+  inst_lib->AddInst("IsStr", hardware_t::Inst_IsStr, 3, "");
+  inst_lib->AddInst("IsNum", hardware_t::Inst_IsNum, 3, "");
+  inst_lib->AddInst("IsVec", hardware_t::Inst_IsVec, 3, "");
+
+  // Flow control
+  inst_lib->AddInst("If", hardware_t::Inst_If, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  inst_lib->AddInst("IfNot", hardware_t::Inst_IfNot, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  inst_lib->AddInst("While", hardware_t::Inst_While, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  inst_lib->AddInst("Countdown", hardware_t::Inst_Countdown, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  inst_lib->AddInst("Foreach", hardware_t::Inst_Foreach, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  inst_lib->AddInst("Close", hardware_t::Inst_Close, 3, "", {inst_lib_t::InstProperty::END_FLOW});
+  inst_lib->AddInst("Break", hardware_t::Inst_Break, 3, "");
+  inst_lib->AddInst("Call", hardware_t::Inst_Call, 3, "");
+  inst_lib->AddInst("Routine", hardware_t::Inst_Routine, 3, "");
+  inst_lib->AddInst("Return", hardware_t::Inst_Return, 3, "");
+
+  // Module
+  inst_lib->AddInst("ModuleDef", hardware_t::Inst_Nop, 3, "", {inst_lib_t::InstProperty::MODULE});
+
+  // Misc
+  inst_lib->AddInst("Nop", hardware_t::Inst_Nop, 3, "");
+
+  // Add Terminals [0:16] -- TODO - may want these to be slightly more configurable.
+  for (size_t i = 0; i <= 16; ++i) {
+    inst_lib->AddInst("Set-" + emp::to_string(i),
+      [i](hardware_t & hw, const inst_t & inst) {
+        hardware_t::CallState & state = hw.GetCurCallState();
+        hardware_t::Memory & wmem = state.GetWorkingMem();
+        size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+        if (!hw.IsValidMemPos(posA)) return; // Do nothing
+        wmem.Set(posA, (double)i);
+      });
+  }
+
+  // What do at beginning of program evaluation (about to be run on potentially many tests)?
+  begin_program_eval.AddAction([this](prog_org_t & prog_org) {
+    eval_hardware->Reset();
+    eval_hardware->SetProgram(prog_org.GetGenome());
+  });
+
+  // What do at end of program evaluation (after being run on some number of tests)?
+  // end_program_eval - do nothing (?)
+  
+  // What to do before running program on a single test?
+  begin_program_test.AddAction([this](prog_org_t & prog_org, size_t testID) {
+    eval_hardware->ResetHardware();
+    eval_hardware->CallModule(call_tag, MIN_TAG_SPECIFICITY, true, false);
+  });
+
+  // do_program_test
+  do_program_test.AddAction([this](prog_org_t & prog_org, size_t testID) {
+    for (eval_time = 0; eval_time < PROG_EVAL_TIME; ++eval_time) {
+      do_program_advance.Trigger(prog_org);
+      if (eval_hardware->GetCallStackSize() == 0) break; // If call stack is ever completely empty, program is done early.
+    }
+  });
+
+  // end_program_test
+  
+  // do_program_advance
+  do_program_advance.AddAction([this](prog_org_t &) {
+    eval_hardware->SingleProcess();
+  });
+
+}
+
 void ProgramSynthesisExperiment::SetupEvaluation() {
-  // PROGRAM_EVALUATION_TESTCASE_CNT
   switch (EVALUATION_MODE) {
     case (size_t)EVALUATION_TYPE::COHORT: {
       emp_assert(PROG_POP_SIZE % PROG_COHORT_SIZE == 0, "Program population size must be evenly divisible by program cohort size.");
       emp_assert(TEST_POP_SIZE % TEST_COHORT_SIZE == 0, "Test population size must be evenly divisible by test cohort size.");
       std::cout << ">> Setting up cohorts." << std::endl;
       std::cout << "   - Test cohorts" << std::endl;
-      test_cohorts.Setup(TEST_POP_SIZE, TEST_COHORT_SIZE); // --- BOOKMARK ---
+      test_cohorts.Setup(TEST_POP_SIZE, TEST_COHORT_SIZE);
       std::cout << "   - Program cohorts" << std::endl;
       prog_cohorts.Setup(PROG_POP_SIZE, PROG_COHORT_SIZE);
       std::cout << "     # test cohorts = " << test_cohorts.GetCohortCnt() << std::endl;
       std::cout << "     # program cohorts = " << prog_cohorts.GetCohortCnt() << std::endl;
-      emp_assert(test_cohorts.GetCohortCnt() == prog_cohorts.GetCohortCnt());
-
+      if (test_cohorts.GetCohortCnt() != prog_cohorts.GetCohortCnt()) {
+        std::cout << "ERROR: Test cohort count must the same as program cohort count in COHORT mode. Exiting." << std::endl;
+        exit(-1);
+      }
+      NUM_COHORTS = prog_cohorts.GetCohortCnt();
       PROGRAM_MAX_PASSES = TEST_COHORT_SIZE;
+
+      // Setup program world on placement response.
+      prog_world->OnPlacement([this](size_t pos) {
+        prog_world->GetOrg(pos).GetPhenotype().Reset(TEST_COHORT_SIZE);
+      });
+      
+      // Setup test case world on placement response.
+      OnPlacement_ActiveTestCaseWorld([this](size_t pos) { GetTestPhenotype(pos).Reset(PROG_COHORT_SIZE); }); //<--back
+
+      // What should happen on evaluation?
+      do_evaluation_sig.AddAction([this]() {
+        // Randomize the cohorts.
+        prog_cohorts.Randomize(*random);
+        test_cohorts.Randomize(*random);
+        // For each cohort, evaluate all programs against all tests in corresponding cohort.
+        for (size_t cID = 0; cID < prog_cohorts.GetCohortCnt(); ++cID) {
+          for (size_t pID = 0; pID < PROG_COHORT_SIZE; ++pID) {
+            prog_org_t & prog_org = prog_world->GetOrg(prog_cohorts.GetWorldID(cID, pID));
+            begin_program_eval.Trigger(prog_org);
+            for (size_t tID = 0; tID < TEST_COHORT_SIZE; ++tID) {
+              const size_t test_world_id = test_cohorts.GetWorldID(cID, tID);
+              double score = EvaluateTest(prog_org, test_world_id);
+              test_org_phen_t & test_phen = GetTestPhenotype(test_world_id);
+              prog_org_phen_t & prog_phen = prog_org.GetPhenotype();
+              // Update test phenotype
+              test_phen.test_results[pID] = score;
+              prog_phen.test_results[tID] = score;
+            }
+            end_program_eval.Trigger(prog_org);
+          }
+        }
+      });
       break;
     }
     case (size_t)EVALUATION_TYPE::FULL: {
@@ -621,6 +1006,7 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
       std::cout << "Unknown EVALUATION_MODE (" << EVALUATION_MODE << "). Exiting." << std::endl;
       exit(-1);
     }
+    // TODO - pools?
   }
 }
 
@@ -636,6 +1022,8 @@ void ProgramSynthesisExperiment::InitProgPop_Random() {
 
 void ProgramSynthesisExperiment::SetupProblem_NumberIO() { 
   std::cout << "Setting up problem - NumberIO" << std::endl; 
+
+  // using test_org_t = TestOrg_NumberIO;
   
   // Load testing examples from file (used to evaluate 'true' performance of programs).
   if (BENCHMARK_DATA_DIR.back() != '/') BENCHMARK_DATA_DIR += '/';  
@@ -651,38 +1039,59 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
   NewTestCaseWorld(prob_NumberIO_world, *random, "NumberIO Test Case World");
   
   // Configure how population should be initialized -- TODO - maybe move this into functor(?)
-  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC) {
-    TEST_POP_SIZE = prob_utils_NumberIO.GetTrainingSet().GetSize();
-    std::cout << "In static training example mode, adjusting TEST_POP_SIZE to: " << TEST_POP_SIZE << std::endl;
-    end_setup_sig.AddAction([this]() {
-      InitTestCasePop_TrainingSet(prob_NumberIO_world, prob_utils_NumberIO.GetTrainingSet());
-    });
-  } else {
-    end_setup_sig.AddAction([this]() {
-      InitTestCasePop_Random(prob_NumberIO_world, 
-        [this]() { 
-          return GenRandomTestInput_NumberIO(*random, {PROB_NUMBER_IO__INT_MIN, PROB_NUMBER_IO__INT_MAX}, {PROB_NUMBER_IO__DOUBLE_MIN, PROB_NUMBER_IO__DOUBLE_MAX});
-        });
-    });
-  }
+ 
+  SetupTestCasePop_Init(prob_NumberIO_world, 
+                        prob_utils_NumberIO.training_set,
+                        [this]() { return GenRandomTestInput_NumberIO(*random, {PROB_NUMBER_IO__INT_MIN, PROB_NUMBER_IO__INT_MAX}, {PROB_NUMBER_IO__DOUBLE_MIN, PROB_NUMBER_IO__DOUBLE_MAX}); } );
+
   end_setup_sig.AddAction([this]() { std::cout << ">> TestCase world size = " << prob_NumberIO_world->GetSize() << std::endl; });
   
+  // Tell world to calculate correct test output (given input) on placement.
+  prob_NumberIO_world->OnPlacement([this](size_t pos) { prob_NumberIO_world->GetOrg(pos).CalcOut(); } );
+
+  // Tell experiment how to get test phenotypes.
+  GetTestPhenotype = [this](size_t testID) -> test_org_phen_t & {
+    return prob_NumberIO_world->GetOrg(testID).GetPhenotype();
+  };
+  
   // Tell experiment how to update the world (i.e., which world to update).
-  update_testcase_world = [this]() {
+  UpdateTestCaseWorld = [this]() {
     prob_NumberIO_world->Update();
     prob_NumberIO_world->ClearCache();
   };
 
-  // Setup how population will be initialized.
-  // - Setup population initialization method.
-  // prob_utils_NumberIO.GetTrainingSet()
-  // InitTestCasePop_TrainingSet = [this]() {
-  //   std::cout << "Initializing test case population." << std::endl;
-  //   auto & training_set = prob_utils_NumberIO.GetTrainingSet();
-  //   for (size_t i = 0; i < training_set.GetSize(); ++i) {
-  //     prob_NumberIO_world->Inject(training_set.GetInput(i), 1);
-  //   }
-  // };
+  // Tell experiment how to configure hardware inputs when running program against a test.
+  begin_program_test.AddAction([this](prog_org_t & prog_org, size_t testID) {
+    // Reset eval stuff
+    // Set current test org.
+    prob_utils_NumberIO.cur_eval_test_org = prob_NumberIO_world->GetOrgPtr(testID);
+    prob_utils_NumberIO.ResetTestEval();
+    emp_assert(eval_hardware->GetMemSize() >= 2);
+    // Configure inputs.
+    if (eval_hardware->GetCallStackSize()) {
+      // Grab some useful references.
+      Problem_NumberIO_input_t & input = prob_utils_NumberIO.cur_eval_test_org->GetGenome(); // std::pair<int, double>
+      hardware_t::CallState & state = eval_hardware->GetCurCallState();
+      hardware_t::Memory & wmem = state.GetWorkingMem();
+      // Set hardware input.
+      wmem.Set(0, input.first);
+      wmem.Set(1, input.second);
+    } // TODO - confirm that this is working.
+  });
+
+  // Tell experiment how to calculate program score.
+  CalcProgramScoreOnTest = [this](prog_org_t & prog_org, size_t testID) {
+    if (prob_utils_NumberIO.submitted) {
+      return 0.0;
+    } else {
+      return CalcScorePassFail_NumberIO(prob_NumberIO_world->GetOrg(testID).GetCorrectOut(), prob_utils_NumberIO.submitted_val);
+    }
+  };
+
+  // Todo - Add custom instructions
+  // - LoadInteger
+  // - LoadDouble
+  // - SubmitNum
 }
 
 void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() { 
@@ -819,5 +1228,24 @@ void ProgramSynthesisExperiment::SetupProblem_Syllables() {
   std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
   exit(-1); 
 }
+
+/*
+scratch:
+ // if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC) {
+  //   TEST_POP_SIZE = prob_utils_NumberIO.GetTrainingSet().GetSize();
+  //   std::cout << "In static training example mode, adjusting TEST_POP_SIZE to: " << TEST_POP_SIZE << std::endl;
+  //   end_setup_sig.AddAction([this]() {
+  //     InitTestCasePop_TrainingSet(prob_NumberIO_world, prob_utils_NumberIO.GetTrainingSet());
+  //   });
+  // } else {
+  //   end_setup_sig.AddAction([this]() {
+  //     InitTestCasePop_Random(prob_NumberIO_world, 
+  //       [this]() { 
+  //         return GenRandomTestInput_NumberIO(*random, {PROB_NUMBER_IO__INT_MIN, PROB_NUMBER_IO__INT_MAX}, {PROB_NUMBER_IO__DOUBLE_MIN, PROB_NUMBER_IO__DOUBLE_MAX});
+  //       });
+  //   });
+  // }
+
+*/
 
 #endif

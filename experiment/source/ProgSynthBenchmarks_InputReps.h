@@ -420,33 +420,9 @@ void SetCorrectOut_NumberIO(const Problem_NumberIO_input_t & input, Problem_Numb
   output = input.first + input.second;
 }
 
-struct ProblemUtilities_NumberIO {
-  using input_t = Problem_NumberIO_input_t;
-  using output_t = Problem_NumberIO_output_t;
-  
-  using testcase_set_t = TestCaseSet<input_t,output_t>;
-  
-  testcase_set_t testing_set;
-  testcase_set_t training_set;
-
-  ProblemUtilities_NumberIO() 
-    : testing_set(ProblemUtilities_NumberIO::LoadTestCaseFromLine),
-      training_set(ProblemUtilities_NumberIO::LoadTestCaseFromLine)
-  { ; }
-
-  testcase_set_t & GetTestingSet() { return testing_set; }
-  testcase_set_t & GetTrainingSet() { return training_set; }
-
-  static std::pair<input_t, output_t> LoadTestCaseFromLine(const std::string & line) {
-    emp::vector<std::string> split_line = emp::slice(line, ',');
-    input_t input;
-    output_t output;
-    input.second = std::atof(split_line[0].c_str());
-    input.first = std::atof(split_line[1].c_str());
-    output = std::atof(split_line[2].c_str());
-    return {input, output};
-  }
-};
+double CalcScorePassFail_NumberIO(const Problem_NumberIO_output_t & correct_test_output, double sub) {
+  return (double)sub == correct_test_output;
+}
 
 /// ProblemOrg: NumberIO
 /// NumberIO: Pair<integer, float>
@@ -468,11 +444,52 @@ class TestOrg_NumberIO : public TestOrg_Base {
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
 
+    out_t & GetCorrectOut() { return out; }
+    const out_t & GetCorrectOut() const { return out; }
+
     void SetOut(const out_t & _out) { out = _out; }
 
     void CalcOut() { SetCorrectOut_NumberIO(genome, out); }
 };
 
+struct ProblemUtilities_NumberIO {
+  using input_t = Problem_NumberIO_input_t;
+  using output_t = Problem_NumberIO_output_t;
+  
+  using testcase_set_t = TestCaseSet<input_t,output_t>;
+  
+  testcase_set_t testing_set;
+  testcase_set_t training_set;
+
+  // A few useful things for use within a test evaluation
+  emp::Ptr<TestOrg_NumberIO> cur_eval_test_org;
+  bool submitted;
+  double submitted_val; // if going to do string thing, we can have a submission_str.
+
+  ProblemUtilities_NumberIO() 
+    : testing_set(ProblemUtilities_NumberIO::LoadTestCaseFromLine),
+      training_set(ProblemUtilities_NumberIO::LoadTestCaseFromLine),
+      submitted(false), submitted_val(0.0)
+  { ; }
+
+  testcase_set_t & GetTestingSet() { return testing_set; }
+  testcase_set_t & GetTrainingSet() { return training_set; }
+
+  void ResetTestEval() {
+    submitted = false;
+    submitted_val = 0.0;
+  }
+
+  static std::pair<input_t, output_t> LoadTestCaseFromLine(const std::string & line) {
+    emp::vector<std::string> split_line = emp::slice(line, ',');
+    input_t input;
+    output_t output;
+    input.second = std::atof(split_line[0].c_str());
+    input.first = std::atof(split_line[1].c_str());
+    output = std::atof(split_line[2].c_str());
+    return {input, output};
+  }
+};
 
 ////////////////////////////////////////////////////////////////
 // Problem: Small or large

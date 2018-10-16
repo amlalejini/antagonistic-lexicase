@@ -53,12 +53,23 @@ public:
         emp_assert(testID < test_cases.size());
         return test_cases[testID].first;
     }
+    /// Get input for testcase given by testID.
+    const input_t & GetInput(size_t testID) const {
+        emp_assert(testID < test_cases.size());
+        return test_cases[testID].first;
+    }
 
     /// Get output for test case given by testID.
     output_t & GetOutput(size_t testID) {
         emp_assert(testID < test_cases.size());
         return test_cases[testID].second;
     }
+    /// Get output for test case given by testID.
+    const output_t & GetOutput(size_t testID) const {
+        emp_assert(testID < test_cases.size());
+        return test_cases[testID].second;
+    }
+
 
     /// Get test case set
     emp::vector<test_case_t> & GetTestCaseSet() { return test_cases; }

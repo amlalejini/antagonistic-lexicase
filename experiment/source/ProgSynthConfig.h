@@ -19,6 +19,11 @@ EMP_BUILD_CONFIG(ProgramSynthesisConfig,
   GROUP(PROGRAM_GROUP, "Settings specific to programs."),
   VALUE(MIN_PROG_SIZE, size_t, 1, "Minimum program size"),
   VALUE(MAX_PROG_SIZE, size_t, 128, "Maximum program size"),
+  VALUE(PROG_EVAL_TIME, size_t, 256, "How many clock cycles should we give a program during a test?"),
+
+  GROUP(HARDWARE_GROUP, "Settings specific to TagLGP virtual hardware"),
+  VALUE(MIN_TAG_SPECIFICITY, double, 0.0, "What is the minimum tag similarity required for a tag to successfully reference another tag?"),
+  VALUE(MAX_CALL_DEPTH, size_t, 128, "Maximum depth of hardware's call stack."),
 
   GROUP(PROB_NUMBER_IO_GROUP, "Settings specific to NumberIO problem."),
   VALUE(PROB_NUMBER_IO__DOUBLE_MIN, double, -100.0, "Min value for input double."),

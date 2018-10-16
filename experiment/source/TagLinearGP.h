@@ -837,6 +837,10 @@ namespace TagLGP {
       mem_tags = tags;
     }
 
+    void SetMinTagSpecificity(double val) { min_tag_specificity = val; }
+
+    void SetMaxCallDepth(size_t depth) { max_call_depth = depth; }
+
     // ---------------------------- Hardware control ----------------------------
     /// Reset everything, including the program.
     void Reset() {
@@ -1091,6 +1095,9 @@ namespace TagLGP {
       emp_assert(call_stack.size(), "Cannot query for current call state if call stack is empty.");
       return call_stack.back();
     }
+
+    /// Get size of call stack.
+    size_t GetCallStackSize() const { return call_stack.size(); }
 
     // ---------------------------- Hardware utilities ----------------------------
     void NewRandom(int seed=-1) {
