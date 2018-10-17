@@ -17,6 +17,7 @@
 #include "base/vector.h"
 #include "control/Signal.h"
 #include "Evolve/World.h"
+#include "Evolve/World_select.h"
 #include "tools/Random.h"
 #include "tools/random_utils.h"
 #include "tools/math.h"
@@ -89,6 +90,7 @@ constexpr size_t MEM_SIZE = TAG_WIDTH;
 // - random - training examples randomly change over time
 enum TRAINING_EXAMPLE_MODE_TYPE { COEVOLUTION=0, STATIC, RANDOM };
 enum EVALUATION_TYPE { COHORT=0, FULL=1 };
+enum SELECTION_TYPE { LEXICASE=0, COHORT_LEXICASE, TOURNAMENT, DRIFT };
 
 enum PROBLEM_ID { NumberIO=0,
                   SmallOrLarge,
@@ -279,6 +281,15 @@ protected:
   std::string PROBLEM;
   std::string BENCHMARK_DATA_DIR;
 
+  size_t PROG_SELECTION_MODE;
+  size_t TEST_SELECTION_MODE;
+  size_t PROG_LEXICASE_MAX_FUNS;
+  size_t PROG_COHORTLEXICASE_MAX_FUNS;
+  size_t TEST_LEXICASE_MAX_FUNS;
+  size_t TEST_COHORTLEXICASE_MAX_FUNS;
+  size_t PROG_TOURNAMENT_SIZE;
+  size_t TEST_TOURNAMENT_SIZE;
+
   size_t MIN_PROG_SIZE;
   size_t MAX_PROG_SIZE;
   size_t PROG_EVAL_TIME;
@@ -315,6 +326,9 @@ protected:
   emp::BitSet<TAG_WIDTH> call_tag;
   
   emp::Ptr<prog_world_t> prog_world;
+  
+  emp::vector<std::function<double(prog_org_t &)>> lexicase_prog_fit_set;
+  
 
   // Test worlds
   emp::Ptr<prob_NumberIO_world_t> prob_NumberIO_world;
@@ -384,6 +398,33 @@ protected:
 
   // Problem utilities
   ProblemUtilities_NumberIO prob_utils_NumberIO;
+  ProblemUtilities_SmallOrLarge prob_utils_SmallOrLarge;
+  ProblemUtilities_ForLoopIndex prob_utils_ForLoopIndex;
+  ProblemUtilities_CompareStringLengths prob_utils_CompareStringLengths;
+  ProblemUtilities_DoubleLetters prob_utils_DoubleLetters;
+  ProblemUtilities_CollatzNumbers prob_utils_CollatzNumbers;
+  ProblemUtilities_ReplaceSpaceWithNewline prob_utils_ReplaceSpaceWithNewline;
+  ProblemUtilities_StringDifferences prob_utils_StringDifferences;
+  ProblemUtilities_EvenSquares prob_utils_EvenSquares;
+  ProblemUtilities_WallisPi prob_utils_WallisPi;
+  ProblemUtilities_StringLengthsBackwards prob_utils_StringLengthsBackwards;
+  ProblemUtilities_LastIndexOfZero prob_utils_LastIndexOfZero;
+  ProblemUtilities_VectorAverage prob_utils_VectorAverage;
+  ProblemUtilities_CountOdds prob_utils_CountOdds;
+  ProblemUtilities_MirrorImage prob_utils_MirrorImage;
+  ProblemUtilities_SuperAnagrams prob_utils_SuperAnagrams;
+  ProblemUtilities_SumOfSquares prob_utils_SumOfSquares;
+  ProblemUtilities_VectorsSummed prob_utils_VectorsSummed;
+  ProblemUtilities_XWordLines prob_utils_XWordLines;
+  ProblemUtilities_PigLatin prob_utils_PigLatin;
+  ProblemUtilities_NegativeToZero prob_utils_NegativeToZero;
+  ProblemUtilities_ScrabbleScore prob_utils_ScrabbleScore;
+  ProblemUtilities_Checksum prob_utils_Checksum;
+  ProblemUtilities_Digits prob_utils_Digits;
+  ProblemUtilities_Grade prob_utils_Grade;
+  ProblemUtilities_Median prob_utils_Median;
+  ProblemUtilities_Smallest prob_utils_Smallest;
+  ProblemUtilities_Syllables prob_utils_Syllables;
 
   Cohorts prog_cohorts;
   Cohorts test_cohorts;
@@ -432,6 +473,8 @@ protected:
   void SetupHardware();         ///< Setup virtual hardware.
   
   void SetupEvaluation();       ///< Setup evaluation
+
+  void SetupSelection();        ///< Setup selection (?)
 
   void SetupDataCollection();   ///< Setup data collection
 
@@ -501,6 +544,72 @@ protected:
   //   // }
   //   emp::TupleIterateTemplate<decltype(test_world_tuple), OnPlacement_TestCaseWorld>(test_world_tuple);
   // }
+
+  template<typename WORLD_ORG_TYPE>
+  void SetupTestSelection(emp::Ptr<emp::World<WORLD_ORG_TYPE>> w, emp::vector<std::function<double(WORLD_ORG_TYPE &)>> & lexicase_fit_set) {
+    const auto pw = &w;
+    std::cout << "Setting up test selection." << std::endl;
+    switch (TEST_SELECTION_MODE) {
+      case (size_t)SELECTION_TYPE::LEXICASE: {
+        std::cout << "  >> Setting up test LEXICASE selection." << std::endl;
+        // Setup lexicase selection.
+        // - 1 lexicase function for every program organism.
+        for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
+          lexicase_fit_set.push_back([i](WORLD_ORG_TYPE & test_org) {
+            TestOrg_Base & org = static_cast<TestOrg_Base&>(test_org);
+            return 1 - org.GetPhenotype().test_results[i]; // TODO - need to update this if we switch to gradients
+          });
+        }
+        // Add selection action.
+        do_selection_sig.AddAction([this, pw, lexicase_fit_set]() { // todo - check that capture is working as expected
+          emp::LexicaseSelect_NAIVE(*(*pw), lexicase_fit_set, TEST_POP_SIZE, TEST_LEXICASE_MAX_FUNS);
+        });
+        break;
+      }
+      case (size_t)SELECTION_TYPE::COHORT_LEXICASE: {
+        std::cout << "  >> Setting up test COHORT LEXICASE selection." << std::endl;
+        // Setup cohort lexicase.
+        // - 1 lexicase function for every program cohort member.
+        for (size_t i = 0; i < PROG_COHORT_SIZE; ++i) {
+          lexicase_fit_set.push_back([i](WORLD_ORG_TYPE & test_org) {
+            TestOrg_Base & org = static_cast<TestOrg_Base&>(test_org);
+            return 1 - org.GetPhenotype().test_results[i];
+          });
+        }
+        // Add selection action.
+        emp_assert(TEST_COHORT_SIZE * test_cohorts.GetCohortCnt() == TEST_POP_SIZE);
+        do_selection_sig.AddAction([this, pw, lexicase_fit_set]() { // todo - check that capture is working as expected
+          // For each cohort, run selection.
+          for (size_t cID = 0; cID < test_cohorts.GetCohortCnt(); ++cID) {
+            emp::CohortLexicaseSelect_NAIVE(*(*pw),
+                                            lexicase_fit_set,
+                                            test_cohorts.GetCohort(cID),
+                                            TEST_COHORT_SIZE,
+                                            TEST_COHORTLEXICASE_MAX_FUNS);
+          }
+        });
+        break;
+      }
+      case (size_t)SELECTION_TYPE::TOURNAMENT: {
+        std::cout << "  >> Setting up test TOURNAMENT selection." << std::endl;
+        do_selection_sig.AddAction([this, pw]() {
+          emp::TournamentSelect(*(*pw), TEST_TOURNAMENT_SIZE, TEST_POP_SIZE);
+        });
+        break;
+      }
+      case (size_t)SELECTION_TYPE::DRIFT: {
+        std::cout << "  >> Setting up test DRIFT selection." << std::endl;
+        do_selection_sig.AddAction([this, pw]() {
+          emp::RandomSelect(*(*pw), TEST_POP_SIZE);
+        });
+        break;
+      }
+      default: {
+        std::cout << "Unknown TEST_SELECTION_MODE (" << TEST_SELECTION_MODE << "). Exiting." << std::endl;
+        exit(-1);
+      }
+    }
+  }
 
   void OnPlacement_ActiveTestCaseWorld(const std::function<void(size_t)> & fun) {
       if (prob_NumberIO_world != nullptr) prob_NumberIO_world->OnPlacement(fun);
@@ -725,16 +834,16 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
   });
 
   std::cout << "EXPERIMENT SETUP => Setting up evaluation hardware." << std::endl;
-  SetupHardware();
+  SetupHardware(); // [x]
   
   std::cout << "EXPERIMENT SETUP => Setting up problem." << std::endl;
   SetupProblem();  //...many many todos embedded in this one...
 
   std::cout << "EXPERIMENT SETUP => Setting up evaluation." << std::endl;
-  SetupEvaluation();
+  SetupEvaluation(); // [x]
   
   std::cout << "EXPERIMENT SETUP => Setting up program selection." << std::endl;
-  // todo
+  SetupSelection();
 
   #ifndef EMSCRIPTEN
   std::cout << "EXPERIMENT SETUP => Setting up data collection." << std::endl;
@@ -768,6 +877,16 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   TRAINING_EXAMPLE_MODE = config.TRAINING_EXAMPLE_MODE();
   PROBLEM = config.PROBLEM();
   BENCHMARK_DATA_DIR = config.BENCHMARK_DATA_DIR();
+
+  // -- Selection settings --
+  PROG_SELECTION_MODE = config.PROG_SELECTION_MODE();
+  TEST_SELECTION_MODE = config.TEST_SELECTION_MODE();
+  PROG_LEXICASE_MAX_FUNS = config.PROG_LEXICASE_MAX_FUNS();
+  PROG_COHORTLEXICASE_MAX_FUNS = config.PROG_COHORTLEXICASE_MAX_FUNS();
+  TEST_LEXICASE_MAX_FUNS = config.TEST_LEXICASE_MAX_FUNS();
+  TEST_COHORTLEXICASE_MAX_FUNS = config.TEST_COHORTLEXICASE_MAX_FUNS();
+  PROG_TOURNAMENT_SIZE = config.PROG_TOURNAMENT_SIZE();
+  TEST_TOURNAMENT_SIZE = config.TEST_TOURNAMENT_SIZE();
 
   // -- Hardware settings --
   MIN_TAG_SPECIFICITY = config.MIN_TAG_SPECIFICITY();
@@ -1076,6 +1195,106 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
       }
     }
   });
+}
+
+void ProgramSynthesisExperiment::SetupSelection() {
+  // (1) Setup program selection.
+  SetupProgramSelection();
+  // (2) Setup test selection -- todo.
+  if (prob_NumberIO_world != nullptr) { SetupTestSelection(prob_NumberIO_world, prob_utils_NumberIO.lexicase_fit_set); }
+  else if (prob_SmallOrLarge_world != nullptr) { SetupTestSelection(prob_SmallOrLarge_world, prob_utils_SmallOrLarge.lexicase_fit_set); }
+  else if (prob_ForLoopIndex_world != nullptr) { SetupTestSelection(prob_ForLoopIndex_world, prob_utils_ForLoopIndex.lexicase_fit_set); }
+  else if (prob_CompareStringLengths_world != nullptr) { SetupTestSelection(prob_CompareStringLengths_world, prob_utils_CompareStringLengths.lexicase_fit_set); }
+  else if (prob_DoubleLetters_world != nullptr) { SetupTestSelection(prob_DoubleLetters_world, prob_utils_DoubleLetters.lexicase_fit_set); }
+  else if (prob_CollatzNumbers_world != nullptr) { SetupTestSelection(prob_CollatzNumbers_world, prob_utils_CollatzNumbers.lexicase_fit_set); }
+  else if (prob_ReplaceSpaceWithNewline_world != nullptr) { SetupTestSelection(prob_ReplaceSpaceWithNewline_world, prob_utils_ReplaceSpaceWithNewline.lexicase_fit_set); }
+  else if (prob_StringDifferences_world != nullptr) { SetupTestSelection(prob_StringDifferences_world, prob_utils_StringDifferences.lexicase_fit_set); }
+  else if (prob_EvenSquares_world != nullptr) { SetupTestSelection(prob_EvenSquares_world, prob_utils_EvenSquares.lexicase_fit_set); }
+  else if (prob_WallisPi_world != nullptr) { SetupTestSelection(prob_WallisPi_world, prob_utils_WallisPi.lexicase_fit_set); }
+  else if (prob_StringLengthsBackwards_world != nullptr) { SetupTestSelection(prob_StringLengthsBackwards_world, prob_utils_StringLengthsBackwards.lexicase_fit_set); }
+  else if (prob_LastIndexOfZero_world != nullptr) { SetupTestSelection(prob_LastIndexOfZero_world, prob_utils_LastIndexOfZero.lexicase_fit_set); }
+  else if (prob_VectorAverage_world != nullptr) { SetupTestSelection(prob_VectorAverage_world, prob_utils_VectorAverage.lexicase_fit_set); }
+  else if (prob_CountOdds_world != nullptr) { SetupTestSelection(prob_CountOdds_world, prob_utils_CountOdds.lexicase_fit_set); }
+  else if (prob_MirrorImage_world != nullptr) { SetupTestSelection(prob_MirrorImage_world, prob_utils_MirrorImage.lexicase_fit_set); }
+  else if (prob_SuperAnagrams_world != nullptr) { SetupTestSelection(prob_SuperAnagrams_world, prob_utils_SuperAnagrams.lexicase_fit_set); }
+  else if (prob_SumOfSquares_world != nullptr) { SetupTestSelection(prob_SumOfSquares_world, prob_utils_SumOfSquares.lexicase_fit_set); }
+  else if (prob_VectorsSummed_world != nullptr) { SetupTestSelection(prob_VectorsSummed_world, prob_utils_VectorsSummed.lexicase_fit_set); }
+  else if (prob_XWordLines_world != nullptr) { SetupTestSelection(prob_XWordLines_world, prob_utils_XWordLines.lexicase_fit_set); }
+  else if (prob_PigLatin_world != nullptr) { SetupTestSelection(prob_PigLatin_world, prob_utils_PigLatin.lexicase_fit_set); }
+  else if (prob_NegativeToZero_world != nullptr) { SetupTestSelection(prob_NegativeToZero_world, prob_utils_NegativeToZero.lexicase_fit_set); }
+  else if (prob_ScrabbleScore_world != nullptr) { SetupTestSelection(prob_ScrabbleScore_world, prob_utils_ScrabbleScore.lexicase_fit_set); }
+  else if (prob_Checksum_world != nullptr) { SetupTestSelection(prob_Checksum_world, prob_utils_Checksum.lexicase_fit_set); }
+  else if (prob_Digits_world != nullptr) { SetupTestSelection(prob_Digits_world, prob_utils_Digits.lexicase_fit_set); }
+  else if (prob_Grade_world != nullptr) { SetupTestSelection(prob_Grade_world, prob_utils_Grade.lexicase_fit_set); }
+  else if (prob_Median_world != nullptr) { SetupTestSelection(prob_Median_world, prob_utils_Median.lexicase_fit_set); }
+  else if (prob_Smallest_world != nullptr) { SetupTestSelection(prob_Smallest_world, prob_utils_Smallest.lexicase_fit_set); }
+  else if (prob_Syllables_world != nullptr) { SetupTestSelection(prob_Syllables_world, prob_utils_Syllables.lexicase_fit_set); }
+  else { std::cout << "AHH! More than one test case world has been created. Exiting." << std::endl; exit(-1); }
+}
+
+void ProgramSynthesisExperiment::SetupProgramSelection() {
+  switch (PROG_SELECTION_MODE) {
+    case (size_t)SELECTION_TYPE::LEXICASE: {
+      std::cout << "  >> Setting up program LEXICASE selection." << std::endl;
+      // Setup program fitness functions.
+      // - 1 function for every test.
+      for (size_t i = 0; i < TEST_POP_SIZE; ++i) {
+        lexicase_prog_fit_set.push_back([i](prog_org_t & prog_org) {
+          double score = prog_org.GetPhenotype().test_results[i];
+          return score;
+        });
+      }
+      // Add selection action
+      do_selection_sig.AddAction([this]() {
+        emp::LexicaseSelect_NAIVE(*prog_world,
+                                  lexicase_prog_fit_set,
+                                  PROG_POP_SIZE,
+                                  PROG_LEXICASE_MAX_FUNS); // TODO - track lexicase fit fun stats
+      });
+      break;
+    }
+    case (size_t)SELECTION_TYPE::COHORT_LEXICASE: {
+      std::cout << "  >> Setting up program COHORT LEXICASE selection." << std::endl;
+      // Setup program fitness functions.
+      // - 1 function for every test cohort member.
+      for (size_t i = 0; i < TEST_COHORT_SIZE; ++i) {
+        lexicase_prog_fit_set.push_back([i](prog_org_t & prog_org) {
+          double score = prog_org.GetPhenotype().test_results[i];
+          return score;
+        });
+      }
+      // Add selection action
+      emp_assert(PROG_COHORT_SIZE * prog_cohorts.GetCohortCnt() == PROG_POP_SIZE);
+      do_selection_sig.AddAction([this]() {
+        for (size_t cID = 0; cID < prog_cohorts.GetCohortCnt(); ++cID) {
+          emp::CohortLexicaseSelect_NAIVE(*prog_world,
+                                          lexicase_prog_fit_set,
+                                          prog_cohorts.GetCohort(cID),
+                                          PROG_COHORT_SIZE,
+                                          PROG_COHORTLEXICASE_MAX_FUNS);
+        }
+      });
+      break;
+    }
+    case (size_t)SELECTION_TYPE::TOURNAMENT: {
+      std::cout << "  >> Setting up program TOURNAMENT selection." << std::endl;
+      do_selection_sig.AddAction([this]() {
+        emp::TournamentSelect(*prog_world, PROG_TOURNAMENT_SIZE, PROG_POP_SIZE);
+      });
+      break;
+    }
+    case (size_t)SELECTION_TYPE::DRIFT: {
+      std::cout << "  >> Setting up program DRIFT selection." << std::endl;
+      do_selection_sig.AddAction([this]() {
+        emp::RandomSelect(*prog_world, PROG_POP_SIZE);
+      });
+      break;
+    }
+    default: {
+      std::cout << "Unknown PROG_SELECTION_MODE (" << PROG_SELECTION_MODE << "). Exiting." << std::endl;
+      exit(-1);
+    }
+  }
 }
 
 // ================= PROGRAM-RELATED FUNCTIONS ===========
