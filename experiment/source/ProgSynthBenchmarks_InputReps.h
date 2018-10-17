@@ -447,6 +447,10 @@ class TestOrg_NumberIO : public TestOrg_Base {
     out_t & GetCorrectOut() { return out; }
     const out_t & GetCorrectOut() const { return out; }
 
+    // std::pair<int, double>;
+    int GetTestIntegerInput() const { return genome.first; }
+    double GetTestDoubleInput() const { return genome.second; }
+
     void SetOut(const out_t & _out) { out = _out; }
 
     void CalcOut() { SetCorrectOut_NumberIO(genome, out); }
@@ -478,6 +482,11 @@ struct ProblemUtilities_NumberIO {
   void ResetTestEval() {
     submitted = false;
     submitted_val = 0.0;
+  }
+
+  void Submit(double val) {
+    submitted = true;
+    submitted_val = val;
   }
 
   static std::pair<input_t, output_t> LoadTestCaseFromLine(const std::string & line) {

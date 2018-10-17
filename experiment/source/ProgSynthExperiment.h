@@ -75,6 +75,9 @@
 //  - Add LoadAllSetInputs
 // - SELECTION
 //  - Pools (as in Cliff's implementation of lexicase) (?)
+// - Scoring
+//  - Assume pass/fail only at first, next add gradient (NOTE - will need to update how we screen/add more things to phenotypes).
+//    - Simplest thing to do would be to add a pass_vector + score_vector to test/program phenotypes
 //////////////////////////////////////////
 
 constexpr size_t TAG_WIDTH = 32;
@@ -568,6 +571,11 @@ protected:
     }
   }
 
+  // ---- Problem-specific instruction signatures ----
+  void Inst_LoadInt_NumberIO(hardware_t & hw, const inst_t & inst);
+  void Inst_LoadDouble_NumberIO(hardware_t & hw, const inst_t & inst);
+  void Inst_SubmitNum_NumberIO(hardware_t & hw, const inst_t & inst); 
+
   // ---- Some useful experiment-running functions ----
   double EvaluateTest(prog_org_t & prog_org, size_t testID) {
     begin_program_test.Trigger(prog_org, testID);
@@ -1000,14 +1008,74 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
       break;
     }
     case (size_t)EVALUATION_TYPE::FULL: {
+      // Evaluate all programs on all tests.
+      // - Configure world to reset phenotypes on organism placement.
+      prog_world->OnPlacement([this](size_t pos) {
+        prog_world->GetOrg(pos).GetPhenotype().Reset(TEST_POP_SIZE); // Phenotype should have space for results against all tests
+      });
+      OnPlacement_ActiveTestCaseWorld([this](size_t pos) { GetTestPhenotype(pos).Reset(PROG_POP_SIZE); });
+      PROGRAM_MAX_PASSES = TEST_POP_SIZE;
+      // What should happen on evaluation?
+      do_evaluation_sig.AddAction([this]() {
+        for (size_t pID = 0; pID < PROG_POP_SIZE; ++pID) {
+          emp_assert(prog_world->IsOccupied(pID));
+          prog_org_t & prog_org = prog_world->GetOrg(pID);
+          begin_program_eval.Trigger(prog_org);
+          for (size_t tID = 0; tID < TEST_POP_SIZE; ++tID) {
+            double score = EvaluateTest(prog_org, tID);
+            test_org_phen_t & test_phen = GetTestPhenotype(tID);
+            prog_org_phen_t & prog_phen = prog_org.GetPhenotype();
+            // Update phenotypes.
+            test_phen.test_results[pID] = score;
+            prog_phen.test_results[tID] = score;
+          }
+          end_program_eval.Trigger(prog_org);
+        }
+      });
       break;
     }
+    // case (size_t)EVALUATION_TYPE::POOLS { // TODO - implement pools version
+    //   break;
+    // }
     default: {
       std::cout << "Unknown EVALUATION_MODE (" << EVALUATION_MODE << "). Exiting." << std::endl;
       exit(-1);
-    }
-    // TODO - pools?
+    } 
   }
+
+  // Add generic evaluation action - calculate num_passes/fails for tests and programs.
+  do_evaluation_sig.AddAction([this]() {
+    // Sum pass totals for programs, find 'dominant' program.
+    double cur_best_score = 0;
+    // TODO - add correctness test
+    for (size_t pID = 0; pID < prog_world->GetSize(); ++pID) {
+      emp_assert(prog_world->IsOccupied(pID));
+      prog_org_t & prog_org = prog_world->GetOrg(pID);
+      const size_t pass_total = emp::Sum(prog_org.GetPhenotype().test_results);
+      prog_org.GetPhenotype().num_passes = pass_total;
+      // Is this the highest pass total program this generation?
+      if (pass_total > cur_best_score || pID == 0) {
+        dominant_prog_id = pID;
+        cur_best_score = pass_total;
+      }
+      // At this point, program has been evaluated against all tests. 
+      // - TODO - screen for possible solution program.
+      // if (pass_total == PROGRAM_MAX_PASSES) 
+    }
+
+    // Sum pass/fail totals for tests.
+    for (size_t tID = 0; tID < TEST_POP_SIZE; ++tID) {
+      test_org_phen_t & test_phen = GetTestPhenotype(tID);
+      const size_t pass_total = emp::Sum(test_phen.test_results);
+      const size_t fail_total = PROGRAM_MAX_PASSES - pass_total;
+      test_phen.num_passes = pass_total;
+      test_phen.num_fails = fail_total;
+      if (fail_total > cur_best_score || tID == 0) { // NOTE - will need to be updated if switch to gradient fitness functions (will be problem specific whether or not use a gradient).
+        dominant_test_id = tID;
+        cur_best_score = fail_total;
+      }
+    }
+  });
 }
 
 // ================= PROGRAM-RELATED FUNCTIONS ===========
@@ -1051,6 +1119,7 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
 
   // Tell experiment how to get test phenotypes.
   GetTestPhenotype = [this](size_t testID) -> test_org_phen_t & {
+    emp_assert(prob_NumberIO_world->IsOccupied(testID));
     return prob_NumberIO_world->GetOrg(testID).GetPhenotype();
   };
   
@@ -1088,10 +1157,19 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
     }
   };
 
-  // Todo - Add custom instructions
+  // Add custom instructions
   // - LoadInteger
+  inst_lib->AddInst("LoadInt", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadInt_NumberIO(hw, inst);
+  }, 1, "");
   // - LoadDouble
+  inst_lib->AddInst("LoadDouble", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadDouble_NumberIO(hw, inst);
+  }, 1, "");
   // - SubmitNum
+  inst_lib->AddInst("SubmitNum", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_SubmitNum_NumberIO(hw, inst);
+  }, 1, "");
 }
 
 void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() { 
@@ -1228,6 +1306,46 @@ void ProgramSynthesisExperiment::SetupProblem_Syllables() {
   std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
   exit(-1); 
 }
+
+
+// ================= PROBLEM-SPECIFIC INSTRUCTION IMPLEMENTATIONS ======================
+
+void ProgramSynthesisExperiment::Inst_LoadInt_NumberIO(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_NumberIO.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_NumberIO.cur_eval_test_org->GetTestIntegerInput());
+}
+
+void ProgramSynthesisExperiment::Inst_LoadDouble_NumberIO(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_NumberIO.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_NumberIO.cur_eval_test_org->GetTestDoubleInput());
+}
+
+void ProgramSynthesisExperiment::Inst_SubmitNum_NumberIO(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), hardware_t::MemPosType::NUM);
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_NumberIO.cur_eval_test_org != nullptr);
+  prob_utils_NumberIO.Submit(wmem.AccessVal(posA).GetNum());
+}
+
 
 /*
 scratch:
