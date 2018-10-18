@@ -11,7 +11,6 @@
 #include "TagLinearGP.h"
 #include "TagLinearGP_InstLib.h"
 #include "TagLinearGP_Utilities.h"
-#include "TagLinearGP_Instructions.h"
 #include "Utilities.h"
 
 // String => number; number=>string conversion

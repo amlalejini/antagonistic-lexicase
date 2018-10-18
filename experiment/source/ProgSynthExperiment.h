@@ -37,48 +37,18 @@
 #include "TagLinearGP_InstLib.h"
 #include "TagLinearGP_Utilities.h"
 
-//////////////////////////////////////////////////////////////////////////////////////////////////
-// template <size_t I>
-// struct visit_impl
-// {
-//     template <typename T, typename F>
-//     static void visit(T& tup, size_t idx, F fun)
-//     {
-//         if (idx == I - 1) fun(std::get<I - 1>(tup));
-//         else visit_impl<I - 1>::visit(tup, idx, fun);
-//     }
-// };
-  
-// template <>
-// struct visit_impl<0>
-// {
-//     template <typename T, typename F>
-//     static void visit(T& tup, size_t idx, F fun) { assert(false); }
-// };
-  
-// template <typename F, typename... Ts>
-// void visit_at(std::tuple<Ts...> const& tup, size_t idx, F fun)
-// {
-//     visit_impl<sizeof...(Ts)>::visit(tup, idx, fun);
-// }
-  
-// template <typename F, typename... Ts>
-// void visit_at(std::tuple<Ts...>& tup, size_t idx, F fun)
-// {
-//     visit_impl<sizeof...(Ts)>::visit(tup, idx, fun);
-// }
-//////////////////////////////////////////////////////////////////////////////////////////////////
-
 //////////////////////////////////////////
 // --- Notes/Todos ---
 // - May need to generate more training examples for problems(?)
 // - INSTRUCTION SET
-//  - Add LoadAllSetInputs
+//  - [ ] Add LoadAllSetInputs
 // - SELECTION
-//  - Pools (as in Cliff's implementation of lexicase) (?)
-// - Scoring
+//  - [ ] Pools (as in Cliff's implementation of lexicase) (?)
+// - SCORING
 //  - Assume pass/fail only at first, next add gradient (NOTE - will need to update how we screen/add more things to phenotypes).
 //    - Simplest thing to do would be to add a pass_vector + score_vector to test/program phenotypes
+// - DIAGNOSTICS
+//  - [ ] Clean up printing format
 //////////////////////////////////////////
 
 constexpr size_t TAG_WIDTH = 32;
@@ -471,11 +441,9 @@ protected:
   void InitProgPop_Random();    ///< Randomly initialize the program population.
   
   void SetupHardware();         ///< Setup virtual hardware.
-  
   void SetupEvaluation();       ///< Setup evaluation
-
   void SetupSelection();        ///< Setup selection (?)
-
+  void SetupMutation();         ///< Setup mutation (?)
   void SetupDataCollection();   ///< Setup data collection
 
   void SetupProgramSelection(); ///< Setup program selection scheme
@@ -1295,6 +1263,18 @@ void ProgramSynthesisExperiment::SetupProgramSelection() {
       exit(-1);
     }
   }
+}
+
+void ProgramSynthesisExperiment::SetupMutation() {
+  // todo
+  // (1) Setup program mutations
+  SetupProgramMutation();
+  // (2) Setup test mutations
+  // -- todo --
+}
+
+void ProgramSynthesisExperiment::SetupProgramMutation() {
+  
 }
 
 // ================= PROGRAM-RELATED FUNCTIONS ===========
