@@ -263,6 +263,13 @@ protected:
   size_t MIN_PROG_SIZE;
   size_t MAX_PROG_SIZE;
   size_t PROG_EVAL_TIME;
+  double PROG_MUT__PER_BIT_FLIP;
+  double PROG_MUT__PER_INST_SUB;
+  double PROG_MUT__PER_INST_INS;
+  double PROG_MUT__PER_INST_DEL;
+  double PROG_MUT__PER_PROG_SLIP;
+  double PROG_MUT__PER_MOD_DUP;
+  double PROG_MUT__PER_MOD_DEL;
 
   double MIN_TAG_SPECIFICITY;
   size_t MAX_CALL_DEPTH;
@@ -271,6 +278,8 @@ protected:
   double PROB_NUMBER_IO__DOUBLE_MAX;
   int PROB_NUMBER_IO__INT_MIN;
   int PROB_NUMBER_IO__INT_MAX;
+  double PROB_NUMBER_IO__MUTATION__PER_INT_RATE;
+  double PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE;
 
   // - Data collection group -
   size_t SNAPSHOT_INTERVAL;
@@ -298,7 +307,8 @@ protected:
   emp::Ptr<prog_world_t> prog_world;
   
   emp::vector<std::function<double(prog_org_t &)>> lexicase_prog_fit_set;
-  
+
+  TagLGPMutator<TAG_WIDTH> prog_mutator;
 
   // Test worlds
   emp::Ptr<prob_NumberIO_world_t> prob_NumberIO_world;
@@ -434,6 +444,7 @@ protected:
   std::function<void(void)> UpdateTestCaseWorld;
   std::function<double(prog_org_t &, size_t)> CalcProgramScoreOnTest;
   std::function<test_org_phen_t&(size_t)> GetTestPhenotype;
+  std::function<void(void)> SetupTestMutation;
 
   // Internal function signatures.
   void InitConfigs(const ProgramSynthesisConfig & config);
@@ -864,12 +875,21 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   MIN_PROG_SIZE = config.MIN_PROG_SIZE();
   MAX_PROG_SIZE = config.MAX_PROG_SIZE();
   PROG_EVAL_TIME  = config.PROG_EVAL_TIME();
+  PROG_MUT__PER_BIT_FLIP = config.PROG_MUT__PER_BIT_FLIP();
+  PROG_MUT__PER_INST_SUB = config.PROG_MUT__PER_INST_SUB();
+  PROG_MUT__PER_INST_INS = config.PROG_MUT__PER_INST_INS();
+  PROG_MUT__PER_INST_DEL = config.PROG_MUT__PER_INST_DEL();
+  PROG_MUT__PER_PROG_SLIP = config.PROG_MUT__PER_PROG_SLIP();
+  PROG_MUT__PER_MOD_DUP = config.PROG_MUT__PER_MOD_DUP();
+  PROG_MUT__PER_MOD_DEL = config.PROG_MUT__PER_MOD_DEL();
 
   // -- Number IO settings --
   PROB_NUMBER_IO__DOUBLE_MIN = config.PROB_NUMBER_IO__DOUBLE_MIN();
   PROB_NUMBER_IO__DOUBLE_MAX = config.PROB_NUMBER_IO__DOUBLE_MAX();
   PROB_NUMBER_IO__INT_MIN = config.PROB_NUMBER_IO__INT_MIN();
   PROB_NUMBER_IO__INT_MAX = config.PROB_NUMBER_IO__INT_MAX();
+  PROB_NUMBER_IO__MUTATION__PER_INT_RATE = config.PROB_NUMBER_IO__MUTATION__PER_INT_RATE();
+  PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE = config.PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE();
 
   SNAPSHOT_INTERVAL = config.SNAPSHOT_INTERVAL();
   SOLUTION_SCREEN_INTERVAL = config.SOLUTION_SCREEN_INTERVAL();
@@ -1270,10 +1290,25 @@ void ProgramSynthesisExperiment::SetupMutation() {
   // (1) Setup program mutations
   SetupProgramMutation();
   // (2) Setup test mutations
-  // -- todo --
+  SetupTestMutation();
 }
 
 void ProgramSynthesisExperiment::SetupProgramMutation() {
+  // Configure program mutator.
+  prog_mutator.MAX_PROGRAM_LEN = MAX_PROG_SIZE;
+  prog_mutator.MIN_PROGRAM_LEN = MIN_PROG_SIZE;
+  prog_mutator.PER_BIT_FLIP = PROG_MUT__PER_BIT_FLIP;
+  prog_mutator.PER_INST_SUB = PROG_MUT__PER_INST_SUB;
+  prog_mutator.PER_INST_INS = PROG_MUT__PER_INST_INS;
+  prog_mutator.PER_INST_DEL = PROG_MUT__PER_INST_DEL;
+  prog_mutator.PER_PROG_SLIP = PROG_MUT__PER_PROG_SLIP;
+  prog_mutator.PER_MOD_DUP = PROG_MUT__PER_MOD_DUP;
+  prog_mutator.PER_MOD_DEL = PROG_MUT__PER_MOD_DEL;
+
+  // Configure world mutation function.
+  prog_world->SetMutFun([this](prog_org_t & prog_org, emp::Random & rnd) {
+    return prog_mutator.Mutate(rnd, prog_org.GetGenome());
+  });
   
 }
 
@@ -1290,7 +1325,7 @@ void ProgramSynthesisExperiment::InitProgPop_Random() {
 void ProgramSynthesisExperiment::SetupProblem_NumberIO() { 
   std::cout << "Setting up problem - NumberIO" << std::endl; 
 
-  // using test_org_t = TestOrg_NumberIO;
+  using test_org_t = TestOrg_NumberIO;
   
   // Load testing examples from file (used to evaluate 'true' performance of programs).
   if (BENCHMARK_DATA_DIR.back() != '/') BENCHMARK_DATA_DIR += '/';  
@@ -1326,6 +1361,20 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
   UpdateTestCaseWorld = [this]() {
     prob_NumberIO_world->Update();
     prob_NumberIO_world->ClearCache();
+  };
+
+  SetupTestMutation = [this]() {
+    // (1) Configure mutator.
+    prob_utils_NumberIO.mutator.MIN_INT = PROB_NUMBER_IO__INT_MIN;
+    prob_utils_NumberIO.mutator.MAX_INT = PROB_NUMBER_IO__INT_MAX;
+    prob_utils_NumberIO.mutator.MIN_DOUBLE = PROB_NUMBER_IO__DOUBLE_MIN;
+    prob_utils_NumberIO.mutator.MAX_DOUBLE = PROB_NUMBER_IO__DOUBLE_MAX;
+    prob_utils_NumberIO.mutator.PER_INT_RATE = PROB_NUMBER_IO__MUTATION__PER_INT_RATE;
+    prob_utils_NumberIO.mutator.PER_DOUBLE_RATE = PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE;
+    // (2) Hook mutator up to world.
+    prob_NumberIO_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+      return prob_utils_NumberIO.mutator.Mutate(rnd, test_org.GetGenome());
+    });
   };
 
   // Tell experiment how to configure hardware inputs when running program against a test.

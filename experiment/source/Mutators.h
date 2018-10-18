@@ -316,7 +316,7 @@ struct TagLGPMutator {
       emp::vector<size_t> danglers;
       
       for (size_t i = 0; i < program.GetSize(); ++i) {
-        inst_t & inst = program[i];
+        // inst_t & inst = program[i];
         if (ilib.HasProperty(program[i].id, inst_prop_t::MODULE)) {
           if (modules.size()) { modules.back().end = i; }
           const size_t mod_id = modules.size();

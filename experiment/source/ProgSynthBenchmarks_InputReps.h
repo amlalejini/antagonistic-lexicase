@@ -161,214 +161,63 @@ using Problem_Smallest_output_t = int;
 using Problem_Syllables_input_t = std::string;
 using Problem_Syllables_output_t = std::string;
 
-// ================== Problem Utilities =========================
 
-/*
-struct ProgSynthProblemUtility {
-  
-  /// Input: std::pair<int, double>;
-  /// Output: double;
+// ================ Problem mutators ================
 
+// Problem_NumberIO_input_t = std::pair<int, double>;
+struct Pair_IntDouble_Mutator {
+  int MIN_INT;
+  int MAX_INT;
 
+  double MIN_DOUBLE;
+  double MAX_DOUBLE;
 
+  double PER_INT_RATE;
+  double PER_DOUBLE_RATE;
 
-  /// Input: std::array<int, 3>;
-  /// Output: emp::vector<int>;
-  static Problem_ForLoopIndex_output_t GenCorrectOut_ForLoopIndex(const Problem_ForLoopIndex_input_t & input) {
-    emp::vector<int> out;
-    SetCorrectOut_ForLoopIndex(input, out);
-    return out;
-  }
-  static void SetCorrectOut_ForLoopIndex(const Problem_ForLoopIndex_input_t & input, Problem_ForLoopIndex_output_t & output) {
-    out.clear();
-    const size_t start = input[0]; 
-    const size_t end = input[1];
-    const size_t step = input[2];
-    for (size_t i = start; i < end; i+= step) {
-      out.emplace_back(i);
+  size_t Mutate(emp::Random & rnd, std::pair<int, double> & mut_pair) {
+    size_t muts = 0;
+    if (rnd.P(PER_INT_RATE)) {
+      mut_pair.first = rnd.GetInt(MIN_INT, MAX_INT+1);
+      ++muts;
     }
-  }
-
-
-  /// std::array<std::string, 3>;
-  /// bool;
-  Problem_CompareStringLengths_output_t GenCorrectOut_CompareStringLengths(const Problem_CompareStringLengths_input_t & input) {
-    // todo
-    return false;
-  }
-
-  /// std::string;
-  /// std::string;
-  Problem_DoubleLetters_output_t GenCorrectOut_DoubleLetters(const Problem_DoubleLetters_input_t & input) {
-    // todo
-    return "";
-  }
-
-  /// int;
-  /// int;
-  Problem_CollatzNumbers_output_t GenCorrectOut_CollatzNumbers(const Problem_CollatzNumbers_input_t & input) {
-    correct_out.clear();
-    correct_out.emplace_back(test);
-    while (correct_out.back() != 1) {
-      if (correct_out.back() % 2 == 0) correct_out.emplace_back(correct_out.back() / 2);
-      else correct_out.emplace_back((3*correct_out.back()) + 1);
+    if (rnd.P(PER_DOUBLE_RATE)) {
+      mut_pair.second = rnd.GetDouble(MIN_DOUBLE, MAX_DOUBLE);
+      ++muts;
     }
+    return muts;
   }
-
-
-  /// std::string;
-  /// std::pair<std::string, int>;
-  Problem_ReplaceSpaceWithNewline_output_t GenCorrectOut_ReplaceSpaceWithNewline(const Problem_ReplaceSpaceWithNewline_input_t & input) {
-
-
-  }
-
-  /// std::array<std::string, 2>;
-  /// std::string;
-  Problem_StringDifferences_output_t GenCorrectOut_StringDifferences(const Problem_StringDifferences_input_t & input) {
-
-
-
-  }
-
-  /// int;
-  /// int;
-  Problem_EvenSquares_output_t GenCorrectOut_EvenSquares(const Problem_EvenSquares_input_t & input) {
-
-
-  }
-
-
-  /// int;
-  /// double;
-  Problem_WallisPi_output_t GenCorrectOut_WallisPi(const Problem_WallisPi_input_t & input) {
-
-
-  }
-
-  /// emp::vector<std::string>;
-  /// std::string;
-  Problem_StringLengthsBackwards_output_t GenCorrectOut_StringLengthsBackwards(const Problem_StringLengthsBackwards_input_t & input) {
-
-
-
-  }
-
-  /// emp::vector<int>;
-  /// int;
-  Problem_LastIndexOfZero_output_t GenCorrectOut_LastIndexOfZero(const Problem_LastIndexOfZero_input_t & input) {
-
-
-  }
-
-
-  /// emp::vector<double>;
-  /// double;
-  Problem_VectorAverage_output_t GenCorrectOut_VectorAverage(const Problem_VectorAverage_input_t & input) {
-
-
-  }
-
-  /// emp::vector<int>;
-  /// int;
-  Problem_CountOdds_output_t GenCorrectOut_CountOdds(const Problem_CountOdds_input_t & input) {
-
-
-
-  }
-
-  /// std::array<emp::vector<int>, 2>;
-  /// bool;
-  Problem_MirrorImage_output_t GenCorrectOut_MirrorImage(const Problem_MirrorImage_input_t & input) {
-
-
-  }
-
-
-  /// std::array<std::string, 2>;
-  /// bool;
-  Problem_SuperAnagrams_output_t GenCorrectOut_SuperAnagrams(const Problem_SuperAnagrams_input_t & input) {
-
-
-  }
-
-  /// int;
-  /// int;
-  Problem_SumOfSquares_output_t GenCorrectOut_SumOfSquares(const Problem_SumOfSquares_input_t & input) {
-
-
-
-  }
-
-  /// std::array<emp::vector<int>, 2>;
-  /// emp::vector<int>;
-  Problem_VectorsSummed_output_t GenCorrectOut_VectorsSummed(const Problem_VectorsSummed_input_t & input) {
-
-
-  }
-
-
-  /// std::pair<int, std::string>;
-  /// std::string;
-  Problem_XWordLines_output_t GenCorrectOut_XWordLines(const Problem_XWordLines_input_t & input) {
-
-
-  }
-
-  /// std::string;
-  /// std::string;
-  Problem_PigLatin_output_t GenCorrectOut_PigLatin(const Problem_PigLatin_input_t & input) {
-
-
-
-  }
-
-  /// emp::vector<int>;
-  /// emp::vector<int>;
-  Problem_NegativeToZero_output_t GenCorrectOut_NegativeToZero(const Problem_NegativeToZero_input_t & input) {
-
-
-  }
-  /// std::string;
-  /// int;
-  Problem_ScrabbleScore_output_t GenCorrectOut_ScrabbleScore(const Problem_ScrabbleScore_input_t & input) {
-
-  }
-  /// std::string;
-  /// std::string;
-  Problem_Checksum_output_t GenCorrectOut_Checksum(const Problem_Checksum_input_t & input) {
-
-  }
-  /// int;
-  /// emp::vector<int>;
-  Problem_Digits_output_t GenCorrectOut_Digits(const Problem_Digits_input_t & input) {
-
-  }
-  /// std::array<int, 5>;
-  /// std::string;
-  Problem_Grade_output_t GenCorrectOut_Grade(const Problem_Grade_input_t & input) {
-
-  }
-  /// std::array<int, 3>;
-  /// int;
-  Problem_Median_output_t GenCorrectOut_Median(const Problem_Median_input_t & input) {
-
-  }
-  /// std::array<int, 4>;
-  /// int;
-  Problem_Smallest_output_t GenCorrectOut_Smallest(const Problem_Smallest_input_t & input) {
-
-  }
-  /// std::string;
-  /// std::string;
-  Problem_Syllables_output_t GenCorrectOut_Syllables(const Problem_Syllables_input_t & input) {
-
-  }
-
 };
-*/
 
-// ================ Problem Organism Classes ====================
+// Problem_SmallOrLarge_input_t = int;
+// Problem_ForLoopIndex_input_t = std::array<int, 3>;
+// Problem_CompareStringLengths_input_t = std::array<std::string, 3>;
+// Problem_DoubleLetters_input_t = std::string;
+// Problem_CollatzNumbers_input_t = int;
+// Problem_ReplaceSpaceWithNewline_input_t = std::string;
+// Problem_StringDifferences_input_t = std::array<std::string, 2>;
+// Problem_EvenSquares_input_t = int;
+// Problem_WallisPi_input_t = int;
+// Problem_StringLengthsBackwards_input_t = emp::vector<std::string>;
+// Problem_LastIndexOfZero_input_t = emp::vector<int>;
+// Problem_VectorAverage_input_t = emp::vector<double>;
+// Problem_CountOdds_input_t = emp::vector<int>;
+// Problem_MirrorImage_input_t = std::array<emp::vector<int>, 2>;
+// Problem_SuperAnagrams_input_t = std::array<std::string, 2>;
+// Problem_SumOfSquares_input_t = int;
+// Problem_VectorsSummed_input_t = std::array<emp::vector<int>, 2>;
+// Problem_XWordLines_input_t = std::pair<int, std::string>;
+// Problem_PigLatin_input_t = std::string;
+// Problem_NegativeToZero_input_t = emp::vector<int>;
+// Problem_ScrabbleScore_input_t = std::string;
+// Problem_Checksum_input_t = std::string;
+// Problem_Digits_input_t = int;
+// Problem_Grade_input_t = std::array<int, 5>;
+// Problem_Median_input_t = std::array<int, 3>;
+// Problem_Smallest_input_t = std::array<int, 4>;
+// Problem_Syllables_input_t = std::string;
+
+// ================ Problem Organism Classes ================
 
 // Test org base class
 class TestOrg_Base {
@@ -469,6 +318,8 @@ struct ProblemUtilities_NumberIO {
   emp::Ptr<TestOrg_NumberIO> cur_eval_test_org;
   bool submitted;
   double submitted_val; // if going to do string thing, we can have a submission_str.
+
+  Pair_IntDouble_Mutator mutator;
 
   emp::vector<std::function<double(TestOrg_NumberIO &)>> lexicase_fit_set;
 
