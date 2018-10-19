@@ -13,6 +13,7 @@
 #include "tools/string_utils.h"
 
 #include "TagLinearGP_InstLib.h"
+#include "Utilities.h"
 
 namespace TagLGP {
   /////////////
@@ -1106,18 +1107,15 @@ namespace TagLGP {
       random_ptr = emp::NewPtr<emp::Random>(seed);
       random_owner = true;
     }
-  
-    /// Return best matching memory
-    /// TODO - configurable tie-breaking procedure
-    size_t FindBestMemoryMatch(const Memory & mem, const tag_t & tag, double threshold=0.0, MemPosType mem_type=MemPosType::ANY) { 
-      // TODO - type checking
+
+    size_t FindBestMemoryMatch_SMC(const Memory & mem, const tag_t & tag, double threshold=0.0, MemPosType mem_type=MemPosType::ANY) { 
       emp::vector<size_t> best_matches;
       for (size_t i = 0; i < mem_tags.size(); ++i) {
         // ANY, VEC, STR, NUM
         if (mem_type == MemPosType::ANY || mem_type == mem.GetPosType(i)) {
           double match = emp::SimpleMatchCoeff(tag, mem_tags[i]);
           if (match == threshold) best_matches.emplace_back(i);
-          else if (match > threshold) {
+          else if (match > threshold) { // If distance is closer.
             best_matches.resize(1);
             best_matches[0] = i;
             threshold = match;
@@ -1131,18 +1129,66 @@ namespace TagLGP {
       }
     }
 
-    size_t FindBestMemoryMatch(const Memory & mem, const tag_t & tag, std::unordered_set<MemPosType> mem_types, double threshold=0.0) { 
-      // TODO - type checking
+    size_t FindBestMemoryMatch_SMC(const Memory & mem, const tag_t & tag, std::unordered_set<MemPosType> mem_types, double threshold=0.0) { 
       emp::vector<size_t> best_matches;
       for (size_t i = 0; i < mem_tags.size(); ++i) {
         // ANY, VEC, STR, NUM
         if (emp::Has(mem_types, mem.GetPosType(i))) {
           double match = emp::SimpleMatchCoeff(tag, mem_tags[i]);
           if (match == threshold) best_matches.emplace_back(i);
-          else if (match > threshold) {
+          else if (match > threshold) { // If distance is closer.
             best_matches.resize(1);
             best_matches[0] = i;
             threshold = match;
+          }
+        }
+      }
+      if (best_matches.size()) {
+        return best_matches[0];
+      } else {
+        return (size_t)-1;
+      }
+    }
+  
+    /// Return best matching memory
+    /// TODO - configurable tie-breaking procedure
+    size_t FindBestMemoryMatch(const Memory & mem, const tag_t & tag, double threshold=0.0, MemPosType mem_type=MemPosType::ANY) { 
+      double dist_thresh = TAG_WIDTH - (threshold * (double)TAG_WIDTH);
+      emp::vector<size_t> best_matches;
+      for (size_t i = 0; i < mem_tags.size(); ++i) {
+        // ANY, VEC, STR, NUM
+        if (mem_type == MemPosType::ANY || mem_type == mem.GetPosType(i)) {
+          // double match = emp::SimpleMatchCoeff(tag, mem_tags[i]);
+          double dist = (double)HammingDist(tag, mem_tags[i]);
+          if (dist == dist_thresh) best_matches.emplace_back(i);
+          else if (dist < dist_thresh) {
+            best_matches.resize(1);
+            best_matches[0] = i;
+            dist_thresh = dist;
+          }
+        }
+      }
+      if (best_matches.size()) {
+        return best_matches[0];
+      } else {
+        return (size_t)-1;
+      }
+    }
+
+    size_t FindBestMemoryMatch(const Memory & mem, const tag_t & tag, std::unordered_set<MemPosType> mem_types, double threshold=0.0) { 
+      double dist_thresh = TAG_WIDTH - (threshold * (double)TAG_WIDTH);
+      // TODO - type checking
+      emp::vector<size_t> best_matches;
+      for (size_t i = 0; i < mem_tags.size(); ++i) {
+        // ANY, VEC, STR, NUM
+        if (emp::Has(mem_types, mem.GetPosType(i))) {
+          // double match = emp::SimpleMatchCoeff(tag, mem_tags[i]);
+          double dist = (double)HammingDist(tag, mem_tags[i]);
+          if (dist == dist_thresh) best_matches.emplace_back(i);
+          else if (dist < dist_thresh) { // If distance is closer.
+            best_matches.resize(1);
+            best_matches[0] = i;
+            dist_thresh = dist;
           }
         }
       }
@@ -2145,9 +2191,7 @@ namespace TagLGP {
       size_t bof = (cur_ip == 0) ? hw.GetProgram().GetSize() - 1 : cur_ip - 1;
       
       size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
-      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::VEC);
-
-      // Skip if: posA or posB invalid
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::VEC);
 
       bool skip = false;
       if (!hw.IsValidMemPos(posA) || !hw.IsValidMemPos(posB)) skip = true;                       // SKip if failed to find valid mem pos

@@ -80,4 +80,12 @@ emp::vector<emp::BitSet<TAG_WIDTH>> GenHadamardMatrix() {
   return matrix;
 }
 
+/// Computes simple matching coefficient (https://en.wikipedia.org/wiki/Simple_matching_coefficient).
+template <size_t NUM_BITS>
+size_t HammingDist(const emp::BitSet<NUM_BITS> & in1, const emp::BitSet<NUM_BITS> & in2) {
+  emp_assert(NUM_BITS > 0);
+  // return (double)((in1 & in2).CountOnes() + (~in1 & ~in2).CountOnes()) / (double)NUM_BITS;
+  return (in1^in2).CountOnes();
+}
+
 #endif

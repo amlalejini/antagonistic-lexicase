@@ -38,6 +38,8 @@
 #include "TagLinearGP_Utilities.h"
 
 //////////////////////////////////////////
+// - (1) Add Data collection
+// - (2) Add Solution to utility
 // --- Notes/Todos ---
 // - May need to generate more training examples for problems(?)
 // - INSTRUCTION SET
@@ -47,11 +49,18 @@
 // - SCORING
 //  - Assume pass/fail only at first, next add gradient (NOTE - will need to update how we screen/add more things to phenotypes).
 //    - Simplest thing to do would be to add a pass_vector + score_vector to test/program phenotypes
+//  - Add submission test case(?) to encourage submitting *something*
 // - DIAGNOSTICS
 //  - [ ] Clean up printing format
+// - Cleaning
+//  - [ ] Flesh out config comments
+//  - [ ] Round out instruction descriptions
+// - ISSUES
+//  - Memory indexing seems to be the biggest impact on evaluation speed. 
+//    Every instruction argument requires a linear scan of memory for best match.
 //////////////////////////////////////////
 
-constexpr size_t TAG_WIDTH = 32;
+constexpr size_t TAG_WIDTH = 16;
 constexpr size_t MEM_SIZE = TAG_WIDTH;
 
 // How do training examples change over time?
@@ -445,6 +454,7 @@ protected:
   std::function<double(prog_org_t &, size_t)> CalcProgramScoreOnTest;
   std::function<test_org_phen_t&(size_t)> GetTestPhenotype;
   std::function<void(void)> SetupTestMutation;
+  std::function<void(void)> SetupTestFitFun;
 
   // Internal function signatures.
   void InitConfigs(const ProgramSynthesisConfig & config);
@@ -455,10 +465,15 @@ protected:
   void SetupEvaluation();       ///< Setup evaluation
   void SetupSelection();        ///< Setup selection (?)
   void SetupMutation();         ///< Setup mutation (?)
+  void SetupFitFuns();
   void SetupDataCollection();   ///< Setup data collection
 
   void SetupProgramSelection(); ///< Setup program selection scheme
   void SetupProgramMutation();  ///< Setup program mutations
+  void SetupProgramFitFun();
+
+  void AddDefaultInstructions();
+  // void AddVecInstructions();
 
   void SetupProblem();
   void SetupProblem_NumberIO();
@@ -526,10 +541,10 @@ protected:
 
   template<typename WORLD_ORG_TYPE>
   void SetupTestSelection(emp::Ptr<emp::World<WORLD_ORG_TYPE>> w, emp::vector<std::function<double(WORLD_ORG_TYPE &)>> & lexicase_fit_set) {
-    const auto pw = &w;
     std::cout << "Setting up test selection." << std::endl;
     switch (TEST_SELECTION_MODE) {
       case (size_t)SELECTION_TYPE::LEXICASE: {
+        emp_assert(EVALUATION_MODE == (size_t)EVALUATION_TYPE::FULL);
         std::cout << "  >> Setting up test LEXICASE selection." << std::endl;
         // Setup lexicase selection.
         // - 1 lexicase function for every program organism.
@@ -540,12 +555,13 @@ protected:
           });
         }
         // Add selection action.
-        do_selection_sig.AddAction([this, pw, lexicase_fit_set]() { // todo - check that capture is working as expected
-          emp::LexicaseSelect_NAIVE(*(*pw), lexicase_fit_set, TEST_POP_SIZE, TEST_LEXICASE_MAX_FUNS);
+        do_selection_sig.AddAction([this, w, lexicase_fit_set]() mutable { // todo - check that capture is working as expected
+          emp::LexicaseSelect_NAIVE(*w, lexicase_fit_set, TEST_POP_SIZE, TEST_LEXICASE_MAX_FUNS);
         });
         break;
       }
       case (size_t)SELECTION_TYPE::COHORT_LEXICASE: {
+        emp_assert(EVALUATION_MODE == (size_t)EVALUATION_TYPE::COHORT);
         std::cout << "  >> Setting up test COHORT LEXICASE selection." << std::endl;
         // Setup cohort lexicase.
         // - 1 lexicase function for every program cohort member.
@@ -557,10 +573,10 @@ protected:
         }
         // Add selection action.
         emp_assert(TEST_COHORT_SIZE * test_cohorts.GetCohortCnt() == TEST_POP_SIZE);
-        do_selection_sig.AddAction([this, pw, lexicase_fit_set]() { // todo - check that capture is working as expected
+        do_selection_sig.AddAction([this, w, lexicase_fit_set]() mutable { // todo - check that capture is working as expected
           // For each cohort, run selection.
           for (size_t cID = 0; cID < test_cohorts.GetCohortCnt(); ++cID) {
-            emp::CohortLexicaseSelect_NAIVE(*(*pw),
+            emp::CohortLexicaseSelect_NAIVE(*w,
                                             lexicase_fit_set,
                                             test_cohorts.GetCohort(cID),
                                             TEST_COHORT_SIZE,
@@ -571,15 +587,15 @@ protected:
       }
       case (size_t)SELECTION_TYPE::TOURNAMENT: {
         std::cout << "  >> Setting up test TOURNAMENT selection." << std::endl;
-        do_selection_sig.AddAction([this, pw]() {
-          emp::TournamentSelect(*(*pw), TEST_TOURNAMENT_SIZE, TEST_POP_SIZE);
+        do_selection_sig.AddAction([this, w]() mutable {
+          emp::TournamentSelect(*w, TEST_TOURNAMENT_SIZE, TEST_POP_SIZE);
         });
         break;
       }
       case (size_t)SELECTION_TYPE::DRIFT: {
         std::cout << "  >> Setting up test DRIFT selection." << std::endl;
-        do_selection_sig.AddAction([this, pw]() {
-          emp::RandomSelect(*(*pw), TEST_POP_SIZE);
+        do_selection_sig.AddAction([this, w]() mutable {
+          emp::RandomSelect(*w, TEST_POP_SIZE);
         });
         break;
       }
@@ -796,13 +812,13 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
   // Configure how programs should be initialized.
   end_setup_sig.AddAction([this]() {
     // Initialize program population.
-    // InitProgPop_Random(); TODO - Add this back in when I've constructed instruction set.
+    InitProgPop_Random();
     std::cout << ">> Program population size=" << prog_world->GetSize() << std::endl;
   });
   // Configure On Update signal.
   do_update_sig.AddAction([this]() {
-    std::cout << "Update: " << update << ", ";
-    std::cout << "best-program score=" << prog_world->CalcFitnessID(dominant_prog_id) << std::endl;
+    std::cout << "Update: " << update << "; ";
+    std::cout << "best program score: " << prog_world->CalcFitnessID(dominant_prog_id) << std::endl;
 
     if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger();
 
@@ -813,24 +829,27 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
   });
 
   std::cout << "EXPERIMENT SETUP => Setting up evaluation hardware." << std::endl;
-  SetupHardware(); // [x]
+  SetupHardware(); 
   
   std::cout << "EXPERIMENT SETUP => Setting up problem." << std::endl;
   SetupProblem();  //...many many todos embedded in this one...
 
   std::cout << "EXPERIMENT SETUP => Setting up evaluation." << std::endl;
-  SetupEvaluation(); // [x]
+  SetupEvaluation(); 
   
-  std::cout << "EXPERIMENT SETUP => Setting up program selection." << std::endl;
+  std::cout << "EXPERIMENT SETUP => Setting up selection." << std::endl;
   SetupSelection();
+
+  std::cout << "EXPERIMENT SETUP => Setting up mutation." << std::endl;
+  SetupMutation();
+
+  std::cout << "EXPERIMENT SETUP => Setting up mutation." << std::endl;
+  SetupFitFuns();
 
   #ifndef EMSCRIPTEN
   std::cout << "EXPERIMENT SETUP => Setting up data collection." << std::endl;
   // todo
   #endif
-
-  // Configure fitness function(s)
-
 
   end_setup_sig.Trigger();
 
@@ -842,6 +861,23 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
 
   // std::cout << "--- Instruction set: ---" << std::endl;
   // inst_lib->Print();
+}
+
+/// Run the experiment start->finish
+void ProgramSynthesisExperiment::Run() {
+  for (update = 0; update <= GENERATIONS; ++update) {
+    RunStep();
+  }
+}
+
+/// Run a single step of the experiment
+void ProgramSynthesisExperiment::RunStep() {
+  // std::cout << "-- do eval --" << std::endl;
+  do_evaluation_sig.Trigger();
+  // std::cout << "-- do selection --" << std::endl;
+  do_selection_sig.Trigger();
+  // std::cout << "-- do/ update --" << std::endl;
+  do_update_sig.Trigger();
 }
 
 /// ================ Internal function implementations ================
@@ -954,82 +990,6 @@ void ProgramSynthesisExperiment::SetupHardware() {
   // Configure call tag
   call_tag.Clear(); // Set initial call tag to all 0s.
 
-  // Configure default instructions
-  // Math
-  inst_lib->AddInst("Add", hardware_t::Inst_Add, 3, "wmemANY[C] = wmemNUM[A] + wmemNUM[B]");
-  inst_lib->AddInst("Sub", hardware_t::Inst_Sub, 3, "wmemANY[C] = wmemNUM[A] - wmemNUM[B]");
-  inst_lib->AddInst("Mult", hardware_t::Inst_Mult, 3, "wmemANY[C] = wmemNUM[A] * wmemNUM[B]");
-  inst_lib->AddInst("Div", hardware_t::Inst_Div, 3, "if (wmemNUM[B] != 0) wmemANY[C] = wmemNUM[A] / wmemNUM[B]; else NOP");
-  inst_lib->AddInst("Mod", hardware_t::Inst_Mod, 3, "if (wmemNUM[B] != 0) wmemANY[C] = int(wmemNUM[A]) % int(wmemNUM[B]); else NOP");
-  inst_lib->AddInst("TestNumEqu", hardware_t::Inst_TestNumEqu, 3, "wmemANY[C] = wmemNUM[A] == wmemNUM[B]");
-  inst_lib->AddInst("TestNumNEqu", hardware_t::Inst_TestNumNEqu, 3, "wmemANY[C] = wmemNUM[A] != wmemNUM[B]");
-  inst_lib->AddInst("TestNumLess", hardware_t::Inst_TestNumLess, 3, "wmemANY[C] = wmemNUM[A] < wmemNUM[B]");
-  inst_lib->AddInst("Floor", hardware_t::Inst_Floor, 1, "wmemNUM[A] = floor(wmemNUM[A])");
-  inst_lib->AddInst("Not", hardware_t::Inst_Not, 1, "wmemNUM[A] = !wmemNUM[A]"); 
-  inst_lib->AddInst("Inc", hardware_t::Inst_Inc, 1, "wmemNUM[A] = wmemNUM[A] + 1");
-  inst_lib->AddInst("Dec", hardware_t::Inst_Dec, 1, "wmemNUM[A] = wmemNUM[A] - 1");
-  
-  // Memory manipulation
-  inst_lib->AddInst("CopyMem", hardware_t::Inst_CopyMem, 2, "wmemANY[B] = wmemANY[A] // Copy mem[A] to mem[B]");
-  inst_lib->AddInst("SwapMem", hardware_t::Inst_SwapMem, 2, "swap(wmemANY[A], wmemANY[B])");
-  inst_lib->AddInst("Input", hardware_t::Inst_Input, 2, "wmemANY[B] = imemANY[A]");
-  inst_lib->AddInst("Output", hardware_t::Inst_Output, 2, "omemANY[B] = wmemANY[A]");
-  inst_lib->AddInst("CommitGlobal", hardware_t::Inst_CommitGlobal, 2, "gmemANY[B] = wmemANY[A]");
-  inst_lib->AddInst("PullGlobal", hardware_t::Inst_PullGlobal, 2, "wmemANY[B] = gmemANY[A]");
-  inst_lib->AddInst("TestMemEqu", hardware_t::Inst_TestMemEqu, 3, "wmemANY[C] = wmemANY[A] == wmemANY[B]");
-  inst_lib->AddInst("TestMemNEqu", hardware_t::Inst_TestMemNEqu, 3, "wmemANY[C] = wmemANY[A] != wmemANY[B]");
-
-  // Vector-related instructions
-  inst_lib->AddInst("MakeVector", hardware_t::Inst_MakeVector, 3, "");  // TODO - more descriptions
-  inst_lib->AddInst("VecGet", hardware_t::Inst_VecGet, 3, "");
-  inst_lib->AddInst("VecSet", hardware_t::Inst_VecSet, 3, "");
-  inst_lib->AddInst("VecLen", hardware_t::Inst_VecLen, 3, "");
-  inst_lib->AddInst("VecAppend", hardware_t::Inst_VecAppend, 3, "");
-  inst_lib->AddInst("VecPop", hardware_t::Inst_VecPop, 3, "");
-  inst_lib->AddInst("VecRemove", hardware_t::Inst_VecRemove, 3, "");
-  inst_lib->AddInst("VecReplaceAll", hardware_t::Inst_VecReplaceAll, 3, "");
-  inst_lib->AddInst("VecIndexOf", hardware_t::Inst_VecIndexOf, 3, "");
-  inst_lib->AddInst("VecOccurrencesOf", hardware_t::Inst_VecOccurrencesOf, 3, "");
-  inst_lib->AddInst("VecReverse", hardware_t::Inst_VecReverse, 3, "");
-  inst_lib->AddInst("VecSwapIfLess", hardware_t::Inst_VecSwapIfLess, 3, "");
-  inst_lib->AddInst("VecGetFront", hardware_t::Inst_VecGetFront, 3, "");
-  inst_lib->AddInst("VecGetBack", hardware_t::Inst_VecGetBack, 3, "");
-
-  // Memory-type
-  inst_lib->AddInst("IsStr", hardware_t::Inst_IsStr, 3, "");
-  inst_lib->AddInst("IsNum", hardware_t::Inst_IsNum, 3, "");
-  inst_lib->AddInst("IsVec", hardware_t::Inst_IsVec, 3, "");
-
-  // Flow control
-  inst_lib->AddInst("If", hardware_t::Inst_If, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
-  inst_lib->AddInst("IfNot", hardware_t::Inst_IfNot, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
-  inst_lib->AddInst("While", hardware_t::Inst_While, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
-  inst_lib->AddInst("Countdown", hardware_t::Inst_Countdown, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
-  inst_lib->AddInst("Foreach", hardware_t::Inst_Foreach, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
-  inst_lib->AddInst("Close", hardware_t::Inst_Close, 3, "", {inst_lib_t::InstProperty::END_FLOW});
-  inst_lib->AddInst("Break", hardware_t::Inst_Break, 3, "");
-  inst_lib->AddInst("Call", hardware_t::Inst_Call, 3, "");
-  inst_lib->AddInst("Routine", hardware_t::Inst_Routine, 3, "");
-  inst_lib->AddInst("Return", hardware_t::Inst_Return, 3, "");
-
-  // Module
-  inst_lib->AddInst("ModuleDef", hardware_t::Inst_Nop, 3, "", {inst_lib_t::InstProperty::MODULE});
-
-  // Misc
-  inst_lib->AddInst("Nop", hardware_t::Inst_Nop, 3, "");
-
-  // Add Terminals [0:16] -- TODO - may want these to be slightly more configurable.
-  for (size_t i = 0; i <= 16; ++i) {
-    inst_lib->AddInst("Set-" + emp::to_string(i),
-      [i](hardware_t & hw, const inst_t & inst) {
-        hardware_t::CallState & state = hw.GetCurCallState();
-        hardware_t::Memory & wmem = state.GetWorkingMem();
-        size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
-        if (!hw.IsValidMemPos(posA)) return; // Do nothing
-        wmem.Set(posA, (double)i);
-      });
-  }
-
   // What do at beginning of program evaluation (about to be run on potentially many tests)?
   begin_program_eval.AddAction([this](prog_org_t & prog_org) {
     eval_hardware->Reset();
@@ -1083,6 +1043,7 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
 
       // Setup program world on placement response.
       prog_world->OnPlacement([this](size_t pos) {
+        // std::cout << "Program org " << pos << " reset." << std::endl;
         prog_world->GetOrg(pos).GetPhenotype().Reset(TEST_COHORT_SIZE);
       });
       
@@ -1096,12 +1057,17 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
         test_cohorts.Randomize(*random);
         // For each cohort, evaluate all programs against all tests in corresponding cohort.
         for (size_t cID = 0; cID < prog_cohorts.GetCohortCnt(); ++cID) {
+          // std::cout << "  -- evaluating cohort " << cID << std::endl;
+          // std::cout << "    - # programs to eval: " << PROG_COHORT_SIZE << std::endl;
+          // std::cout << "     - # tests per program: " << TEST_COHORT_SIZE << std::endl;
           for (size_t pID = 0; pID < PROG_COHORT_SIZE; ++pID) {
+            // std::cout << "    - evaluating program " << pID << std::endl;
             prog_org_t & prog_org = prog_world->GetOrg(prog_cohorts.GetWorldID(cID, pID));
             begin_program_eval.Trigger(prog_org);
             for (size_t tID = 0; tID < TEST_COHORT_SIZE; ++tID) {
               const size_t test_world_id = test_cohorts.GetWorldID(cID, tID);
               double score = EvaluateTest(prog_org, test_world_id);
+              // std::cout << "      Score on " << tID << " = " << score << std::endl;
               test_org_phen_t & test_phen = GetTestPhenotype(test_world_id);
               prog_org_phen_t & prog_phen = prog_org.GetPhenotype();
               // Update test phenotype
@@ -1115,6 +1081,7 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
       break;
     }
     case (size_t)EVALUATION_TYPE::FULL: {
+      std::cout << ">> Setting up full evaluation. No cohorts here." << std::endl;
       // Evaluate all programs on all tests.
       // - Configure world to reset phenotypes on organism placement.
       prog_world->OnPlacement([this](size_t pos) {
@@ -1141,9 +1108,6 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
       });
       break;
     }
-    // case (size_t)EVALUATION_TYPE::POOLS { // TODO - implement pools version
-    //   break;
-    // }
     default: {
       std::cout << "Unknown EVALUATION_MODE (" << EVALUATION_MODE << "). Exiting." << std::endl;
       exit(-1);
@@ -1160,6 +1124,15 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
       prog_org_t & prog_org = prog_world->GetOrg(pID);
       const size_t pass_total = emp::Sum(prog_org.GetPhenotype().test_results);
       prog_org.GetPhenotype().num_passes = pass_total;
+      // std::cout << "======================================" << std::endl;
+      // std::cout << "Org: " << std::endl;
+      // prog_org.GetGenome().Print();
+      // std::cout << "  pass total for this rando org: " << pass_total << std::endl;
+      // std::cout << "  passes: ";
+      // for (size_t k = 0; k < prog_org.GetPhenotype().test_results.size(); ++k) {
+        // if (k) std::cout << ",";
+        // std::cout << prog_org.GetPhenotype().test_results[k];
+      // } std::cout << std::endl;
       // Is this the highest pass total program this generation?
       if (pass_total > cur_best_score || pID == 0) {
         dominant_prog_id = pID;
@@ -1169,7 +1142,6 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
       // - TODO - screen for possible solution program.
       // if (pass_total == PROGRAM_MAX_PASSES) 
     }
-
     // Sum pass/fail totals for tests.
     for (size_t tID = 0; tID < TEST_POP_SIZE; ++tID) {
       test_org_phen_t & test_phen = GetTestPhenotype(tID);
@@ -1224,10 +1196,14 @@ void ProgramSynthesisExperiment::SetupProgramSelection() {
   switch (PROG_SELECTION_MODE) {
     case (size_t)SELECTION_TYPE::LEXICASE: {
       std::cout << "  >> Setting up program LEXICASE selection." << std::endl;
+      emp_assert(EVALUATION_MODE == (size_t)EVALUATION_TYPE::FULL, "Lexicase selection requires FULL evaluation mode.");
+      // Lexicase selection requires full evaluation mode?
+      // emp_assert()
       // Setup program fitness functions.
       // - 1 function for every test.
       for (size_t i = 0; i < TEST_POP_SIZE; ++i) {
         lexicase_prog_fit_set.push_back([i](prog_org_t & prog_org) {
+          emp_assert(i < prog_org.GetPhenotype().test_results.size(), i, prog_org.GetPhenotype().test_results.size());
           double score = prog_org.GetPhenotype().test_results[i];
           return score;
         });
@@ -1243,6 +1219,7 @@ void ProgramSynthesisExperiment::SetupProgramSelection() {
     }
     case (size_t)SELECTION_TYPE::COHORT_LEXICASE: {
       std::cout << "  >> Setting up program COHORT LEXICASE selection." << std::endl;
+      emp_assert(EVALUATION_MODE == (size_t)EVALUATION_TYPE::COHORT, "Cohort lexicase selection requires COHORT evaluation mode.");
       // Setup program fitness functions.
       // - 1 function for every test cohort member.
       for (size_t i = 0; i < TEST_COHORT_SIZE; ++i) {
@@ -1286,11 +1263,57 @@ void ProgramSynthesisExperiment::SetupProgramSelection() {
 }
 
 void ProgramSynthesisExperiment::SetupMutation() {
-  // todo
   // (1) Setup program mutations
   SetupProgramMutation();
   // (2) Setup test mutations
   SetupTestMutation();
+  // (3) Setup world(s) to auto mutate.
+  end_setup_sig.AddAction([this]() {
+    prog_world->SetAutoMutate();      // After we've initialized populations, turn auto mutate on.
+  });
+
+  if (prob_NumberIO_world != nullptr) { end_setup_sig.AddAction([this]() { prob_NumberIO_world->SetAutoMutate(); }); }
+  else if (prob_SmallOrLarge_world != nullptr) { end_setup_sig.AddAction([this]() { prob_SmallOrLarge_world->SetAutoMutate(); }); }
+  else if (prob_ForLoopIndex_world != nullptr) { end_setup_sig.AddAction([this]() { prob_ForLoopIndex_world->SetAutoMutate(); }); }
+  else if (prob_CompareStringLengths_world != nullptr) { end_setup_sig.AddAction([this]() { prob_CompareStringLengths_world->SetAutoMutate(); }); }
+  else if (prob_DoubleLetters_world != nullptr) { end_setup_sig.AddAction([this]() { prob_DoubleLetters_world->SetAutoMutate(); }); }
+  else if (prob_CollatzNumbers_world != nullptr) { end_setup_sig.AddAction([this]() { prob_CollatzNumbers_world->SetAutoMutate(); }); }
+  else if (prob_ReplaceSpaceWithNewline_world != nullptr) { end_setup_sig.AddAction([this]() { prob_ReplaceSpaceWithNewline_world->SetAutoMutate(); }); }
+  else if (prob_StringDifferences_world != nullptr) { end_setup_sig.AddAction([this]() { prob_StringDifferences_world->SetAutoMutate(); }); }
+  else if (prob_EvenSquares_world != nullptr) { end_setup_sig.AddAction([this]() { prob_EvenSquares_world->SetAutoMutate(); }); }
+  else if (prob_WallisPi_world != nullptr) { end_setup_sig.AddAction([this]() { prob_WallisPi_world->SetAutoMutate(); }); }
+  else if (prob_StringLengthsBackwards_world != nullptr) { end_setup_sig.AddAction([this]() { prob_StringLengthsBackwards_world->SetAutoMutate(); }); }
+  else if (prob_LastIndexOfZero_world != nullptr) { end_setup_sig.AddAction([this]() { prob_LastIndexOfZero_world->SetAutoMutate(); }); }
+  else if (prob_VectorAverage_world != nullptr) { end_setup_sig.AddAction([this]() { prob_VectorAverage_world->SetAutoMutate(); }); }
+  else if (prob_CountOdds_world != nullptr) { end_setup_sig.AddAction([this]() { prob_CountOdds_world->SetAutoMutate(); }); }
+  else if (prob_MirrorImage_world != nullptr) { end_setup_sig.AddAction([this]() { prob_MirrorImage_world->SetAutoMutate(); }); }
+  else if (prob_SuperAnagrams_world != nullptr) { end_setup_sig.AddAction([this]() { prob_SuperAnagrams_world->SetAutoMutate(); }); }
+  else if (prob_SumOfSquares_world != nullptr) { end_setup_sig.AddAction([this]() { prob_SumOfSquares_world->SetAutoMutate(); }); }
+  else if (prob_VectorsSummed_world != nullptr) { end_setup_sig.AddAction([this]() { prob_VectorsSummed_world->SetAutoMutate(); }); }
+  else if (prob_XWordLines_world != nullptr) { end_setup_sig.AddAction([this]() { prob_XWordLines_world->SetAutoMutate(); }); }
+  else if (prob_PigLatin_world != nullptr) { end_setup_sig.AddAction([this]() { prob_PigLatin_world->SetAutoMutate(); }); }
+  else if (prob_NegativeToZero_world != nullptr) { end_setup_sig.AddAction([this]() { prob_NegativeToZero_world->SetAutoMutate(); }); }
+  else if (prob_ScrabbleScore_world != nullptr) { end_setup_sig.AddAction([this]() { prob_ScrabbleScore_world->SetAutoMutate(); }); }
+  else if (prob_Checksum_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Checksum_world->SetAutoMutate(); }); }
+  else if (prob_Digits_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Digits_world->SetAutoMutate(); }); }
+  else if (prob_Grade_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Grade_world->SetAutoMutate(); }); }
+  else if (prob_Median_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Median_world->SetAutoMutate(); }); }
+  else if (prob_Smallest_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Smallest_world->SetAutoMutate(); }); }
+  else if (prob_Syllables_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Syllables_world->SetAutoMutate(); }); }
+  else { std::cout << "AHH! None of the worlds have been initialized. Exiting." << std::endl; exit(-1); }
+}
+
+void ProgramSynthesisExperiment::SetupFitFuns() {
+  // (1) Setup program mutations
+  SetupProgramFitFun();
+  // (2) Setup test mutations
+  SetupTestFitFun();
+}
+
+void ProgramSynthesisExperiment::SetupProgramFitFun() {
+  prog_world->SetFitFun([](prog_org_t & prog_org) {
+    return (double)prog_org.GetPhenotype().num_passes;
+  });
 }
 
 void ProgramSynthesisExperiment::SetupProgramMutation() {
@@ -1318,6 +1341,84 @@ void ProgramSynthesisExperiment::InitProgPop_Random() {
   for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
     prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
   }
+  // New:
+  // emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  // hardware_t::Program sol(inst_lib);
+  // sol.PushInst("LoadInt", {matrix[0], matrix[0], matrix[0]});
+  // sol.PushInst("LoadDouble", {matrix[1], matrix[1], matrix[1]});
+  // sol.PushInst("Add", {matrix[0], matrix[1], matrix[2]});
+  // sol.PushInst("SubmitNum", {matrix[2], matrix[2], matrix[2]});
+  // sol.PushInst("Return", {matrix[0], matrix[0], matrix[0]});
+  // prog_world->Inject(sol, PROG_POP_SIZE);
+
+}
+
+// todo - add inclusion as argument
+void ProgramSynthesisExperiment::AddDefaultInstructions() {
+
+  // Configure instructions
+  // Math
+  inst_lib->AddInst("Add", hardware_t::Inst_Add, 3, "wmemANY[C] = wmemNUM[A] + wmemNUM[B]");
+  inst_lib->AddInst("Sub", hardware_t::Inst_Sub, 3, "wmemANY[C] = wmemNUM[A] - wmemNUM[B]");
+  inst_lib->AddInst("Mult", hardware_t::Inst_Mult, 3, "wmemANY[C] = wmemNUM[A] * wmemNUM[B]");
+  inst_lib->AddInst("Div", hardware_t::Inst_Div, 3, "if (wmemNUM[B] != 0) wmemANY[C] = wmemNUM[A] / wmemNUM[B]; else NOP");
+  inst_lib->AddInst("Mod", hardware_t::Inst_Mod, 3, "if (wmemNUM[B] != 0) wmemANY[C] = int(wmemNUM[A]) % int(wmemNUM[B]); else NOP");
+  inst_lib->AddInst("TestNumEqu", hardware_t::Inst_TestNumEqu, 3, "wmemANY[C] = wmemNUM[A] == wmemNUM[B]");
+  inst_lib->AddInst("TestNumNEqu", hardware_t::Inst_TestNumNEqu, 3, "wmemANY[C] = wmemNUM[A] != wmemNUM[B]");
+  inst_lib->AddInst("TestNumLess", hardware_t::Inst_TestNumLess, 3, "wmemANY[C] = wmemNUM[A] < wmemNUM[B]");
+  inst_lib->AddInst("Floor", hardware_t::Inst_Floor, 1, "wmemNUM[A] = floor(wmemNUM[A])");
+  inst_lib->AddInst("Not", hardware_t::Inst_Not, 1, "wmemNUM[A] = !wmemNUM[A]"); 
+  inst_lib->AddInst("Inc", hardware_t::Inst_Inc, 1, "wmemNUM[A] = wmemNUM[A] + 1");
+  inst_lib->AddInst("Dec", hardware_t::Inst_Dec, 1, "wmemNUM[A] = wmemNUM[A] - 1");
+  
+  // Memory manipulation
+  inst_lib->AddInst("CopyMem", hardware_t::Inst_CopyMem, 2, "wmemANY[B] = wmemANY[A] // Copy mem[A] to mem[B]");
+  inst_lib->AddInst("SwapMem", hardware_t::Inst_SwapMem, 2, "swap(wmemANY[A], wmemANY[B])");
+  inst_lib->AddInst("Input", hardware_t::Inst_Input, 2, "wmemANY[B] = imemANY[A]");
+  inst_lib->AddInst("Output", hardware_t::Inst_Output, 2, "omemANY[B] = wmemANY[A]");
+  inst_lib->AddInst("CommitGlobal", hardware_t::Inst_CommitGlobal, 2, "gmemANY[B] = wmemANY[A]");
+  inst_lib->AddInst("PullGlobal", hardware_t::Inst_PullGlobal, 2, "wmemANY[B] = gmemANY[A]");
+  inst_lib->AddInst("TestMemEqu", hardware_t::Inst_TestMemEqu, 3, "wmemANY[C] = wmemANY[A] == wmemANY[B]");
+  inst_lib->AddInst("TestMemNEqu", hardware_t::Inst_TestMemNEqu, 3, "wmemANY[C] = wmemANY[A] != wmemANY[B]");
+
+  // Vector-related instructions
+  // inst_lib->AddInst("MakeVector", hardware_t::Inst_MakeVector, 3, "");  // TODO - more descriptions
+  // inst_lib->AddInst("VecGet", hardware_t::Inst_VecGet, 3, "");
+  // inst_lib->AddInst("VecSet", hardware_t::Inst_VecSet, 3, "");
+  // inst_lib->AddInst("VecLen", hardware_t::Inst_VecLen, 3, "");
+  // inst_lib->AddInst("VecAppend", hardware_t::Inst_VecAppend, 3, "");
+  // inst_lib->AddInst("VecPop", hardware_t::Inst_VecPop, 3, "");
+  // inst_lib->AddInst("VecRemove", hardware_t::Inst_VecRemove, 3, "");
+  // inst_lib->AddInst("VecReplaceAll", hardware_t::Inst_VecReplaceAll, 3, "");
+  // inst_lib->AddInst("VecIndexOf", hardware_t::Inst_VecIndexOf, 3, "");
+  // inst_lib->AddInst("VecOccurrencesOf", hardware_t::Inst_VecOccurrencesOf, 3, "");
+  // inst_lib->AddInst("VecReverse", hardware_t::Inst_VecReverse, 3, "");
+  // inst_lib->AddInst("VecSwapIfLess", hardware_t::Inst_VecSwapIfLess, 3, "");
+  // inst_lib->AddInst("VecGetFront", hardware_t::Inst_VecGetFront, 3, "");
+  // inst_lib->AddInst("VecGetBack", hardware_t::Inst_VecGetBack, 3, "");
+  
+  // Memory-type
+  // inst_lib->AddInst("IsNum", hardware_t::Inst_IsNum, 3, "");
+  // inst_lib->AddInst("IsStr", hardware_t::Inst_IsStr, 3, "");
+  // inst_lib->AddInst("IsVec", hardware_t::Inst_IsVec, 3, "");
+
+  // Flow control
+  // inst_lib->AddInst("If", hardware_t::Inst_If, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  // inst_lib->AddInst("IfNot", hardware_t::Inst_IfNot, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  // inst_lib->AddInst("While", hardware_t::Inst_While, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  // inst_lib->AddInst("Countdown", hardware_t::Inst_Countdown, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  // inst_lib->AddInst("Foreach", hardware_t::Inst_Foreach, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  // inst_lib->AddInst("Close", hardware_t::Inst_Close, 3, "", {inst_lib_t::InstProperty::END_FLOW});
+  // inst_lib->AddInst("Break", hardware_t::Inst_Break, 3, "");
+  // inst_lib->AddInst("Call", hardware_t::Inst_Call, 3, "");
+  // inst_lib->AddInst("Routine", hardware_t::Inst_Routine, 3, "");
+  // inst_lib->AddInst("Return", hardware_t::Inst_Return, 3, "");
+
+  // Module
+  // inst_lib->AddInst("ModuleDef", hardware_t::Inst_Nop, 3, "", {inst_lib_t::InstProperty::MODULE});
+
+  // Misc
+  // inst_lib->AddInst("Nop", hardware_t::Inst_Nop, 3, "");
 }
 
 // ================= PROBLEM SETUPS ======================
@@ -1377,6 +1478,12 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
     });
   };
 
+  SetupTestFitFun = [this]() {
+    prob_NumberIO_world->SetFitFun([](test_org_t & test_org) {
+      return (double)test_org.GetPhenotype().num_fails;
+    });
+  };
+
   // Tell experiment how to configure hardware inputs when running program against a test.
   begin_program_test.AddAction([this](prog_org_t & prog_org, size_t testID) {
     // Reset eval stuff
@@ -1398,12 +1505,30 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
 
   // Tell experiment how to calculate program score.
   CalcProgramScoreOnTest = [this](prog_org_t & prog_org, size_t testID) {
-    if (prob_utils_NumberIO.submitted) {
+    // std::cout << "Calc score on test!" << std::endl;
+    // prog_org.GetGenome().Print();
+    // std::cout << "Submitted? " << prob_utils_NumberIO.submitted << std::endl;
+    // std::cout << "Score? " << CalcScorePassFail_NumberIO(prob_NumberIO_world->GetOrg(testID).GetCorrectOut(), prob_utils_NumberIO.submitted_val) << std::endl;
+    if (!prob_utils_NumberIO.submitted) {
       return 0.0;
     } else {
       return CalcScorePassFail_NumberIO(prob_NumberIO_world->GetOrg(testID).GetCorrectOut(), prob_utils_NumberIO.submitted_val);
     }
   };
+
+  AddDefaultInstructions();
+
+  // Add Terminals [0:16] -- TODO - may want these to be slightly more configurable.
+  for (size_t i = 0; i <= 16; ++i) {
+    inst_lib->AddInst("Set-" + emp::to_string(i),
+      [i](hardware_t & hw, const inst_t & inst) {
+        hardware_t::CallState & state = hw.GetCurCallState();
+        hardware_t::Memory & wmem = state.GetWorkingMem();
+        size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+        if (!hw.IsValidMemPos(posA)) return; // Do nothing
+        wmem.Set(posA, (double)i);
+      });
+  }
 
   // Add custom instructions
   // - LoadInteger

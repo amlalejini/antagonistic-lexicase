@@ -58,3 +58,25 @@ TEST_CASE("TagLGP_Mutator", "[taglgp]") {
     REQUIRE(prg.GetSize() >= mutator.MIN_PROGRAM_LEN);
   }
 }
+
+TEST_CASE("HammingDistance", "[utilities]") {
+
+  constexpr size_t TAG_WIDTH = 4;
+
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+
+  for (size_t i = 0; i < matrix.size(); ++i) {
+    for (size_t k = i; k < matrix.size(); ++k) {
+      std::cout << "======================" << std::endl;
+      matrix[i].Print(); std::cout << std::endl;
+      matrix[k].Print(); std::cout << std::endl;
+      std::cout << " ------- " << std::endl;
+      std::cout << HammingDist(matrix[i], matrix[k]) << std::endl;
+    }
+  }
+
+  emp::BitSet<TAG_WIDTH> z;
+  std::cout << HammingDist(matrix[0], z) << std::endl;
+
+
+}

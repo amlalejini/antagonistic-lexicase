@@ -3314,7 +3314,6 @@ TEST_CASE("Inst_Foreach", "[taglgp]") {
   // ---------------------------------------
   cpu.Reset(); // Hard reset on virtual CPU
   prog.Clear();
-
   prog.PushInst("Dec", {matrix[0]});
   prog.PushInst("Dec", {matrix[1]});
   prog.PushInst("Dec", {matrix[1]});
@@ -3349,7 +3348,7 @@ TEST_CASE("Inst_Foreach", "[taglgp]") {
   REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(2).GetNum() == -3);
   REQUIRE(cpu.GetCurCallState().GetWorkingMem().AccessVal(3).GetNum() == -4);
   // ---------------------------------------
-
+  // exit(-1);
   // ---------------------------------------
   // - TEST: If(true) ... Close ...
   cpu.Reset(); // Hard reset on virtual CPU
@@ -3809,3 +3808,4 @@ TEST_CASE("RandomPrograms", "[taglgp]") {
     std::cout << " ...Done." << std::endl;
   }
 }
+
