@@ -51,7 +51,9 @@ EMP_BUILD_CONFIG(ProgramSynthesisConfig,
   VALUE(PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE, double, 0.1, ""),
 
   GROUP(DATA_COLLECTION_GROUP, "Settings specific to data collection."),
+  VALUE(DATA_DIRECTORY, std::string, "./output", "Where should we dump output files?"),
   VALUE(SNAPSHOT_INTERVAL, size_t, 1000, "How often should we take population snapshots?"),
+  VALUE(SUMMARY_STATS_INTERVAL, size_t, 1000, "How often should we output summary stats?"),
   VALUE(SOLUTION_SCREEN_INTERVAL, size_t, 1000, "How often should we screen entire population for solutions?")
   
 

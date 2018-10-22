@@ -58,6 +58,9 @@
 // - ISSUES
 //  - Memory indexing seems to be the biggest impact on evaluation speed. 
 //    Every instruction argument requires a linear scan of memory for best match.
+// - data collection
+//    - [ ] Solutions file
+//    - [ ] snapshots
 //////////////////////////////////////////
 
 constexpr size_t TAG_WIDTH = 16;
@@ -291,6 +294,8 @@ protected:
   double PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE;
 
   // - Data collection group -
+  std::string DATA_DIRECTORY;
+  size_t SUMMARY_STATS_INTERVAL;
   size_t SNAPSHOT_INTERVAL;
   size_t SOLUTION_SCREEN_INTERVAL;
 
@@ -384,7 +389,6 @@ protected:
   // using test_world_var_t = std::variant<emp::Ptr<prob_NumberIO_world_t>,emp::Ptr<prob_SmallOrLarge_world_t>,emp::Ptr<prob_ForLoopIndex_world_t>,emp::Ptr<prob_CompareStringLengths_world_t>,emp::Ptr<prob_DoubleLetters_world_t>,emp::Ptr<prob_CollatzNumbers_world_t>,emp::Ptr<prob_ReplaceSpaceWithNewline_world_t>,emp::Ptr<prob_StringDifferences_world_t>,emp::Ptr<prob_EvenSquares_world_t>,emp::Ptr<prob_WallisPi_world_t>,emp::Ptr<prob_StringLengthsBackwards_world_t>,emp::Ptr<prob_LastIndexOfZero_world_t>,emp::Ptr<prob_VectorAverage_world_t>,emp::Ptr<prob_CountOdds_world_t>,emp::Ptr<prob_MirrorImage_world_t>,emp::Ptr<prob_SuperAnagrams_world_t>,emp::Ptr<prob_SumOfSquares_world_t>,emp::Ptr<prob_VectorsSummed_world_t>,emp::Ptr<prob_XWordLines_world_t>,emp::Ptr<prob_PigLatin_world_t>,emp::Ptr<prob_NegativeToZero_world_t>,emp::Ptr<prob_ScrabbleScore_world_t>,emp::Ptr<prob_Checksum_world_t>,emp::Ptr<prob_Digits_world_t>,emp::Ptr<prob_Grade_world_t>,emp::Ptr<prob_Median_world_t>,emp::Ptr<prob_Smallest_world_t>,emp::Ptr<prob_Syllables_world_t>>;
   // emp::vector<test_world_var_t> test_world_var_vec;
   
-
   // Problem utilities
   ProblemUtilities_NumberIO prob_utils_NumberIO;
   ProblemUtilities_SmallOrLarge prob_utils_SmallOrLarge;
@@ -418,7 +422,7 @@ protected:
   Cohorts prog_cohorts;
   Cohorts test_cohorts;
 
-  // TODO - TestCaseSet for every input-output pairing type
+  emp::Ptr<emp::DataFile> solution_file;
 
   /// StatsUtil is useful for managing target program/test during snapshots (gets
   /// captured in lambda).
@@ -427,6 +431,21 @@ protected:
     size_t cur_testID;
     StatsUtil(size_t pID=0, size_t tID=0) : cur_progID(pID), cur_testID(tID) { ; }
   } stats_util;
+
+  struct ProgramStats {
+    std::function<size_t(void)> get_ID;
+    std::function<double(void)> get_fitness;
+    std::function<double(void)> get_score_by_evaltest;  //< TODO - might need to make these functions more detailed/richer.
+    std::function<double(void)> get_evaltest_cnt;
+    
+    std::function<double(void)> get_testset_passes;
+    std::function<size_t(void)> get_testset_size;
+
+    std::function<size_t(void)> get_program_len;
+    std::function<std::string(void)> get_program;
+  } program_stats;
+
+  
 
   // Experiment signals
   emp::Signal<void(void)> do_evaluation_sig;
@@ -471,9 +490,12 @@ protected:
   void SetupProgramSelection(); ///< Setup program selection scheme
   void SetupProgramMutation();  ///< Setup program mutations
   void SetupProgramFitFun();
+  void SetupProgramStats();
 
   void AddDefaultInstructions();
   // void AddVecInstructions();
+
+  void SnapshotPrograms();
 
   void SetupProblem();
   void SetupProblem_NumberIO();
@@ -732,6 +754,7 @@ public:
 
   ~ProgramSynthesisExperiment() {
     if (setup) {
+      solution_file.Delete();
       eval_hardware.Delete();
       inst_lib.Delete();
       prog_world.Delete();
@@ -927,6 +950,8 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   PROB_NUMBER_IO__MUTATION__PER_INT_RATE = config.PROB_NUMBER_IO__MUTATION__PER_INT_RATE();
   PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE = config.PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE();
 
+  DATA_DIRECTORY = config.DATA_DIRECTORY();
+  SUMMARY_STATS_INTERVAL = config.SUMMARY_STATS_INTERVAL();
   SNAPSHOT_INTERVAL = config.SNAPSHOT_INTERVAL();
   SOLUTION_SCREEN_INTERVAL = config.SOLUTION_SCREEN_INTERVAL();
 
@@ -1333,6 +1358,71 @@ void ProgramSynthesisExperiment::SetupProgramMutation() {
     return prog_mutator.Mutate(rnd, prog_org.GetGenome());
   });
   
+}
+
+/// Setup data collection.
+void ProgramSynthesisExperiment::SetupDataCollection() {
+  std::cout << "Setting up data collection." << std::endl;
+  // Make a data directory
+  mkdir(DATA_DIRECTORY.c_str(), ACCESSPERMS);
+  if (DATA_DIRECTORY.back() != '/') DATA_DIRECTORY += '/';
+
+  // -- bookmark --
+  // - Setup program stats for snapshots
+  // - Setup test stats for snaphots
+
+  program_world->SetupFitnessFile(DATA_DIRECTORY + "program_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL);
+  // Setup test world fitness file (just don't look...)
+  if (prob_NumberIO_world != nullptr) { prob_NumberIO_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_SmallOrLarge_world != nullptr) { prob_SmallOrLarge_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_ForLoopIndex_world != nullptr) { prob_ForLoopIndex_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_CompareStringLengths_world != nullptr) { prob_CompareStringLengths_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_DoubleLetters_world != nullptr) { prob_DoubleLetters_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_CollatzNumbers_world != nullptr) { prob_CollatzNumbers_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_ReplaceSpaceWithNewline_world != nullptr) { prob_ReplaceSpaceWithNewline_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_StringDifferences_world != nullptr) { prob_StringDifferences_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_EvenSquares_world != nullptr) { prob_EvenSquares_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_WallisPi_world != nullptr) { prob_WallisPi_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_StringLengthsBackwards_world != nullptr) { prob_StringLengthsBackwards_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_LastIndexOfZero_world != nullptr) { prob_LastIndexOfZero_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_VectorAverage_world != nullptr) { prob_VectorAverage_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_CountOdds_world != nullptr) { prob_CountOdds_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_MirrorImage_world != nullptr) { prob_MirrorImage_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_SuperAnagrams_world != nullptr) { prob_SuperAnagrams_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_SumOfSquares_world != nullptr) { prob_SumOfSquares_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_VectorsSummed_world != nullptr) { prob_VectorsSummed_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_XWordLines_world != nullptr) { prob_XWordLines_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_PigLatin_world != nullptr) { prob_PigLatin_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_NegativeToZero_world != nullptr) { prob_NegativeToZero_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_ScrabbleScore_world != nullptr) { prob_ScrabbleScore_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_Checksum_world != nullptr) { prob_Checksum_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_Digits_world != nullptr) { prob_Digits_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_Grade_world != nullptr) { prob_Grade_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_Median_world != nullptr) { prob_Median_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_Smallest_world != nullptr) { prob_Smallest_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else if (prob_Syllables_world != nullptr) { prob_Syllables_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
+  else { std::cout << "AHH! None of the worlds have been initialized. Exiting." << std::endl; exit(-1); }
+
+  // todo - how are we snapshotting tests?
+  do_pop_snapshot_sig.AddAction([this]() {
+    SnapshotPrograms();
+  });
+
+}
+
+void ProgramSynthesisExperiment::SetupProgramStats() {
+  // TODO
+}
+
+void ProgramSynthesisExperiment::SnapshotPrograms() {
+  std::string snapshot_dir = DATA_DIRECTORY + "pop_" + emp::to_string(program_world->GetUpdate());
+  mkdir(snapshot_dir.c_str(), ACCESSPERMS);
+
+  emp::DataFile file(snapshot_dir + "/program_pop_" + emp::to_string((int)program_world->GetUpdate()) + ".csv");
+
+  // Add functions to data file.
+  // -- TODO -- ==> bookmark
+
 }
 
 // ================= PROGRAM-RELATED FUNCTIONS ===========
