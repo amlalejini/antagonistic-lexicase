@@ -303,6 +303,10 @@ class TestOrg_NumberIO : public TestOrg_Base {
     void SetOut(const out_t & _out) { out = _out; }
 
     void CalcOut() { SetCorrectOut_NumberIO(genome, out); }
+
+    void Print(std::ostream & os=std::cout) const {
+      os << genome.first << "," << genome.second;
+    }
 };
 
 struct ProblemUtilities_NumberIO {
@@ -313,6 +317,8 @@ struct ProblemUtilities_NumberIO {
   
   testcase_set_t testing_set;
   testcase_set_t training_set;
+
+  emp::vector<emp::Ptr<TestOrg_NumberIO>> testingset_pop;
 
   // A few useful things for use within a test evaluation
   emp::Ptr<TestOrg_NumberIO> cur_eval_test_org;
@@ -328,6 +334,10 @@ struct ProblemUtilities_NumberIO {
       training_set(ProblemUtilities_NumberIO::LoadTestCaseFromLine),
       submitted(false), submitted_val(0.0)
   { ; }
+
+  ~ProblemUtilities_NumberIO() {
+    for (size_t i = 0; i < testingset_pop.size(); ++i) testingset_pop[i].Delete();
+  }
 
   testcase_set_t & GetTestingSet() { return testing_set; }
   testcase_set_t & GetTrainingSet() { return training_set; }
@@ -351,6 +361,14 @@ struct ProblemUtilities_NumberIO {
     output = std::atof(split_line[2].c_str());
     return {input, output};
   }
+
+  void GenerateTestingSetPop() {
+    for (size_t i = 0; i < testing_set.GetSize(); ++i) {
+      testingset_pop.emplace_back(emp::NewPtr<TestOrg_NumberIO>(testing_set.GetInput(i)));
+      testingset_pop[i]->CalcOut();
+    }
+  }
+
 };
 
 ////////////////////////////////////////////////////////////////

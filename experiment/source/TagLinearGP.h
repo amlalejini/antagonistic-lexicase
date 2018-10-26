@@ -641,6 +641,18 @@ namespace TagLGP {
         }
       }
 
+      /// Print full program as valid CSV entry. 
+      /// "[InstName(1111,1111,1111),InstName(1111,1111,1111),...]"
+      void PrintCSVEntry(std::ostream & os=std::cout) const {
+        os << "\"[";
+        for (size_t i = 0; i < program.size(); ++i) {
+          if (i) os << ",";
+          const inst_t & inst = program[i];
+          PrintInst(inst, os);
+        }
+        os << "]\"";
+      }
+
     };
 
   protected:
