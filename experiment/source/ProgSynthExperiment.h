@@ -45,18 +45,16 @@
 // - SELECTION
 //  - [ ] Pools (as in Cliff's implementation of lexicase) (?)
 // - SCORING
-//  - Assume pass/fail only at first, next add gradient (NOTE - will need to update how we screen/add more things to phenotypes).
-//    - Simplest thing to do would be to add a pass_vector + score_vector to test/program phenotypes
-//  - Add submission test case(?) to encourage submitting *something*
-//  - Track 'tests run' on phenotype (that way can avoid having to use test_results.size())
-//  - Break apart score w/passes
+//  - [x] Assume pass/fail only at first, next add gradient (NOTE - will need to update how we screen/add more things to phenotypes).
+//    - [x] Simplest thing to do would be to add a pass_vector + score_vector to test/program phenotypes
+//  - Add submission test case(?) to encourage submitting *something* ==> For now, not doing this.
+//  - [x] Break apart score w/passes
 //  - [ ] Add selection pressure for small sizes
 // - DIAGNOSTICS
 //  - [ ] Clean up printing format
 // - Cleaning
 //  - [ ] Flesh out config comments
 //  - [ ] Round out instruction descriptions
-//  - [ ] Switch begin_program_eval, etc to begin_program_FITNESS_evalf
 // - ISSUES
 //  - Memory indexing seems to be the biggest impact on evaluation speed. 
 //    Every instruction argument requires a linear scan of memory for best match.
@@ -548,7 +546,7 @@ protected:
         for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
           lexicase_fit_set.push_back([i](WORLD_ORG_TYPE & test_org) {
             TestOrg_Base & org = static_cast<TestOrg_Base&>(test_org);
-            return 1 - org.GetPhenotype().test_results[i]; // TODO - need to update this if we switch to gradients
+            return (size_t)(!org.GetPhenotype().test_passes[i]);        // NOTE - test case fitness functions do not use gradient; use pass/fail.
           });
         }
         // Add selection action.
@@ -565,7 +563,7 @@ protected:
         for (size_t i = 0; i < PROG_COHORT_SIZE; ++i) {
           lexicase_fit_set.push_back([i](WORLD_ORG_TYPE & test_org) {
             TestOrg_Base & org = static_cast<TestOrg_Base&>(test_org);
-            return 1 - org.GetPhenotype().test_results[i];
+            return (size_t)(!org.GetPhenotype().test_passes[i]);
           });
         }
         // Add selection action.
@@ -1064,8 +1062,8 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
               prog_phen.RecordSubmission(result.sub);
               
               // Update test phenotype
-              // test_phen.test_results[pID] = score; // todo - update appropriately
-
+              test_phen.RecordScore(pID, result.score);
+              test_phen.RecordPass(pID, result.pass);
             }
             end_program_eval.Trigger(prog_org);
           }
@@ -1117,7 +1115,8 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
             prog_phen.RecordSubmission(result.sub);
             
             // Update phenotypes.
-            // test_phen.test_results[pID] = score;
+            test_phen.RecordScore(pID, result.score);
+            test_phen.RecordPass(pID, result.pass);
           }
           end_program_eval.Trigger(prog_org);
         }
@@ -1162,13 +1161,9 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
     // Sum pass/fail totals for tests.
     for (size_t tID = 0; tID < TEST_POP_SIZE; ++tID) {
       test_org_phen_t & test_phen = GetTestPhenotype(tID);
-      const size_t pass_total = emp::Sum(test_phen.test_results);
-      const size_t fail_total = PROGRAM_MAX_PASSES - pass_total;
-      test_phen.num_passes = pass_total;
-      test_phen.num_fails = fail_total;
-      if (fail_total > cur_best_score || tID == 0) { // NOTE - will need to be updated if switch to gradient fitness functions (will be problem specific whether or not use a gradient).
+      if (test_phen.num_fails > cur_best_score || tID == 0) { // NOTE - will need to be updated if switch to gradient fitness functions (will be problem specific whether or not use a gradient).
         dominant_test_id = tID;
-        cur_best_score = fail_total;
+        cur_best_score = test_phen.num_fails;
       }
     }
   });
@@ -1788,21 +1783,21 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
     std::function<size_t(void)> get_test_num_fails = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_fails; };
     file.AddFun(get_test_num_fails, "num_fails");
 
-    std::function<size_t(void)> get_num_tested = [this]() { return GetTestPhenotype(stats_util.cur_testID).test_results.size(); };
+    std::function<size_t(void)> get_num_tested = [this]() { return GetTestPhenotype(stats_util.cur_testID).test_passes.size(); };
     file.AddFun(get_num_tested, "num_programs_tested_against");
 
     // - test scores by program
-    std::function<std::string(void)> get_scores_by_program = [this]() {
+    std::function<std::string(void)> get_passes_by_program = [this]() {
       std::string scores = "\"[";
       test_org_phen_t & phen = GetTestPhenotype(stats_util.cur_testID);
-      for (size_t i = 0; i < phen.test_results.size(); ++i) {
+      for (size_t i = 0; i < phen.test_passes.size(); ++i) {
         if (i) scores += ",";
-        scores += emp::to_string(phen.test_results[i]);
+        scores += emp::to_string(phen.test_passes[i]);
       }
       scores += "]\"";
       return scores;
     };
-    file.AddFun(get_scores_by_program, "scores_by_program");
+    file.AddFun(get_passes_by_program, "passes_by_program");
 
     // - test
     std::function<std::string(void)> get_test = [this]() {
