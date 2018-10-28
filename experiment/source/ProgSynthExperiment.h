@@ -38,8 +38,6 @@
 #include "TagLinearGP_Utilities.h"
 
 //////////////////////////////////////////
-// - (1) Add Data collection
-// - (2) Add Solution to utility
 // --- Notes/Todos ---
 // - May need to generate more training examples for problems(?)
 // - INSTRUCTION SET
@@ -52,6 +50,7 @@
 //  - Add submission test case(?) to encourage submitting *something*
 //  - Track 'tests run' on phenotype (that way can avoid having to use test_results.size())
 //  - Break apart score w/passes
+//  - [ ] Add selection pressure for small sizes
 // - DIAGNOSTICS
 //  - [ ] Clean up printing format
 // - Cleaning
@@ -61,9 +60,6 @@
 // - ISSUES
 //  - Memory indexing seems to be the biggest impact on evaluation speed. 
 //    Every instruction argument requires a linear scan of memory for best match.
-// - data collection
-//    - [ ] Solutions file
-//    - [ ] snapshots
 // --------------
 // Scratch
 // -----
@@ -364,9 +360,6 @@ protected:
   emp::Ptr<prob_Median_world_t> prob_Median_world;
   emp::Ptr<prob_Smallest_world_t> prob_Smallest_world;
   emp::Ptr<prob_Syllables_world_t> prob_Syllables_world;
-
-  // using test_world_var_t = std::variant<emp::Ptr<prob_NumberIO_world_t>,emp::Ptr<prob_SmallOrLarge_world_t>,emp::Ptr<prob_ForLoopIndex_world_t>,emp::Ptr<prob_CompareStringLengths_world_t>,emp::Ptr<prob_DoubleLetters_world_t>,emp::Ptr<prob_CollatzNumbers_world_t>,emp::Ptr<prob_ReplaceSpaceWithNewline_world_t>,emp::Ptr<prob_StringDifferences_world_t>,emp::Ptr<prob_EvenSquares_world_t>,emp::Ptr<prob_WallisPi_world_t>,emp::Ptr<prob_StringLengthsBackwards_world_t>,emp::Ptr<prob_LastIndexOfZero_world_t>,emp::Ptr<prob_VectorAverage_world_t>,emp::Ptr<prob_CountOdds_world_t>,emp::Ptr<prob_MirrorImage_world_t>,emp::Ptr<prob_SuperAnagrams_world_t>,emp::Ptr<prob_SumOfSquares_world_t>,emp::Ptr<prob_VectorsSummed_world_t>,emp::Ptr<prob_XWordLines_world_t>,emp::Ptr<prob_PigLatin_world_t>,emp::Ptr<prob_NegativeToZero_world_t>,emp::Ptr<prob_ScrabbleScore_world_t>,emp::Ptr<prob_Checksum_world_t>,emp::Ptr<prob_Digits_world_t>,emp::Ptr<prob_Grade_world_t>,emp::Ptr<prob_Median_world_t>,emp::Ptr<prob_Smallest_world_t>,emp::Ptr<prob_Syllables_world_t>>;
-  // emp::vector<test_world_var_t> test_world_var_vec;
   
   // Problem utilities
   ProblemUtilities_NumberIO prob_utils_NumberIO;
@@ -403,32 +396,48 @@ protected:
 
   emp::Ptr<emp::DataFile> solution_file;
 
+  struct TestResult {
+    double score;
+    bool pass;
+    bool sub;
+    TestResult(double sc=0, bool p=false, bool sb=false) : score(sc), pass(p), sub(sb) { ; }
+  };
+
   /// StatsUtil is useful for managing target program/test during snapshots (gets
   /// captured in lambda).
   struct StatsUtil {
     size_t cur_progID;
     size_t cur_testID;
 
-    emp::vector<size_t> cur_prog_testingset_scores;
-    double cur_prog_testingset_score_total;
-    bool cur_prog_is_solution;
+    emp::vector<TestResult> current_program__validation__test_results;
+    double current_program__validation__total_score;
+    size_t current_program__validation__total_passes;
+    bool current_program__validation__is_solution;
 
     StatsUtil(size_t pID=0, size_t tID=0) : cur_progID(pID), cur_testID(tID) { ; }
   } stats_util;
 
   struct ProgramStats {
+    // Generic stuff
     std::function<size_t(void)> get_id;
     std::function<double(void)> get_fitness;
-    std::function<size_t(void)> get_fitnesstest_passes;
-    std::function<std::string(void)> get_score_by_fitnesstest;  //< TODO - might need to make these functions more detailed/richer.
-    std::function<double(void)> get_fitnesstest_cnt;
-    
-    std::function<double(void)> get_testingset_passes;
-    std::function<size_t(void)> get_testingset_size;
-    std::function<std::string(void)> get_score_by_validation_test;
 
+    // Fitness evaluation stats
+    std::function<double(void)> get_fitness_eval__total_score;          // - get_fitness_eval__total_score
+    std::function<size_t(void)> get_fitness_eval__num_passes;           // - get_fitness_eval__num_passes
+    std::function<size_t(void)> get_fitness_eval__num_fails;            // - get_fitness_eval__num_fails
+    std::function<size_t(void)> get_fitness_eval__num_tests;            // - get_fitness_eval__num_tests
+    std::function<std::string(void)> get_fitness_eval__passes_by_test;  // - get_fitness_eval__passes_by_test
+
+    // program validation stats
+    std::function<size_t(void)> get_validation_eval__num_passes;          // - get_validation_eval__num_passes;
+    std::function<size_t(void)> get_validation_eval__num_tests;           // - get_validation_eval__num_tests
+    std::function<std::string(void)> get_validation_eval__passes_by_test; // - get_validation_eval__passes_by_test
+    
+    // program 'morphology' stats
     std::function<size_t(void)> get_program_len;
     std::function<std::string(void)> get_program;
+
   } program_stats;
 
   // Experiment signals
@@ -452,16 +461,19 @@ protected:
   emp::Signal<void(prog_org_t &)> do_program_advance;
 
   // Functions to be setup depending on experiment configuration (e.g., what problem we're solving)
-  // std::function<void(void)> InitTestCasePop_TrainingSet;
   std::function<void(void)> UpdateTestCaseWorld;
-  std::function<double(prog_org_t &, size_t)> EvaluateWorldTest;
-  std::function<void(prog_org_t &)> DoTestingSetValidation;
-  std::function<double(prog_org_t &, TestOrg_Base &)> CalcProgramScoreOnTest;
-  std::function<test_org_phen_t&(size_t)> GetTestPhenotype;
-  std::function<void(void)> SetupTestMutation;
-  std::function<void(void)> SetupTestFitFun;
-  std::function<void(void)> SnapshotTests;
-  std::function<bool(prog_org_t &)> ScreenForSolution;
+  
+  std::function<TestResult(prog_org_t &, size_t)> EvaluateWorldTest;                ///< Evaluate given program org on world test (specified by given ID). Return the test result.
+  std::function<TestResult(prog_org_t &, TestOrg_Base &)> CalcProgramResultOnTest;  ///< Calculate the test result for a given program on a given test organism.
+  
+  std::function<void(prog_org_t &)> DoTestingSetValidation;     ///< Run program on full validation testing set.
+  std::function<bool(prog_org_t &)> ScreenForSolution;          ///< Run program on validation testing set. Return true if program is a solution; false otherwise.
+  
+  std::function<test_org_phen_t&(size_t)> GetTestPhenotype;     ///< Utility function used to get test phenotype of given test (test type agnostic).
+  std::function<void(void)> SetupTestMutation;                  ///< Test world configuration utility. To be defined by test setup.
+  std::function<void(void)> SetupTestFitFun;                    ///< Test world configuration utility. To be defined by test setup.
+  std::function<void(void)> SnapshotTests;                      ///< Snapshot test population.
+  
 
   // Internal function signatures.
   void InitConfigs(const ProgramSynthesisConfig & config);
@@ -481,7 +493,6 @@ protected:
   void SetupProgramStats();
 
   void AddDefaultInstructions();
-  // void AddVecInstructions();
 
   void SnapshotPrograms();
 
@@ -524,30 +535,6 @@ protected:
     w.New(rnd, wname);
     w->SetPopStruct_Mixed(true);
   }
-
-  // template<typename WORLD_TYPE>
-  // struct OnPlacement_TestCaseWorld {
-  //   static void Run(emp::Ptr<WORLD_TYPE> w) {
-  //     if (w == nullptr) {
-  //       std::cout << ">> Nullptr!" << std::endl;
-  //     } else {
-  //       std::cout << ">> Found a world!" << std::endl;
-  //       // w->OnPlacement(...)
-  //     }
-  //   }
-  // };
-
-  // // Set on org placement function.
-  // void OnPlacement_ActiveTestCaseWorld(const std::function<void(size_t)> & fun) {
-  //   // Loop through all test case worlds
-  //   // for (size_t i = 0; i < 10; ++i) {
-  //   //   visit_at(test_world_tuple, i, [](auto & arg) {
-  //   //     if (arg == nullptr) { std::cout << "Nullptr!" << std::endl; }
-  //   //     else std::cout << "Found a world!" << std::endl;
-  //   //   });
-  //   // }
-  //   emp::TupleIterateTemplate<decltype(test_world_tuple), OnPlacement_TestCaseWorld>(test_world_tuple);
-  // }
 
   template<typename WORLD_ORG_TYPE>
   void SetupTestSelection(emp::Ptr<emp::World<WORLD_ORG_TYPE>> w, emp::vector<std::function<double(WORLD_ORG_TYPE &)>> & lexicase_fit_set) {
@@ -690,14 +677,6 @@ protected:
   void Inst_LoadDouble_NumberIO(hardware_t & hw, const inst_t & inst);
   void Inst_SubmitNum_NumberIO(hardware_t & hw, const inst_t & inst); 
 
-  // ---- Some useful experiment-running functions ----
-  // double EvaluateWorldTest(prog_org_t & prog_org, size_t testID) {
-  //   begin_program_test.Trigger(prog_org, test_org);
-  //   do_program_test.Trigger(prog_org, test_org);
-  //   end_program_test.Trigger(prog_org, test_org);
-  //   return CalcProgramScoreOnTest(prog_org, *test_org);
-  // }
-
 public:
   ProgramSynthesisExperiment() 
     : setup(false), update(0), solution_found(false)
@@ -793,12 +772,14 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
 
   // Configure the program world.
   prog_world->SetPopStruct_Mixed(true);
+  
   // Configure how programs should be initialized.
   end_setup_sig.AddAction([this]() {
     // Initialize program population.
     InitProgPop_Random();
     std::cout << ">> Program population size=" << prog_world->GetSize() << std::endl;
   });
+
   // Configure On Update signal.
   do_update_sig.AddAction([this]() {
     std::cout << "Update: " << update << "; ";
@@ -806,7 +787,7 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
     std::cout << "solution found? " << solution_found << "; ";
     std::cout << "smallest solution? " << smallest_prog_sol_size << std::endl;
 
-    // if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger();
+    // if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger(); // todo - uncomment this!
 
     prog_world->Update();
     prog_world->ClearCache();
@@ -814,43 +795,53 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
     UpdateTestCaseWorld();
   });
 
-  std::cout << "EXPERIMENT SETUP => Setting up evaluation hardware." << std::endl;
+  // Setup the virtual hardware used to evaluate programs.
+  std::cout << "==== EXPERIMENT SETUP => evaluation hardware ====" << std::endl;
   SetupHardware(); 
   
-  std::cout << "EXPERIMENT SETUP => Setting up problem." << std::endl;
+  // Setup problem that we're evolving programs to solve. The particular problem
+  // we setup depends on experiment configuration.
+  std::cout << "==== EXPERIMENT SETUP => problem ====" << std::endl;
   SetupProblem();  //...many many todos embedded in this one...
 
-  std::cout << "EXPERIMENT SETUP => Setting up evaluation." << std::endl;
+  // Setup program (& test) evaluation.
+  std::cout << "==== EXPERIMENT SETUP => evaluation ====" << std::endl;
   SetupEvaluation(); 
   
-  std::cout << "EXPERIMENT SETUP => Setting up selection." << std::endl;
+  // Setup program (& test) selection.
+  std::cout << "==== EXPERIMENT SETUP => selection ====" << std::endl;
   SetupSelection();
 
-  std::cout << "EXPERIMENT SETUP => Setting up mutation." << std::endl;
+  // Setup program (& test) mutation.
+  std::cout << "==== EXPERIMENT SETUP => mutation ====" << std::endl;
   SetupMutation();
 
-  std::cout << "EXPERIMENT SETUP => Setting up mutation." << std::endl;
+  // Setup program (& test) fitness calculations.
+  std::cout << "==== EXPERIMENT SETUP => fitness functions ====" << std::endl;
   SetupFitFuns();
 
   #ifndef EMSCRIPTEN
-  std::cout << "EXPERIMENT SETUP => Setting up data collection." << std::endl;
+  // If we're not compiling to javascript, setup data collection for both programs
+  // and tests.
+  std::cout << "==== EXPERIMENT SETUP => data collection ====" << std::endl;
   SetupDataCollection();
   #endif
 
+  // Signal that setup is done. This will trigger any post-setup things that need
+  // to run before doing evolution (e.g., population initialization).
   end_setup_sig.Trigger();
 
+  // Flag setup as done.
   setup = true;
 
   // TODO - assert that only one test world ptr is not nullptr
 
-  std::cout << "EXPERIMENT SETUP => DONE!" << std::endl;
-
-  // std::cout << "--- Instruction set: ---" << std::endl;
-  // inst_lib->Print();
+  std::cout << "==== EXPERIMENT SETUP => DONE! ====" << std::endl;
 }
 
-/// Run the experiment start->finish
+/// Run the experiment start->finish [update=0 : update=config.GENERATIONS].
 void ProgramSynthesisExperiment::Run() {
+  // For each generation, advance 'time' by one step.
   for (update = 0; update <= GENERATIONS; ++update) {
     RunStep();
   }
@@ -858,15 +849,13 @@ void ProgramSynthesisExperiment::Run() {
 
 /// Run a single step of the experiment
 void ProgramSynthesisExperiment::RunStep() {
-  // std::cout << "-- do eval --" << std::endl;
-  do_evaluation_sig.Trigger();
-  // std::cout << "-- do selection --" << std::endl;
-  do_selection_sig.Trigger();
-  // std::cout << "-- do/ update --" << std::endl;
-  do_update_sig.Trigger();
+  do_evaluation_sig.Trigger();  // (1) Evaluate all members of program (& test) population(s).
+  do_selection_sig.Trigger();   // (2) Select who gets to reproduce!
+  do_update_sig.Trigger();      // (3) Run update on relevant worlds (population turnover, etc).
 }
 
-/// ================ Internal function implementations ================
+// ================ Internal function implementations ================
+/// Localize configs.
 void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & config) {
   SEED = config.SEED();
   GENERATIONS = config.GENERATIONS();
@@ -920,9 +909,11 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
 
 }
 
+/// Setup the appropriate problem by calling its problem-specific setup function.
+/// Which problem is setup will depend on configuration.
 void ProgramSynthesisExperiment::SetupProblem() {
   emp_assert(emp::Has(problems, PROBLEM), "Unknown problem!", PROBLEM);
-
+  // Big ol' switch statement to select appropriate problem to setup.
   switch (problems.at(PROBLEM).id) {
     case PROBLEM_ID::NumberIO: { SetupProblem_NumberIO(); break; }
     case PROBLEM_ID::SmallOrLarge: { SetupProblem_SmallOrLarge(); break; }
@@ -959,66 +950,66 @@ void ProgramSynthesisExperiment::SetupProblem() {
   }
 }
 
+/// Setup hardware used to evaluate evolving programs.
 void ProgramSynthesisExperiment::SetupHardware() {
   // Create new instruction library.
   inst_lib = emp::NewPtr<inst_lib_t>();
   // Create evaluation hardware.
   eval_hardware = emp::NewPtr<hardware_t>(inst_lib, random);
   // Configure the CPU.
-  // - MemSize
-  eval_hardware->SetMemSize(MEM_SIZE);
-  // - MinBindThresh
-  eval_hardware->SetMinTagSpecificity(MIN_TAG_SPECIFICITY);
-  // - MaxCallDepth
-  eval_hardware->SetMaxCallDepth(MAX_CALL_DEPTH);
-  // - MemTags
-  //  - HadamardMatrix
-  eval_hardware->SetMemTags(GenHadamardMatrix<TAG_WIDTH>());
+  eval_hardware->SetMemSize(MEM_SIZE);                       // Configure size of memory.
+  eval_hardware->SetMinTagSpecificity(MIN_TAG_SPECIFICITY);  // Configure minimum tag specificity required for tag-based referencing.
+  eval_hardware->SetMaxCallDepth(MAX_CALL_DEPTH);            // Configure maximum depth of call stack (recursion limit).
+  eval_hardware->SetMemTags(GenHadamardMatrix<TAG_WIDTH>()); // Configure memory location tags. Use Hadamard matrix for given TAG_WIDTH.
 
-  // Configure call tag
+  // Configure call tag (tag used to call initial module during test evaluation).
   call_tag.Clear(); // Set initial call tag to all 0s.
 
   // What do at beginning of program evaluation (about to be run on potentially many tests)?
+  // - Reset virtual hardware (reset hardware, clear module definitions, clear program).
+  // - Set program to given organism's 'genome'.
   begin_program_eval.AddAction([this](prog_org_t & prog_org) {
     eval_hardware->Reset();
     eval_hardware->SetProgram(prog_org.GetGenome());
   });
 
   // What do at end of program evaluation (after being run on some number of tests)?
-  // end_program_eval - do nothing (?)
+  // - Currently, nothing.
   
   // What to do before running program on a single test?
+  // - Reset virtual hardware (reset global memory, reset call stack).
   begin_program_test.AddAction([this](prog_org_t & prog_org, emp::Ptr<TestOrg_Base> test_org_ptr) {
     eval_hardware->ResetHardware();
     eval_hardware->CallModule(call_tag, MIN_TAG_SPECIFICITY, true, false);
   });
 
-  // do_program_test
+  // Specify how we 'do' a program test.
+  // - For specified evaluation time, advance evaluation hardware. If at any point
+  //   the program's call stack is empty, automatically finish the evaluation.
   do_program_test.AddAction([this](prog_org_t & prog_org, emp::Ptr<TestOrg_Base> test_org_ptr) {
     for (eval_time = 0; eval_time < PROG_EVAL_TIME; ++eval_time) {
       do_program_advance.Trigger(prog_org);
       if (eval_hardware->GetCallStackSize() == 0) break; // If call stack is ever completely empty, program is done early.
     }
   });
-
-  // end_program_test
   
-  // do_program_advance
+  // How do we advance the evaluation hardware?
   do_program_advance.AddAction([this](prog_org_t &) {
     eval_hardware->SingleProcess();
   });
-
 }
 
+// Setup evaluation.
 void ProgramSynthesisExperiment::SetupEvaluation() {
   switch (EVALUATION_MODE) {
+    // In cohort evaluation, programs and tests are evaluated in 'cohorts'. Populations
+    // are divided into cohorts (the number of cohorts for tests and programs must
+    // be equal -- size of cohorts may be different).
     case (size_t)EVALUATION_TYPE::COHORT: {
       emp_assert(PROG_POP_SIZE % PROG_COHORT_SIZE == 0, "Program population size must be evenly divisible by program cohort size.");
       emp_assert(TEST_POP_SIZE % TEST_COHORT_SIZE == 0, "Test population size must be evenly divisible by test cohort size.");
       std::cout << ">> Setting up cohorts." << std::endl;
-      std::cout << "   - Test cohorts" << std::endl;
       test_cohorts.Setup(TEST_POP_SIZE, TEST_COHORT_SIZE);
-      std::cout << "   - Program cohorts" << std::endl;
       prog_cohorts.Setup(PROG_POP_SIZE, PROG_COHORT_SIZE);
       std::cout << "     # test cohorts = " << test_cohorts.GetCohortCnt() << std::endl;
       std::cout << "     # program cohorts = " << prog_cohorts.GetCohortCnt() << std::endl;
@@ -1031,12 +1022,15 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
 
       // Setup program world on placement response.
       prog_world->OnPlacement([this](size_t pos) {
-        // std::cout << "Program org " << pos << " reset." << std::endl;
+        // On placement, reset organism phenotype.
         prog_world->GetOrg(pos).GetPhenotype().Reset(TEST_COHORT_SIZE);
       });
       
       // Setup test case world on placement response.
-      OnPlacement_ActiveTestCaseWorld([this](size_t pos) { GetTestPhenotype(pos).Reset(PROG_COHORT_SIZE); }); //<--back
+      OnPlacement_ActiveTestCaseWorld([this](size_t pos) { 
+        // On placement, reset organism phenotype.
+        GetTestPhenotype(pos).Reset(PROG_COHORT_SIZE); 
+      });
 
       // What should happen on evaluation?
       do_evaluation_sig.AddAction([this]() {
@@ -1045,22 +1039,33 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
         test_cohorts.Randomize(*random);
         // For each cohort, evaluate all programs against all tests in corresponding cohort.
         for (size_t cID = 0; cID < prog_cohorts.GetCohortCnt(); ++cID) {
-          // std::cout << "  -- evaluating cohort " << cID << std::endl;
-          // std::cout << "    - # programs to eval: " << PROG_COHORT_SIZE << std::endl;
-          // std::cout << "     - # tests per program: " << TEST_COHORT_SIZE << std::endl;
           for (size_t pID = 0; pID < PROG_COHORT_SIZE; ++pID) {
-            // std::cout << "    - evaluating program " << pID << std::endl;
+            // Get program organism specified by pID.
             prog_org_t & prog_org = prog_world->GetOrg(prog_cohorts.GetWorldID(cID, pID));
             begin_program_eval.Trigger(prog_org);
             for (size_t tID = 0; tID < TEST_COHORT_SIZE; ++tID) {
               const size_t test_world_id = test_cohorts.GetWorldID(cID, tID);
-              double score = EvaluateWorldTest(prog_org, test_world_id);
-              // std::cout << "      Score on " << tID << " = " << score << std::endl;
+              
+              // Evaluate program on this test.
+              TestResult result = EvaluateWorldTest(prog_org, test_world_id);
+              
+              // Grab references to relevant phenotypes.
               test_org_phen_t & test_phen = GetTestPhenotype(test_world_id);
               prog_org_phen_t & prog_phen = prog_org.GetPhenotype();
+              
+              // Test result contents:
+              // - double score;
+              // - bool pass;
+              // - bool sub;
+
+              // Update program phenotype.
+              prog_phen.RecordScore(tID, result.score);
+              prog_phen.RecordPass(tID, result.pass);
+              prog_phen.RecordSubmission(result.sub);
+              
               // Update test phenotype
-              test_phen.test_results[pID] = score;
-              prog_phen.test_results[tID] = score;
+              test_phen.test_results[pID] = score; // todo - update appropriately
+
             }
             end_program_eval.Trigger(prog_org);
           }
@@ -1068,15 +1073,25 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
       });
       break;
     }
+    // In full evaluation mode, evaluate all programs on all tests.
     case (size_t)EVALUATION_TYPE::FULL: {
       std::cout << ">> Setting up full evaluation. No cohorts here." << std::endl;
-      // Evaluate all programs on all tests.
-      // - Configure world to reset phenotypes on organism placement.
+      
+      // Setup program world on placement signal response.
       prog_world->OnPlacement([this](size_t pos) {
-        prog_world->GetOrg(pos).GetPhenotype().Reset(TEST_POP_SIZE); // Phenotype should have space for results against all tests
+        // Reset program phenotype on placement.
+        prog_world->GetOrg(pos).GetPhenotype().Reset(TEST_POP_SIZE); 
       });
-      OnPlacement_ActiveTestCaseWorld([this](size_t pos) { GetTestPhenotype(pos).Reset(PROG_POP_SIZE); });
+
+      // Setup test world on placement signal response.
+      OnPlacement_ActiveTestCaseWorld([this](size_t pos) {
+        // Reset test phenotype on placement.
+        GetTestPhenotype(pos).Reset(PROG_POP_SIZE);   
+      });
+      
       PROGRAM_MAX_PASSES = TEST_POP_SIZE;
+      NUM_COHORTS = 0;
+
       // What should happen on evaluation?
       do_evaluation_sig.AddAction([this]() {
         for (size_t pID = 0; pID < PROG_POP_SIZE; ++pID) {
@@ -1084,16 +1099,30 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
           prog_org_t & prog_org = prog_world->GetOrg(pID);
           begin_program_eval.Trigger(prog_org);
           for (size_t tID = 0; tID < TEST_POP_SIZE; ++tID) {
-            double score = EvaluateWorldTest(prog_org, tID);
+
+            TestResult result = EvaluateWorldTest(prog_org, tID);
+            
+            // Grab references to test and program phenotypes.
             test_org_phen_t & test_phen = GetTestPhenotype(tID);
             prog_org_phen_t & prog_phen = prog_org.GetPhenotype();
+
+            // Test result contents:
+            // - double score;
+            // - bool pass;
+            // - bool sub;
+
+            // Update program phenotype.
+            prog_phen.RecordScore(tID, result.score);
+            prog_phen.RecordPass(tID, result.pass);
+            prog_phen.RecordSubmission(result.sub);
+            
             // Update phenotypes.
             test_phen.test_results[pID] = score;
-            prog_phen.test_results[tID] = score;
           }
           end_program_eval.Trigger(prog_org);
         }
       });
+
       break;
     }
     default: {
@@ -1106,43 +1135,30 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
   do_evaluation_sig.AddAction([this]() {
     // Sum pass totals for programs, find 'dominant' program.
     double cur_best_score = 0;
-    // TODO - add correctness test
     for (size_t pID = 0; pID < prog_world->GetSize(); ++pID) {
       emp_assert(prog_world->IsOccupied(pID));
+
       prog_org_t & prog_org = prog_world->GetOrg(pID);
-      const size_t pass_total = emp::Sum(prog_org.GetPhenotype().test_results);
-      prog_org.GetPhenotype().num_passes = pass_total;
-      // std::cout << "======================================" << std::endl;
-      // std::cout << "Org: " << std::endl;
-      // prog_org.GetGenome().Print();
-      // std::cout << "  pass total for this rando org: " << pass_total << std::endl;
-      // std::cout << "  passes: ";
-      // for (size_t k = 0; k < prog_org.GetPhenotype().test_results.size(); ++k) {
-        // if (k) std::cout << ",";
-        // std::cout << prog_org.GetPhenotype().test_results[k];
-      // } std::cout << std::endl;
+      const size_t pass_total = prog_org.GetPhenotype().num_passes;
+      const double total_score = prog_org.GetPhenotype().total_score;
+
       // Is this the highest pass total program this generation?
-      if (pass_total > cur_best_score || pID == 0) {
+      if (total_score > cur_best_score || pID == 0) {
         dominant_prog_id = pID;
         cur_best_score = pass_total;
       }
-      // At this point, program has been evaluated against all tests. 
-      // - TODO - screen for possible solution program.
+      // At this point, program has been evaluated against all tests. .
       if (pass_total == PROGRAM_MAX_PASSES && prog_org.GetGenome().GetSize() < smallest_prog_sol_size) {
-        // std::cout << ">> Screening for a solution..." << std::endl;
-        // std::cout << "  genome size=" << prog_org.GetGenome().GetSize() << std::endl;
-        // std::cout << "  pass total=" << pass_total << std::endl;
-        // std::cout << "  max passes=" << PROGRAM_MAX_PASSES << std::endl;
-        // std::cout << "  Genome="; prog_org.GetGenome().PrintCSVEntry(); std::cout << std::endl;
         stats_util.cur_progID = pID;
         if (ScreenForSolution(prog_org)) {
           solution_found = true;
           smallest_prog_sol_size = prog_org.GetGenome().GetSize();
-          // Add to solutions file. todo - setup solution file
+          // Add to solutions file.
           solution_file->Update();
         }
       }
     }
+
     // Sum pass/fail totals for tests.
     for (size_t tID = 0; tID < TEST_POP_SIZE; ++tID) {
       test_org_phen_t & test_phen = GetTestPhenotype(tID);
@@ -1158,10 +1174,11 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
   });
 }
 
+/// Setup selection for programs and tests.
 void ProgramSynthesisExperiment::SetupSelection() {
   // (1) Setup program selection.
   SetupProgramSelection();
-  // (2) Setup test selection -- todo.
+  // (2) Setup test selection.
   if (prob_NumberIO_world != nullptr) { SetupTestSelection(prob_NumberIO_world, prob_utils_NumberIO.lexicase_fit_set); }
   else if (prob_SmallOrLarge_world != nullptr) { SetupTestSelection(prob_SmallOrLarge_world, prob_utils_SmallOrLarge.lexicase_fit_set); }
   else if (prob_ForLoopIndex_world != nullptr) { SetupTestSelection(prob_ForLoopIndex_world, prob_utils_ForLoopIndex.lexicase_fit_set); }
@@ -1193,19 +1210,19 @@ void ProgramSynthesisExperiment::SetupSelection() {
   else { std::cout << "AHH! More than one test case world has been created. Exiting." << std::endl; exit(-1); }
 }
 
+/// Setup program selection.
 void ProgramSynthesisExperiment::SetupProgramSelection() {
   switch (PROG_SELECTION_MODE) {
     case (size_t)SELECTION_TYPE::LEXICASE: {
       std::cout << "  >> Setting up program LEXICASE selection." << std::endl;
-      emp_assert(EVALUATION_MODE == (size_t)EVALUATION_TYPE::FULL, "Lexicase selection requires FULL evaluation mode.");
       // Lexicase selection requires full evaluation mode?
-      // emp_assert()
+      emp_assert(EVALUATION_MODE == (size_t)EVALUATION_TYPE::FULL, "Lexicase selection requires FULL evaluation mode.");
       // Setup program fitness functions.
-      // - 1 function for every test.
+      // - 1 function for every test score.
       for (size_t i = 0; i < TEST_POP_SIZE; ++i) {
         lexicase_prog_fit_set.push_back([i](prog_org_t & prog_org) {
-          emp_assert(i < prog_org.GetPhenotype().test_results.size(), i, prog_org.GetPhenotype().test_results.size());
-          double score = prog_org.GetPhenotype().test_results[i];
+          emp_assert(i < prog_org.GetPhenotype().test_scores.size(), i, prog_org.GetPhenotype().test_scores.size());
+          double score = prog_org.GetPhenotype().test_scores[i];
           return score;
         });
       }
@@ -1227,16 +1244,19 @@ void ProgramSynthesisExperiment::SetupProgramSelection() {
     case (size_t)SELECTION_TYPE::COHORT_LEXICASE: {
       std::cout << "  >> Setting up program COHORT LEXICASE selection." << std::endl;
       emp_assert(EVALUATION_MODE == (size_t)EVALUATION_TYPE::COHORT, "Cohort lexicase selection requires COHORT evaluation mode.");
+      emp_assert(PROG_COHORT_SIZE * prog_cohorts.GetCohortCnt() == PROG_POP_SIZE);
+
       // Setup program fitness functions.
       // - 1 function for every test cohort member.
       for (size_t i = 0; i < TEST_COHORT_SIZE; ++i) {
         lexicase_prog_fit_set.push_back([i](prog_org_t & prog_org) {
-          double score = prog_org.GetPhenotype().test_results[i];
+          emp_assert(i < prog_org.GetPhenotype().test_scores.size(), i, prog_org.GetPhenotype().test_scores.size());
+          double score = prog_org.GetPhenotype().test_scores[i];
           return score;
         });
       }
+      // todo - add something for minimizing size
       // Add selection action
-      emp_assert(PROG_COHORT_SIZE * prog_cohorts.GetCohortCnt() == PROG_POP_SIZE);
       do_selection_sig.AddAction([this]() {
         for (size_t cID = 0; cID < prog_cohorts.GetCohortCnt(); ++cID) {
           emp::CohortLexicaseSelect_NAIVE(*prog_world,
@@ -1269,6 +1289,7 @@ void ProgramSynthesisExperiment::SetupProgramSelection() {
   }
 }
 
+/// Setup program/test mutation.
 void ProgramSynthesisExperiment::SetupMutation() {
   // (1) Setup program mutations
   SetupProgramMutation();
@@ -1278,7 +1299,6 @@ void ProgramSynthesisExperiment::SetupMutation() {
   end_setup_sig.AddAction([this]() {
     prog_world->SetAutoMutate();      // After we've initialized populations, turn auto mutate on.
   });
-
   if (prob_NumberIO_world != nullptr) { end_setup_sig.AddAction([this]() { prob_NumberIO_world->SetAutoMutate(); }); }
   else if (prob_SmallOrLarge_world != nullptr) { end_setup_sig.AddAction([this]() { prob_SmallOrLarge_world->SetAutoMutate(); }); }
   else if (prob_ForLoopIndex_world != nullptr) { end_setup_sig.AddAction([this]() { prob_ForLoopIndex_world->SetAutoMutate(); }); }
@@ -1310,19 +1330,7 @@ void ProgramSynthesisExperiment::SetupMutation() {
   else { std::cout << "AHH! None of the worlds have been initialized. Exiting." << std::endl; exit(-1); }
 }
 
-void ProgramSynthesisExperiment::SetupFitFuns() {
-  // (1) Setup program mutations
-  SetupProgramFitFun();
-  // (2) Setup test mutations
-  SetupTestFitFun();
-}
-
-void ProgramSynthesisExperiment::SetupProgramFitFun() {
-  prog_world->SetFitFun([](prog_org_t & prog_org) {
-    return (double)prog_org.GetPhenotype().num_passes;
-  });
-}
-
+/// Setup program mutation
 void ProgramSynthesisExperiment::SetupProgramMutation() {
   // Configure program mutator.
   prog_mutator.MAX_PROGRAM_LEN = MAX_PROG_SIZE;
@@ -1339,7 +1347,25 @@ void ProgramSynthesisExperiment::SetupProgramMutation() {
   prog_world->SetMutFun([this](prog_org_t & prog_org, emp::Random & rnd) {
     return prog_mutator.Mutate(rnd, prog_org.GetGenome());
   });
-  
+}
+
+/// Setup fitness functions for tests/programs.
+void ProgramSynthesisExperiment::SetupFitFuns() {
+  // (1) Setup program mutations
+  SetupProgramFitFun();
+  // (2) Setup test mutations
+  SetupTestFitFun();
+}
+
+/// Setup program fitness function.
+void ProgramSynthesisExperiment::SetupProgramFitFun() {
+  prog_world->SetFitFun([](prog_org_t & prog_org) {
+    double fitness = prog_org.GetPhenotype().total_score;
+    if (prog_org.GetPhenotype().num_passes == PROGRAM_MAX_PASSES) { // Add 'smallness' bonus.
+      fitness += ((double)(MAX_PROG_SIZE - prog_org.GetGenome().GetSize()))/(double)MAX_PROG_SIZE
+    }
+    return fitness;
+  });
 }
 
 /// Setup data collection.
@@ -1402,50 +1428,67 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
 
 }
 
+/// Setup program stats functions (used by data collection stuff).
 void ProgramSynthesisExperiment::SetupProgramStats() {
   // Setup program stats functions.
+
+  // program_stats.get_id
   program_stats.get_id = [this]() { return stats_util.cur_progID; };
+
+  // program_stats.get_fitness
   program_stats.get_fitness = [this]() { return prog_world->CalcFitnessID(stats_util.cur_progID); };
 
-  program_stats.get_fitnesstest_passes = [this]() { return prog_world->GetOrg(stats_util.cur_progID).GetPhenotype().num_passes; };
+  // program_stats.get_fitness_eval__total_score
+  program_stats.get_fitness_eval__total_score = [this]() { return prog_world->GetOrg(stats_util.cur_progID).GetPhenotype().total_score; };
+  
+  // program_stats.get_fitness_eval__num_passes
+  program_stats.get_fitness_eval__num_passes = [this]() { return prog_world->GetOrg(stats_util.cur_progID).GetPhenotype().num_passes; };
 
-  // Get scores broken down by 'world' test.
-  program_stats.get_score_by_fitnesstest = [this]() { 
+  // program_stats.get_fitness_eval__num_fails
+  program_stats.get_fitness_eval__num_fails = [this]() { return prog_world->GetOrg(stats_util.cur_progID).GetPhenotype().num_fails; };
+
+  // program_stats.get_fitness_eval__num_tests
+  program_stats.get_fitness_eval__num_tests = [this]() { return prog_world->GetOrg(stats_util.cur_progID).GetPhenotype().test_passes.size(); };
+
+  // program_stats.get_fitness_eval__passes_by_test
+  program_stats.get_fitness_eval__passes_by_test = [this]() { 
     prog_org_t & prog = prog_world->GetOrg(stats_util.cur_progID);
     std::string scores = "\"[";
-    for (size_t i = 0; i < prog.GetPhenotype().test_results.size(); ++i) {
+    for (size_t i = 0; i < prog.GetPhenotype().test_passes.size(); ++i) {
       if (i) scores += ",";
-      scores += emp::to_string(prog.GetPhenotype().test_results[i]);
+      scores += emp::to_string((size_t)prog.GetPhenotype().test_passes[i]);
     }
     scores += "]\"";
     return scores;
   };
-  
-  // Get number of tests evaluated.
-  program_stats.get_fitnesstest_cnt = [this]() { return prog_world->GetOrg(stats_util.cur_progID).GetPhenotype().test_results.size(); };
 
-  program_stats.get_testingset_passes = [this]() {
-    return stats_util.cur_prog_testingset_score_total;
+  // program_stats.get_validation_eval__num_passes
+  program_stats.get_validation_eval__num_passes = [this]() {
+    return stats_util.current_program__validation__total_passes;
   };
 
-  program_stats.get_testingset_size = [this]() {
-    return stats_util.cur_prog_testingset_scores.size();
+  // program_stats.get_validation_eval__num_tests
+  program_stats.get_validation_eval__num_tests = [this]() {
+    return stats_util.current_program__validation__test_results.size();
   };
 
-  program_stats.get_score_by_validation_test = [this]() {
+  // program_stats.get_validation_eval__passes_by_test
+  program_stats.get_validation_eval__passes_by_test = [this]() {
     std::string scores = "\"[";
-    for (size_t i = 0; i < stats_util.cur_prog_testingset_scores.size(); ++i) {
+    for (size_t i = 0; i < stats_util.current_program__validation__test_results.size(); ++i) {
       if (i) scores += ",";
-      scores += emp::to_string(stats_util.cur_prog_testingset_scores[i]);
+      scores += emp::to_string((size_t)stats_util.current_program__validation__test_results[i].pass);
     }
     scores += "]\"";
     return scores; 
   };
-  
+
+  // program_stats.get_program_len
   program_stats.get_program_len = [this]() {
     return prog_world->GetOrg(stats_util.cur_progID).GetGenome().GetSize();
   };
-  
+
+  // program_stats.get_program
   program_stats.get_program = [this]() {
     std::ostringstream stream;
     prog_world->GetOrg(stats_util.cur_progID).GetGenome().PrintCSVEntry(stream);
@@ -1453,6 +1496,7 @@ void ProgramSynthesisExperiment::SetupProgramStats() {
   };
 }
 
+/// Take a snapshot of the program population.
 void ProgramSynthesisExperiment::SnapshotPrograms() {
   std::string snapshot_dir = DATA_DIRECTORY + "pop_" + emp::to_string(prog_world->GetUpdate());
   mkdir(snapshot_dir.c_str(), ACCESSPERMS);
@@ -1462,17 +1506,23 @@ void ProgramSynthesisExperiment::SnapshotPrograms() {
   // Add functions to data file.
   file.AddFun(program_stats.get_id, "program_id", "Program ID");
   
-  file.AddFun(program_stats.get_fitness, "fitness", "");
-  file.AddFun(program_stats.get_fitnesstest_passes, "fitness_test_passes", "");
-  file.AddFun(program_stats.get_fitnesstest_cnt, "fitness_test_cnt", "");
-  file.AddFun(program_stats.get_score_by_fitnesstest, "scores_by_fitness_test", "");
+  file.AddFun(program_stats.get_fitness, "fitness");
+  file.AddFun(program_stats.get_fitness_eval__total_score, "total_score__fitness_eval");
+  file.AddFun(program_stats.get_fitness_eval__num_passes, "num_passes__fitness_eval");
+  file.AddFun(program_stats.get_fitness_eval__num_fails, "num_fails__fitness_eval");
+  file.AddFun(program_stats.get_fitness_eval__num_tests, "num_tests__fitness_eval");
+  file.AddFun(program_stats.get_fitness_eval__passes_by_test, "passes_by_test__fitness_eval");
+
+  file.AddFun(program_stats.get_validation_eval__num_passes, "num_passes__validation_eval");
+  file.AddFun(program_stats.get_validation_eval__num_tests, "num_tests__validation_eval");
+  file.AddFun(program_stats.get_validation_eval__passes_by_test, "passes_by_test__validation_eval");
+
+  file.AddFun(program_stats.get_testingset_passes, "validation_test_passes");
+  file.AddFun(program_stats.get_testingset_size, "validation_test_cnt");
+  file.AddFun(program_stats.get_score_by_validation_test, "scores_by_validation_test");
   
-  file.AddFun(program_stats.get_testingset_passes, "validation_test_passes", "");
-  file.AddFun(program_stats.get_testingset_size, "validation_test_cnt", "");
-  file.AddFun(program_stats.get_score_by_validation_test, "scores_by_validation_test", "");
-  
-  file.AddFun(program_stats.get_program_len, "program_len", "");
-  file.AddFun(program_stats.get_program, "program", "");
+  file.AddFun(program_stats.get_program_len, "program_len");
+  file.AddFun(program_stats.get_program, "program");
 
   file.PrintHeaderKeys();
 
@@ -1499,7 +1549,6 @@ void ProgramSynthesisExperiment::InitProgPop_Random() {
   // sol.PushInst("SubmitNum", {matrix[2], matrix[2], matrix[2]});
   // sol.PushInst("Return", {matrix[0], matrix[0], matrix[0]});
   // prog_world->Inject(sol, PROG_POP_SIZE);
-
 }
 
 // todo - add inclusion as argument
@@ -1573,12 +1622,12 @@ void ProgramSynthesisExperiment::AddDefaultInstructions() {
 // ================= PROBLEM SETUPS ======================
 
 void ProgramSynthesisExperiment::SetupProblem_NumberIO() { 
-  std::cout << "Setting up problem - NumberIO" << std::endl; 
+  std::cout << "NumberIO problem setup" << std::endl; 
 
   using test_org_t = TestOrg_NumberIO;
   
   // Load testing examples from file (used to evaluate 'true' performance of programs).
-  if (BENCHMARK_DATA_DIR.back() != '/') BENCHMARK_DATA_DIR += '/';  
+  if (BENCHMARK_DATA_DIR.back() != '/') BENCHMARK_DATA_DIR += '/';
   std::string training_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTrainingSetFilename();  
   std::string testing_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTestingSetFilename();  
   prob_utils_NumberIO.GetTrainingSet().LoadTestCases(training_examples_fpath);
@@ -1596,7 +1645,7 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
                         prob_utils_NumberIO.training_set,
                         [this]() { return GenRandomTestInput_NumberIO(*random, {PROB_NUMBER_IO__INT_MIN, PROB_NUMBER_IO__INT_MAX}, {PROB_NUMBER_IO__DOUBLE_MIN, PROB_NUMBER_IO__DOUBLE_MAX}); } );
 
-  end_setup_sig.AddAction([this]() { std::cout << ">> TestCase world size = " << prob_NumberIO_world->GetSize() << std::endl; });
+  end_setup_sig.AddAction([this]() { std::cout << "TestCase world size = " << prob_NumberIO_world->GetSize() << std::endl; });
   
   // Tell world to calculate correct test output (given input) on placement.
   prob_NumberIO_world->OnPlacement([this](size_t pos) { prob_NumberIO_world->GetOrg(pos).CalcOut(); } );
@@ -1606,23 +1655,28 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
     begin_program_test.Trigger(prog_org, test_org_ptr);
     do_program_test.Trigger(prog_org, test_org_ptr);
     end_program_test.Trigger(prog_org, test_org_ptr);
-    return CalcProgramScoreOnTest(prog_org, *test_org_ptr);
+    return CalcProgramResultOnTest(prog_org, *test_org_ptr);
   };
 
   DoTestingSetValidation = [this](prog_org_t & prog_org) {
     // evaluate program on full testing set; update stats utils with results
     begin_program_eval.Trigger(prog_org);
-    stats_util.cur_prog_testingset_scores.resize(prob_utils_NumberIO.testingset_pop.size());
+    stats_util.current_program__validation__test_results.resize(prob_utils_NumberIO.testingset_pop.size());
+    stats_util.current_program__validation__total_score = 0;
+    stats_util.current_program__validation__total_passes = 0;
+    stats_util.current_program__validation__is_solution = false;
+    // For each test in validation set, evaluate program.
     for (size_t testID = 0; testID < prob_utils_NumberIO.testingset_pop.size(); ++testID) {
       stats_util.cur_testID = testID;
       emp::Ptr<test_org_t> test_org_ptr = prob_utils_NumberIO.testingset_pop[testID];
       begin_program_test.Trigger(prog_org, test_org_ptr);
       do_program_test.Trigger(prog_org, test_org_ptr);
       end_program_test.Trigger(prog_org, test_org_ptr);
-      stats_util.cur_prog_testingset_scores[testID] = CalcProgramScoreOnTest(prog_org, *test_org_ptr);
+      stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
+      stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
     }
-    stats_util.cur_prog_testingset_score_total = emp::Sum(stats_util.cur_prog_testingset_scores);
-    stats_util.cur_prog_is_solution = stats_util.cur_prog_testingset_score_total == prob_utils_NumberIO.testingset_pop.size();
+    stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_NumberIO.testingset_pop.size();
     end_program_eval.Trigger(prog_org);
   }; // todo - test this out
 
@@ -1636,7 +1690,8 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
       do_program_test.Trigger(prog_org, test_org_ptr);
       end_program_test.Trigger(prog_org, test_org_ptr);
       
-      if (CalcProgramScoreOnTest(prog_org, *test_org_ptr) != 1.0) {
+      TestResult result = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      if (!result.pass) {
         end_program_eval.Trigger(prog_org);
         return false;
       }
@@ -1698,17 +1753,21 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
   });
 
   // Tell experiment how to calculate program score.
-  CalcProgramScoreOnTest = [this](prog_org_t & prog_org, TestOrg_Base & test_org_base) {
+  CalcProgramResultOnTest = [this](prog_org_t & prog_org, TestOrg_Base & test_org_base) {
     // std::cout << "Calc score on test!" << std::endl;
     test_org_t & test_org = static_cast<test_org_t&>(test_org_base);
-    // prog_org.GetGenome().Print();
-    // std::cout << "Submitted? " << prob_utils_NumberIO.submitted << std::endl;
-    // std::cout << "Score? " << CalcScorePassFail_NumberIO(prob_NumberIO_world->GetOrg(testID).GetCorrectOut(), prob_utils_NumberIO.submitted_val) << std::endl;
+    TestResult result;
     if (!prob_utils_NumberIO.submitted) {
-      return 0.0;
+      result.score = 0;
+      result.pass = false;
+      result.sub = false;
     } else {
-      return CalcScorePassFail_NumberIO(test_org.GetCorrectOut(), prob_utils_NumberIO.submitted_val);
+      std::pair<double, bool> r(CalcScorePassFail_NumberIO(test_org.GetCorrectOut(), prob_utils_NumberIO.submitted_val));
+      result.score = r.first;
+      result.pass = r.second;
+      result.sub = true;
     }
+    return result;
   };
 
   SnapshotTests = [this]() {
@@ -1716,26 +1775,25 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
     mkdir(snapshot_dir.c_str(), ACCESSPERMS);
     
     emp::DataFile file(snapshot_dir + "/test_pop_" + emp::to_string((int)prog_world->GetUpdate()) + ".csv");
-
     // Test file contents:
     // - test id
     std::function<size_t(void)> get_test_id = [this]() { return stats_util.cur_testID; };
-    file.AddFun(get_test_id, "test_id", "");
+    file.AddFun(get_test_id, "test_id");
 
     // - test fitness
     std::function<double(void)> get_test_fitness = [this]() { return prob_NumberIO_world->CalcFitnessID(stats_util.cur_testID); };
-    file.AddFun(get_test_fitness, "fitness", "");
+    file.AddFun(get_test_fitness, "fitness");
 
     // - num passes
     std::function<size_t(void)> get_test_num_passes = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_passes; };
-    file.AddFun(get_test_num_passes, "num_passes", "");
+    file.AddFun(get_test_num_passes, "num_passes");
 
     // - num fails
     std::function<size_t(void)> get_test_num_fails = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_fails; };
-    file.AddFun(get_test_num_fails, "num_fails", "");
+    file.AddFun(get_test_num_fails, "num_fails");
 
     std::function<size_t(void)> get_num_tested = [this]() { return GetTestPhenotype(stats_util.cur_testID).test_results.size(); };
-    file.AddFun(get_num_tested, "num_programs_tested_against", "");
+    file.AddFun(get_num_tested, "num_programs_tested_against");
 
     // - test scores by program
     std::function<std::string(void)> get_scores_by_program = [this]() {
@@ -1748,7 +1806,7 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
       scores += "]\"";
       return scores;
     };
-    file.AddFun(get_scores_by_program, "scores_by_program", "");
+    file.AddFun(get_scores_by_program, "scores_by_program");
 
     // - test
     std::function<std::string(void)> get_test = [this]() {
@@ -1759,7 +1817,6 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
       return stream.str();
     };
     file.AddFun(get_test, "test", "");
-
 
     // Loop over tests, snapshotting each.
     for (stats_util.cur_testID = 0; stats_util.cur_testID < prob_NumberIO_world->GetSize(); ++stats_util.cur_testID) {
@@ -1932,7 +1989,6 @@ void ProgramSynthesisExperiment::SetupProblem_Syllables() {
   std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
   exit(-1); 
 }
-
 
 // ================= PROBLEM-SPECIFIC INSTRUCTION IMPLEMENTATIONS ======================
 

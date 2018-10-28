@@ -269,8 +269,9 @@ void SetCorrectOut_NumberIO(const Problem_NumberIO_input_t & input, Problem_Numb
   output = input.first + input.second;
 }
 
-double CalcScorePassFail_NumberIO(const Problem_NumberIO_output_t & correct_test_output, double sub) {
-  return (double)sub == correct_test_output;
+std::pair<double, bool> CalcScorePassFail_NumberIO(const Problem_NumberIO_output_t & correct_test_output, double sub) {
+  const pass = (double)sub == correct_test_output;
+  return {pass, pass};
 }
 
 /// ProblemOrg: NumberIO

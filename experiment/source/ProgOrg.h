@@ -16,14 +16,49 @@ public:
   using genome_t = typename TagLGP::TagLinearGP_TW<TAG_WIDTH>::Program;
 
   struct Phenotype {
-    emp::vector<double> test_results;
+    // emp::vector<double> test_results;
+    emp::vector<double> test_scores;
+    double total_score;
+    
+    emp::vector<bool> test_passes;
     size_t num_passes;
+    size_t num_fails;
+
+    size_t total_submissions;
 
     void Reset(size_t s=0) {
-      test_results.clear();
-      test_results.resize(s, 0);
+      // test_results.clear();
+      // test_results.resize(s, 0);
+
+      test_scores.clear();
+      test_scores.resize(s, 0);
+      total_score = 0;
+      
+      test_passes.clear();
+      test_passes.resize(s, false);
       num_passes = 0;
+      num_fails = 0;
+
+      total_submissions = 0;
     }
+
+    void RecordScore(size_t id, double val) {
+      emp_assert(id < test_scores.size());
+      total_score += val;
+      test_scores[id] = val;
+    }
+
+    void RecordPass(size_t id, bool pass) {
+      emp_assert(id < test_passes.size());
+      if (pass) ++num_passes;
+      else ++num_fails;
+      test_passes[id] = pass;
+    }
+
+    void RecordSubmission(bool sub) {
+      total_submissions += (size_t)sub;
+    }
+
   };
 
 protected:
