@@ -1064,7 +1064,7 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
               prog_phen.RecordSubmission(result.sub);
               
               // Update test phenotype
-              test_phen.test_results[pID] = score; // todo - update appropriately
+              // test_phen.test_results[pID] = score; // todo - update appropriately
 
             }
             end_program_eval.Trigger(prog_org);
@@ -1117,7 +1117,7 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
             prog_phen.RecordSubmission(result.sub);
             
             // Update phenotypes.
-            test_phen.test_results[pID] = score;
+            // test_phen.test_results[pID] = score;
           }
           end_program_eval.Trigger(prog_org);
         }
@@ -1359,10 +1359,10 @@ void ProgramSynthesisExperiment::SetupFitFuns() {
 
 /// Setup program fitness function.
 void ProgramSynthesisExperiment::SetupProgramFitFun() {
-  prog_world->SetFitFun([](prog_org_t & prog_org) {
+  prog_world->SetFitFun([this](prog_org_t & prog_org) {
     double fitness = prog_org.GetPhenotype().total_score;
     if (prog_org.GetPhenotype().num_passes == PROGRAM_MAX_PASSES) { // Add 'smallness' bonus.
-      fitness += ((double)(MAX_PROG_SIZE - prog_org.GetGenome().GetSize()))/(double)MAX_PROG_SIZE
+      fitness += ((double)(MAX_PROG_SIZE - prog_org.GetGenome().GetSize()))/(double)MAX_PROG_SIZE;
     }
     return fitness;
   });
@@ -1517,10 +1517,6 @@ void ProgramSynthesisExperiment::SnapshotPrograms() {
   file.AddFun(program_stats.get_validation_eval__num_tests, "num_tests__validation_eval");
   file.AddFun(program_stats.get_validation_eval__passes_by_test, "passes_by_test__validation_eval");
 
-  file.AddFun(program_stats.get_testingset_passes, "validation_test_passes");
-  file.AddFun(program_stats.get_testingset_size, "validation_test_cnt");
-  file.AddFun(program_stats.get_score_by_validation_test, "scores_by_validation_test");
-  
   file.AddFun(program_stats.get_program_len, "program_len");
   file.AddFun(program_stats.get_program, "program");
 

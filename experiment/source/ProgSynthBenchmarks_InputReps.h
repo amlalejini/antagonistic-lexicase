@@ -269,9 +269,10 @@ void SetCorrectOut_NumberIO(const Problem_NumberIO_input_t & input, Problem_Numb
   output = input.first + input.second;
 }
 
+/// Calculate pass/fail score on NumberIO problem.
 std::pair<double, bool> CalcScorePassFail_NumberIO(const Problem_NumberIO_output_t & correct_test_output, double sub) {
-  const pass = (double)sub == correct_test_output;
-  return {pass, pass};
+  const bool pass = (double)sub == correct_test_output;
+  return {(double)pass, pass};
 }
 
 /// ProblemOrg: NumberIO
