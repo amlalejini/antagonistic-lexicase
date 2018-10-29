@@ -535,12 +535,63 @@ protected:
   }
 
   template<typename WORLD_ORG_TYPE>
+  void SetupTestCaseWorldUpdate(emp::Ptr<emp::World<WORLD_ORG_TYPE>> w) {
+    // Tell experiment how to update the world (i.e., which world to update).
+    switch (TRAINING_EXAMPLE_MODE) {
+      case (size_t)TRAINING_EXAMPLE_MODE_TYPE::COEVOLUTION: {
+        std::cout << "COEVOLUTION training example mode detected, configuring test world to update." << std::endl;
+        UpdateTestCaseWorld = [w]() {
+          // std::cout << "-COEVO world update" << std::endl;
+          w->Update();
+          w->ClearCache();
+        };
+        break;
+      }
+      case (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC: {
+        std::cout << "STATIC training example mode detected, configuring test world to NOT update." << std::endl;
+        UpdateTestCaseWorld = [w]() {
+          // std::cout << "-STATIC world update" << std::endl;
+          w->ClearCache();
+          // Reset test phenotypes
+          for (size_t i = 0; i < w->GetSize(); ++i) {
+            emp_assert(w->IsOccupied(i));
+            TestOrg_Base & org = static_cast<TestOrg_Base&>(w->GetOrg(i));
+            org.GetPhenotype().Reset(org.GetPhenotype().test_passes.size());
+          }
+        };
+        break;
+      }
+      case (size_t)TRAINING_EXAMPLE_MODE_TYPE::RANDOM: {
+        std::cout << "RANDOM training example mode detected, configuring test world to NOT update. Instead, RANDOMIZE population." << std::endl;
+        UpdateTestCaseWorld = [w]() {
+          // std::cout << "-RANDOM world update" << std::endl;
+          w->ClearCache();
+          // Randomize population
+          w->DoMutations();
+          // Reset test phenotypes
+          for (size_t i = 0; i < w->GetSize(); ++i) {
+            emp_assert(w->IsOccupied(i));
+            TestOrg_Base & org = static_cast<TestOrg_Base&>(w->GetOrg(i));
+            org.GetPhenotype().Reset(org.GetPhenotype().test_passes.size());
+            org.CalcOut();
+          }
+        };
+        break;
+      }
+      default: {
+        std::cout << "Uknown TRAINING_EXAMPLE_MODE (" << TRAINING_EXAMPLE_MODE << "). Exiting." << std::endl;
+        exit(-1);
+      }
+    };
+  }
+
+  template<typename WORLD_ORG_TYPE>
   void SetupTestSelection(emp::Ptr<emp::World<WORLD_ORG_TYPE>> w, emp::vector<std::function<double(WORLD_ORG_TYPE &)>> & lexicase_fit_set) {
     std::cout << "Setting up test selection." << std::endl;
     switch (TEST_SELECTION_MODE) {
       case (size_t)SELECTION_TYPE::LEXICASE: {
         emp_assert(EVALUATION_MODE == (size_t)EVALUATION_TYPE::FULL);
-        std::cout << "  >> Setting up test LEXICASE selection." << std::endl;
+        std::cout << "  Setting up test LEXICASE selection." << std::endl;
         // Setup lexicase selection.
         // - 1 lexicase function for every program organism.
         for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
@@ -557,7 +608,7 @@ protected:
       }
       case (size_t)SELECTION_TYPE::COHORT_LEXICASE: {
         emp_assert(EVALUATION_MODE == (size_t)EVALUATION_TYPE::COHORT);
-        std::cout << "  >> Setting up test COHORT LEXICASE selection." << std::endl;
+        std::cout << "  Setting up test COHORT LEXICASE selection." << std::endl;
         // Setup cohort lexicase.
         // - 1 lexicase function for every program cohort member.
         for (size_t i = 0; i < PROG_COHORT_SIZE; ++i) {
@@ -581,14 +632,14 @@ protected:
         break;
       }
       case (size_t)SELECTION_TYPE::TOURNAMENT: {
-        std::cout << "  >> Setting up test TOURNAMENT selection." << std::endl;
+        std::cout << "  Setting up test TOURNAMENT selection." << std::endl;
         do_selection_sig.AddAction([this, w]() mutable {
           emp::TournamentSelect(*w, TEST_TOURNAMENT_SIZE, TEST_POP_SIZE);
         });
         break;
       }
       case (size_t)SELECTION_TYPE::DRIFT: {
-        std::cout << "  >> Setting up test DRIFT selection." << std::endl;
+        std::cout << "  Setting up test DRIFT selection." << std::endl;
         do_selection_sig.AddAction([this, w]() mutable {
           emp::RandomSelect(*w, TEST_POP_SIZE);
         });
@@ -641,7 +692,7 @@ protected:
     // Configure how population should be initialized -- TODO - maybe move this into functor(?)
     if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC) {
       TEST_POP_SIZE = test_set.GetSize();
-      std::cout << ">> In static training example mode, adjusting TEST_POP_SIZE to: " << TEST_POP_SIZE << std::endl;
+      std::cout << "In STATIC training example mode, adjusting TEST_POP_SIZE to: " << TEST_POP_SIZE << std::endl;
       end_setup_sig.AddAction([this, w, test_set]() {                     // TODO - test that this is actually working!
         InitTestCasePop_TrainingSet(w, test_set);
       });
@@ -775,7 +826,7 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
   end_setup_sig.AddAction([this]() {
     // Initialize program population.
     InitProgPop_Random();
-    std::cout << ">> Program population size=" << prog_world->GetSize() << std::endl;
+    std::cout << "Program population size=" << prog_world->GetSize() << std::endl;
   });
 
   // Configure On Update signal.
@@ -785,7 +836,7 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
     std::cout << "solution found? " << solution_found << "; ";
     std::cout << "smallest solution? " << smallest_prog_sol_size << std::endl;
 
-    if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger(); 
+    if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger();
 
     prog_world->Update();
     prog_world->ClearCache();
@@ -827,6 +878,7 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
 
   // Signal that setup is done. This will trigger any post-setup things that need
   // to run before doing evolution (e.g., population initialization).
+  std::cout << "==== EXPERIMENT SETUP => triggering end setup signal ====" << std::endl;
   end_setup_sig.Trigger();
 
   // Flag setup as done.
@@ -847,8 +899,11 @@ void ProgramSynthesisExperiment::Run() {
 
 /// Run a single step of the experiment
 void ProgramSynthesisExperiment::RunStep() {
+  std::cout << "-- Doing Evaluation --" << std::endl;
   do_evaluation_sig.Trigger();  // (1) Evaluate all members of program (& test) population(s).
+  std::cout << "-- Doing Selection --" << std::endl;
   do_selection_sig.Trigger();   // (2) Select who gets to reproduce!
+  std::cout << "-- Doing Update --" << std::endl;
   do_update_sig.Trigger();      // (3) Run update on relevant worlds (population turnover, etc).
 }
 
@@ -1006,11 +1061,11 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
     case (size_t)EVALUATION_TYPE::COHORT: {
       emp_assert(PROG_POP_SIZE % PROG_COHORT_SIZE == 0, "Program population size must be evenly divisible by program cohort size.");
       emp_assert(TEST_POP_SIZE % TEST_COHORT_SIZE == 0, "Test population size must be evenly divisible by test cohort size.");
-      std::cout << ">> Setting up cohorts." << std::endl;
+      std::cout << "Setting up cohorts." << std::endl;
       test_cohorts.Setup(TEST_POP_SIZE, TEST_COHORT_SIZE);
       prog_cohorts.Setup(PROG_POP_SIZE, PROG_COHORT_SIZE);
-      std::cout << "     # test cohorts = " << test_cohorts.GetCohortCnt() << std::endl;
-      std::cout << "     # program cohorts = " << prog_cohorts.GetCohortCnt() << std::endl;
+      std::cout << "  # test cohorts = " << test_cohorts.GetCohortCnt() << std::endl;
+      std::cout << "  # program cohorts = " << prog_cohorts.GetCohortCnt() << std::endl;
       if (test_cohorts.GetCohortCnt() != prog_cohorts.GetCohortCnt()) {
         std::cout << "ERROR: Test cohort count must the same as program cohort count in COHORT mode. Exiting." << std::endl;
         exit(-1);
@@ -1073,7 +1128,7 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
     }
     // In full evaluation mode, evaluate all programs on all tests.
     case (size_t)EVALUATION_TYPE::FULL: {
-      std::cout << ">> Setting up full evaluation. No cohorts here." << std::endl;
+      std::cout << "Setting up full evaluation. No cohorts here." << std::endl;
       
       // Setup program world on placement signal response.
       prog_world->OnPlacement([this](size_t pos) {
@@ -1174,42 +1229,45 @@ void ProgramSynthesisExperiment::SetupSelection() {
   // (1) Setup program selection.
   SetupProgramSelection();
   // (2) Setup test selection.
-  if (prob_NumberIO_world != nullptr) { SetupTestSelection(prob_NumberIO_world, prob_utils_NumberIO.lexicase_fit_set); }
-  else if (prob_SmallOrLarge_world != nullptr) { SetupTestSelection(prob_SmallOrLarge_world, prob_utils_SmallOrLarge.lexicase_fit_set); }
-  else if (prob_ForLoopIndex_world != nullptr) { SetupTestSelection(prob_ForLoopIndex_world, prob_utils_ForLoopIndex.lexicase_fit_set); }
-  else if (prob_CompareStringLengths_world != nullptr) { SetupTestSelection(prob_CompareStringLengths_world, prob_utils_CompareStringLengths.lexicase_fit_set); }
-  else if (prob_DoubleLetters_world != nullptr) { SetupTestSelection(prob_DoubleLetters_world, prob_utils_DoubleLetters.lexicase_fit_set); }
-  else if (prob_CollatzNumbers_world != nullptr) { SetupTestSelection(prob_CollatzNumbers_world, prob_utils_CollatzNumbers.lexicase_fit_set); }
-  else if (prob_ReplaceSpaceWithNewline_world != nullptr) { SetupTestSelection(prob_ReplaceSpaceWithNewline_world, prob_utils_ReplaceSpaceWithNewline.lexicase_fit_set); }
-  else if (prob_StringDifferences_world != nullptr) { SetupTestSelection(prob_StringDifferences_world, prob_utils_StringDifferences.lexicase_fit_set); }
-  else if (prob_EvenSquares_world != nullptr) { SetupTestSelection(prob_EvenSquares_world, prob_utils_EvenSquares.lexicase_fit_set); }
-  else if (prob_WallisPi_world != nullptr) { SetupTestSelection(prob_WallisPi_world, prob_utils_WallisPi.lexicase_fit_set); }
-  else if (prob_StringLengthsBackwards_world != nullptr) { SetupTestSelection(prob_StringLengthsBackwards_world, prob_utils_StringLengthsBackwards.lexicase_fit_set); }
-  else if (prob_LastIndexOfZero_world != nullptr) { SetupTestSelection(prob_LastIndexOfZero_world, prob_utils_LastIndexOfZero.lexicase_fit_set); }
-  else if (prob_VectorAverage_world != nullptr) { SetupTestSelection(prob_VectorAverage_world, prob_utils_VectorAverage.lexicase_fit_set); }
-  else if (prob_CountOdds_world != nullptr) { SetupTestSelection(prob_CountOdds_world, prob_utils_CountOdds.lexicase_fit_set); }
-  else if (prob_MirrorImage_world != nullptr) { SetupTestSelection(prob_MirrorImage_world, prob_utils_MirrorImage.lexicase_fit_set); }
-  else if (prob_SuperAnagrams_world != nullptr) { SetupTestSelection(prob_SuperAnagrams_world, prob_utils_SuperAnagrams.lexicase_fit_set); }
-  else if (prob_SumOfSquares_world != nullptr) { SetupTestSelection(prob_SumOfSquares_world, prob_utils_SumOfSquares.lexicase_fit_set); }
-  else if (prob_VectorsSummed_world != nullptr) { SetupTestSelection(prob_VectorsSummed_world, prob_utils_VectorsSummed.lexicase_fit_set); }
-  else if (prob_XWordLines_world != nullptr) { SetupTestSelection(prob_XWordLines_world, prob_utils_XWordLines.lexicase_fit_set); }
-  else if (prob_PigLatin_world != nullptr) { SetupTestSelection(prob_PigLatin_world, prob_utils_PigLatin.lexicase_fit_set); }
-  else if (prob_NegativeToZero_world != nullptr) { SetupTestSelection(prob_NegativeToZero_world, prob_utils_NegativeToZero.lexicase_fit_set); }
-  else if (prob_ScrabbleScore_world != nullptr) { SetupTestSelection(prob_ScrabbleScore_world, prob_utils_ScrabbleScore.lexicase_fit_set); }
-  else if (prob_Checksum_world != nullptr) { SetupTestSelection(prob_Checksum_world, prob_utils_Checksum.lexicase_fit_set); }
-  else if (prob_Digits_world != nullptr) { SetupTestSelection(prob_Digits_world, prob_utils_Digits.lexicase_fit_set); }
-  else if (prob_Grade_world != nullptr) { SetupTestSelection(prob_Grade_world, prob_utils_Grade.lexicase_fit_set); }
-  else if (prob_Median_world != nullptr) { SetupTestSelection(prob_Median_world, prob_utils_Median.lexicase_fit_set); }
-  else if (prob_Smallest_world != nullptr) { SetupTestSelection(prob_Smallest_world, prob_utils_Smallest.lexicase_fit_set); }
-  else if (prob_Syllables_world != nullptr) { SetupTestSelection(prob_Syllables_world, prob_utils_Syllables.lexicase_fit_set); }
-  else { std::cout << "AHH! More than one test case world has been created. Exiting." << std::endl; exit(-1); }
+  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::COEVOLUTION) {
+    std::cout << "COEVOLUTION training example mode detected, setting up test case selection." << std::endl;
+    if (prob_NumberIO_world != nullptr) { SetupTestSelection(prob_NumberIO_world, prob_utils_NumberIO.lexicase_fit_set); }
+    else if (prob_SmallOrLarge_world != nullptr) { SetupTestSelection(prob_SmallOrLarge_world, prob_utils_SmallOrLarge.lexicase_fit_set); }
+    else if (prob_ForLoopIndex_world != nullptr) { SetupTestSelection(prob_ForLoopIndex_world, prob_utils_ForLoopIndex.lexicase_fit_set); }
+    else if (prob_CompareStringLengths_world != nullptr) { SetupTestSelection(prob_CompareStringLengths_world, prob_utils_CompareStringLengths.lexicase_fit_set); }
+    else if (prob_DoubleLetters_world != nullptr) { SetupTestSelection(prob_DoubleLetters_world, prob_utils_DoubleLetters.lexicase_fit_set); }
+    else if (prob_CollatzNumbers_world != nullptr) { SetupTestSelection(prob_CollatzNumbers_world, prob_utils_CollatzNumbers.lexicase_fit_set); }
+    else if (prob_ReplaceSpaceWithNewline_world != nullptr) { SetupTestSelection(prob_ReplaceSpaceWithNewline_world, prob_utils_ReplaceSpaceWithNewline.lexicase_fit_set); }
+    else if (prob_StringDifferences_world != nullptr) { SetupTestSelection(prob_StringDifferences_world, prob_utils_StringDifferences.lexicase_fit_set); }
+    else if (prob_EvenSquares_world != nullptr) { SetupTestSelection(prob_EvenSquares_world, prob_utils_EvenSquares.lexicase_fit_set); }
+    else if (prob_WallisPi_world != nullptr) { SetupTestSelection(prob_WallisPi_world, prob_utils_WallisPi.lexicase_fit_set); }
+    else if (prob_StringLengthsBackwards_world != nullptr) { SetupTestSelection(prob_StringLengthsBackwards_world, prob_utils_StringLengthsBackwards.lexicase_fit_set); }
+    else if (prob_LastIndexOfZero_world != nullptr) { SetupTestSelection(prob_LastIndexOfZero_world, prob_utils_LastIndexOfZero.lexicase_fit_set); }
+    else if (prob_VectorAverage_world != nullptr) { SetupTestSelection(prob_VectorAverage_world, prob_utils_VectorAverage.lexicase_fit_set); }
+    else if (prob_CountOdds_world != nullptr) { SetupTestSelection(prob_CountOdds_world, prob_utils_CountOdds.lexicase_fit_set); }
+    else if (prob_MirrorImage_world != nullptr) { SetupTestSelection(prob_MirrorImage_world, prob_utils_MirrorImage.lexicase_fit_set); }
+    else if (prob_SuperAnagrams_world != nullptr) { SetupTestSelection(prob_SuperAnagrams_world, prob_utils_SuperAnagrams.lexicase_fit_set); }
+    else if (prob_SumOfSquares_world != nullptr) { SetupTestSelection(prob_SumOfSquares_world, prob_utils_SumOfSquares.lexicase_fit_set); }
+    else if (prob_VectorsSummed_world != nullptr) { SetupTestSelection(prob_VectorsSummed_world, prob_utils_VectorsSummed.lexicase_fit_set); }
+    else if (prob_XWordLines_world != nullptr) { SetupTestSelection(prob_XWordLines_world, prob_utils_XWordLines.lexicase_fit_set); }
+    else if (prob_PigLatin_world != nullptr) { SetupTestSelection(prob_PigLatin_world, prob_utils_PigLatin.lexicase_fit_set); }
+    else if (prob_NegativeToZero_world != nullptr) { SetupTestSelection(prob_NegativeToZero_world, prob_utils_NegativeToZero.lexicase_fit_set); }
+    else if (prob_ScrabbleScore_world != nullptr) { SetupTestSelection(prob_ScrabbleScore_world, prob_utils_ScrabbleScore.lexicase_fit_set); }
+    else if (prob_Checksum_world != nullptr) { SetupTestSelection(prob_Checksum_world, prob_utils_Checksum.lexicase_fit_set); }
+    else if (prob_Digits_world != nullptr) { SetupTestSelection(prob_Digits_world, prob_utils_Digits.lexicase_fit_set); }
+    else if (prob_Grade_world != nullptr) { SetupTestSelection(prob_Grade_world, prob_utils_Grade.lexicase_fit_set); }
+    else if (prob_Median_world != nullptr) { SetupTestSelection(prob_Median_world, prob_utils_Median.lexicase_fit_set); }
+    else if (prob_Smallest_world != nullptr) { SetupTestSelection(prob_Smallest_world, prob_utils_Smallest.lexicase_fit_set); }
+    else if (prob_Syllables_world != nullptr) { SetupTestSelection(prob_Syllables_world, prob_utils_Syllables.lexicase_fit_set); }
+    else { std::cout << "AHH! More than one test case world has been created. Exiting." << std::endl; exit(-1); }
+  }
 }
 
 /// Setup program selection.
 void ProgramSynthesisExperiment::SetupProgramSelection() {
   switch (PROG_SELECTION_MODE) {
     case (size_t)SELECTION_TYPE::LEXICASE: {
-      std::cout << "  >> Setting up program LEXICASE selection." << std::endl;
+      std::cout << "Setting up program LEXICASE selection." << std::endl;
       // Lexicase selection requires full evaluation mode?
       emp_assert(EVALUATION_MODE == (size_t)EVALUATION_TYPE::FULL, "Lexicase selection requires FULL evaluation mode.");
       // Setup program fitness functions.
@@ -1238,7 +1296,7 @@ void ProgramSynthesisExperiment::SetupProgramSelection() {
       break;
     }
     case (size_t)SELECTION_TYPE::COHORT_LEXICASE: {
-      std::cout << "  >> Setting up program COHORT LEXICASE selection." << std::endl;
+      std::cout << "Setting up program COHORT LEXICASE selection." << std::endl;
       emp_assert(EVALUATION_MODE == (size_t)EVALUATION_TYPE::COHORT, "Cohort lexicase selection requires COHORT evaluation mode.");
       emp_assert(PROG_COHORT_SIZE * prog_cohorts.GetCohortCnt() == PROG_POP_SIZE);
 
@@ -1271,14 +1329,14 @@ void ProgramSynthesisExperiment::SetupProgramSelection() {
       break;
     }
     case (size_t)SELECTION_TYPE::TOURNAMENT: {
-      std::cout << "  >> Setting up program TOURNAMENT selection." << std::endl;
+      std::cout << "Setting up program TOURNAMENT selection." << std::endl;
       do_selection_sig.AddAction([this]() {
         emp::TournamentSelect(*prog_world, PROG_TOURNAMENT_SIZE, PROG_POP_SIZE);
       });
       break;
     }
     case (size_t)SELECTION_TYPE::DRIFT: {
-      std::cout << "  >> Setting up program DRIFT selection." << std::endl;
+      std::cout << "Setting up program DRIFT selection." << std::endl;
       do_selection_sig.AddAction([this]() {
         emp::RandomSelect(*prog_world, PROG_POP_SIZE);
       });
@@ -1301,35 +1359,39 @@ void ProgramSynthesisExperiment::SetupMutation() {
   end_setup_sig.AddAction([this]() {
     prog_world->SetAutoMutate();      // After we've initialized populations, turn auto mutate on.
   });
-  if (prob_NumberIO_world != nullptr) { end_setup_sig.AddAction([this]() { prob_NumberIO_world->SetAutoMutate(); }); }
-  else if (prob_SmallOrLarge_world != nullptr) { end_setup_sig.AddAction([this]() { prob_SmallOrLarge_world->SetAutoMutate(); }); }
-  else if (prob_ForLoopIndex_world != nullptr) { end_setup_sig.AddAction([this]() { prob_ForLoopIndex_world->SetAutoMutate(); }); }
-  else if (prob_CompareStringLengths_world != nullptr) { end_setup_sig.AddAction([this]() { prob_CompareStringLengths_world->SetAutoMutate(); }); }
-  else if (prob_DoubleLetters_world != nullptr) { end_setup_sig.AddAction([this]() { prob_DoubleLetters_world->SetAutoMutate(); }); }
-  else if (prob_CollatzNumbers_world != nullptr) { end_setup_sig.AddAction([this]() { prob_CollatzNumbers_world->SetAutoMutate(); }); }
-  else if (prob_ReplaceSpaceWithNewline_world != nullptr) { end_setup_sig.AddAction([this]() { prob_ReplaceSpaceWithNewline_world->SetAutoMutate(); }); }
-  else if (prob_StringDifferences_world != nullptr) { end_setup_sig.AddAction([this]() { prob_StringDifferences_world->SetAutoMutate(); }); }
-  else if (prob_EvenSquares_world != nullptr) { end_setup_sig.AddAction([this]() { prob_EvenSquares_world->SetAutoMutate(); }); }
-  else if (prob_WallisPi_world != nullptr) { end_setup_sig.AddAction([this]() { prob_WallisPi_world->SetAutoMutate(); }); }
-  else if (prob_StringLengthsBackwards_world != nullptr) { end_setup_sig.AddAction([this]() { prob_StringLengthsBackwards_world->SetAutoMutate(); }); }
-  else if (prob_LastIndexOfZero_world != nullptr) { end_setup_sig.AddAction([this]() { prob_LastIndexOfZero_world->SetAutoMutate(); }); }
-  else if (prob_VectorAverage_world != nullptr) { end_setup_sig.AddAction([this]() { prob_VectorAverage_world->SetAutoMutate(); }); }
-  else if (prob_CountOdds_world != nullptr) { end_setup_sig.AddAction([this]() { prob_CountOdds_world->SetAutoMutate(); }); }
-  else if (prob_MirrorImage_world != nullptr) { end_setup_sig.AddAction([this]() { prob_MirrorImage_world->SetAutoMutate(); }); }
-  else if (prob_SuperAnagrams_world != nullptr) { end_setup_sig.AddAction([this]() { prob_SuperAnagrams_world->SetAutoMutate(); }); }
-  else if (prob_SumOfSquares_world != nullptr) { end_setup_sig.AddAction([this]() { prob_SumOfSquares_world->SetAutoMutate(); }); }
-  else if (prob_VectorsSummed_world != nullptr) { end_setup_sig.AddAction([this]() { prob_VectorsSummed_world->SetAutoMutate(); }); }
-  else if (prob_XWordLines_world != nullptr) { end_setup_sig.AddAction([this]() { prob_XWordLines_world->SetAutoMutate(); }); }
-  else if (prob_PigLatin_world != nullptr) { end_setup_sig.AddAction([this]() { prob_PigLatin_world->SetAutoMutate(); }); }
-  else if (prob_NegativeToZero_world != nullptr) { end_setup_sig.AddAction([this]() { prob_NegativeToZero_world->SetAutoMutate(); }); }
-  else if (prob_ScrabbleScore_world != nullptr) { end_setup_sig.AddAction([this]() { prob_ScrabbleScore_world->SetAutoMutate(); }); }
-  else if (prob_Checksum_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Checksum_world->SetAutoMutate(); }); }
-  else if (prob_Digits_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Digits_world->SetAutoMutate(); }); }
-  else if (prob_Grade_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Grade_world->SetAutoMutate(); }); }
-  else if (prob_Median_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Median_world->SetAutoMutate(); }); }
-  else if (prob_Smallest_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Smallest_world->SetAutoMutate(); }); }
-  else if (prob_Syllables_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Syllables_world->SetAutoMutate(); }); }
-  else { std::cout << "AHH! None of the worlds have been initialized. Exiting." << std::endl; exit(-1); }
+
+  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::COEVOLUTION) {
+    std::cout << "COEVOLUTION training mode detected. Setting test world to AUTO-MUTATE." << std::endl;
+    if (prob_NumberIO_world != nullptr) { end_setup_sig.AddAction([this]() { prob_NumberIO_world->SetAutoMutate(); }); }
+    else if (prob_SmallOrLarge_world != nullptr) { end_setup_sig.AddAction([this]() { prob_SmallOrLarge_world->SetAutoMutate(); }); }
+    else if (prob_ForLoopIndex_world != nullptr) { end_setup_sig.AddAction([this]() { prob_ForLoopIndex_world->SetAutoMutate(); }); }
+    else if (prob_CompareStringLengths_world != nullptr) { end_setup_sig.AddAction([this]() { prob_CompareStringLengths_world->SetAutoMutate(); }); }
+    else if (prob_DoubleLetters_world != nullptr) { end_setup_sig.AddAction([this]() { prob_DoubleLetters_world->SetAutoMutate(); }); }
+    else if (prob_CollatzNumbers_world != nullptr) { end_setup_sig.AddAction([this]() { prob_CollatzNumbers_world->SetAutoMutate(); }); }
+    else if (prob_ReplaceSpaceWithNewline_world != nullptr) { end_setup_sig.AddAction([this]() { prob_ReplaceSpaceWithNewline_world->SetAutoMutate(); }); }
+    else if (prob_StringDifferences_world != nullptr) { end_setup_sig.AddAction([this]() { prob_StringDifferences_world->SetAutoMutate(); }); }
+    else if (prob_EvenSquares_world != nullptr) { end_setup_sig.AddAction([this]() { prob_EvenSquares_world->SetAutoMutate(); }); }
+    else if (prob_WallisPi_world != nullptr) { end_setup_sig.AddAction([this]() { prob_WallisPi_world->SetAutoMutate(); }); }
+    else if (prob_StringLengthsBackwards_world != nullptr) { end_setup_sig.AddAction([this]() { prob_StringLengthsBackwards_world->SetAutoMutate(); }); }
+    else if (prob_LastIndexOfZero_world != nullptr) { end_setup_sig.AddAction([this]() { prob_LastIndexOfZero_world->SetAutoMutate(); }); }
+    else if (prob_VectorAverage_world != nullptr) { end_setup_sig.AddAction([this]() { prob_VectorAverage_world->SetAutoMutate(); }); }
+    else if (prob_CountOdds_world != nullptr) { end_setup_sig.AddAction([this]() { prob_CountOdds_world->SetAutoMutate(); }); }
+    else if (prob_MirrorImage_world != nullptr) { end_setup_sig.AddAction([this]() { prob_MirrorImage_world->SetAutoMutate(); }); }
+    else if (prob_SuperAnagrams_world != nullptr) { end_setup_sig.AddAction([this]() { prob_SuperAnagrams_world->SetAutoMutate(); }); }
+    else if (prob_SumOfSquares_world != nullptr) { end_setup_sig.AddAction([this]() { prob_SumOfSquares_world->SetAutoMutate(); }); }
+    else if (prob_VectorsSummed_world != nullptr) { end_setup_sig.AddAction([this]() { prob_VectorsSummed_world->SetAutoMutate(); }); }
+    else if (prob_XWordLines_world != nullptr) { end_setup_sig.AddAction([this]() { prob_XWordLines_world->SetAutoMutate(); }); }
+    else if (prob_PigLatin_world != nullptr) { end_setup_sig.AddAction([this]() { prob_PigLatin_world->SetAutoMutate(); }); }
+    else if (prob_NegativeToZero_world != nullptr) { end_setup_sig.AddAction([this]() { prob_NegativeToZero_world->SetAutoMutate(); }); }
+    else if (prob_ScrabbleScore_world != nullptr) { end_setup_sig.AddAction([this]() { prob_ScrabbleScore_world->SetAutoMutate(); }); }
+    else if (prob_Checksum_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Checksum_world->SetAutoMutate(); }); }
+    else if (prob_Digits_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Digits_world->SetAutoMutate(); }); }
+    else if (prob_Grade_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Grade_world->SetAutoMutate(); }); }
+    else if (prob_Median_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Median_world->SetAutoMutate(); }); }
+    else if (prob_Smallest_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Smallest_world->SetAutoMutate(); }); }
+    else if (prob_Syllables_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Syllables_world->SetAutoMutate(); }); }
+    else { std::cout << "AHH! None of the worlds have been initialized. Exiting." << std::endl; exit(-1); }
+  }
 }
 
 /// Setup program mutation
@@ -1635,9 +1697,9 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
   prob_utils_NumberIO.GetTrainingSet().LoadTestCases(training_examples_fpath);
   prob_utils_NumberIO.GetTestingSet().LoadTestCases(testing_examples_fpath);
   prob_utils_NumberIO.GenerateTestingSetPop();
-  std::cout << ">> Loaded training example set size = " << prob_utils_NumberIO.GetTrainingSet().GetSize() << std::endl;
-  std::cout << ">> Loaded testing example set size = " << prob_utils_NumberIO.GetTestingSet().GetSize() << std::endl;
-  std::cout << ">> Testing set (non-training examples used to evaluate program accuracy) size = " << prob_utils_NumberIO.testingset_pop.size() << std::endl;
+  std::cout << "Loaded training example set size = " << prob_utils_NumberIO.GetTrainingSet().GetSize() << std::endl;
+  std::cout << "Loaded testing example set size = " << prob_utils_NumberIO.GetTestingSet().GetSize() << std::endl;
+  std::cout << "Testing set (non-training examples used to evaluate program accuracy) size = " << prob_utils_NumberIO.testingset_pop.size() << std::endl;
 
   // Setup world.
   NewTestCaseWorld(prob_NumberIO_world, *random, "NumberIO Test Case World");
@@ -1707,27 +1769,44 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
     emp_assert(prob_NumberIO_world->IsOccupied(testID));
     return prob_NumberIO_world->GetOrg(testID).GetPhenotype();
   };
+
+  // Setup how test case world updates.  
+  SetupTestCaseWorldUpdate(prob_NumberIO_world);
   
-  // Tell experiment how to update the world (i.e., which world to update).
-  UpdateTestCaseWorld = [this]() {
-    prob_NumberIO_world->Update();
-    prob_NumberIO_world->ClearCache();
-  };
+  // Setup how test cases mutate.
+  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::RANDOM) {
+    std::cout << "RANDOM training mode detected, configuring mutation function to RANDOMIZE organisms." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Configure mutator.
+      prob_utils_NumberIO.mutator.MIN_INT = PROB_NUMBER_IO__INT_MIN;
+      prob_utils_NumberIO.mutator.MAX_INT = PROB_NUMBER_IO__INT_MAX;
+      prob_utils_NumberIO.mutator.MIN_DOUBLE = PROB_NUMBER_IO__DOUBLE_MIN;
+      prob_utils_NumberIO.mutator.MAX_DOUBLE = PROB_NUMBER_IO__DOUBLE_MAX;
+      prob_utils_NumberIO.mutator.PER_INT_RATE = 1.0;
+      prob_utils_NumberIO.mutator.PER_DOUBLE_RATE = 1.0;
+      // (2) Hook mutator up to world.
+      prob_NumberIO_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        return prob_utils_NumberIO.mutator.Mutate(rnd, test_org.GetGenome());
+      });
+    };
+  } else {
+    std::cout << "Non-RANDOM training mode detected, configuring mutation function normally." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Configure mutator.
+      prob_utils_NumberIO.mutator.MIN_INT = PROB_NUMBER_IO__INT_MIN;
+      prob_utils_NumberIO.mutator.MAX_INT = PROB_NUMBER_IO__INT_MAX;
+      prob_utils_NumberIO.mutator.MIN_DOUBLE = PROB_NUMBER_IO__DOUBLE_MIN;
+      prob_utils_NumberIO.mutator.MAX_DOUBLE = PROB_NUMBER_IO__DOUBLE_MAX;
+      prob_utils_NumberIO.mutator.PER_INT_RATE = PROB_NUMBER_IO__MUTATION__PER_INT_RATE;
+      prob_utils_NumberIO.mutator.PER_DOUBLE_RATE = PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE;
+      // (2) Hook mutator up to world.
+      prob_NumberIO_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        return prob_utils_NumberIO.mutator.Mutate(rnd, test_org.GetGenome());
+      });
+    };
+  }
 
-  SetupTestMutation = [this]() {
-    // (1) Configure mutator.
-    prob_utils_NumberIO.mutator.MIN_INT = PROB_NUMBER_IO__INT_MIN;
-    prob_utils_NumberIO.mutator.MAX_INT = PROB_NUMBER_IO__INT_MAX;
-    prob_utils_NumberIO.mutator.MIN_DOUBLE = PROB_NUMBER_IO__DOUBLE_MIN;
-    prob_utils_NumberIO.mutator.MAX_DOUBLE = PROB_NUMBER_IO__DOUBLE_MAX;
-    prob_utils_NumberIO.mutator.PER_INT_RATE = PROB_NUMBER_IO__MUTATION__PER_INT_RATE;
-    prob_utils_NumberIO.mutator.PER_DOUBLE_RATE = PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE;
-    // (2) Hook mutator up to world.
-    prob_NumberIO_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
-      return prob_utils_NumberIO.mutator.Mutate(rnd, test_org.GetGenome());
-    });
-  };
-
+  // Setup test case fitness function.
   SetupTestFitFun = [this]() {
     prob_NumberIO_world->SetFitFun([](test_org_t & test_org) {
       return (double)test_org.GetPhenotype().num_fails;
@@ -1879,15 +1958,15 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
   // - LoadInteger
   inst_lib->AddInst("LoadInt", [this](hardware_t & hw, const inst_t & inst) {
     this->Inst_LoadInt_NumberIO(hw, inst);
-  }, 1, "");
+  }, 1);
   // - LoadDouble
   inst_lib->AddInst("LoadDouble", [this](hardware_t & hw, const inst_t & inst) {
     this->Inst_LoadDouble_NumberIO(hw, inst);
-  }, 1, "");
+  }, 1);
   // - SubmitNum
   inst_lib->AddInst("SubmitNum", [this](hardware_t & hw, const inst_t & inst) {
     this->Inst_SubmitNum_NumberIO(hw, inst);
-  }, 1, "");
+  }, 1);
 }
 
 void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() { 

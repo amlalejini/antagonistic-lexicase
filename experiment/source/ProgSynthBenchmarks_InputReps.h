@@ -264,6 +264,9 @@ class TestOrg_Base {
     phenotype_t & GetPhenotype() { return phenotype; }
     const phenotype_t & GetPhenotype() const { return phenotype; }
 
+    virtual ~TestOrg_Base() = default;
+
+    virtual void CalcOut() = 0;
 };
 
 
@@ -445,6 +448,8 @@ class TestOrg_ForLoopIndex : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_ForLoopIndex { emp::vector<std::function<double(TestOrg_ForLoopIndex &)>> lexicase_fit_set; };
@@ -466,6 +471,8 @@ class TestOrg_CompareStringLengths: public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_CompareStringLengths { emp::vector<std::function<double(TestOrg_CompareStringLengths &)>> lexicase_fit_set; };
@@ -487,6 +494,8 @@ class TestOrg_DoubleLetters : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_DoubleLetters { emp::vector<std::function<double(TestOrg_DoubleLetters &)>> lexicase_fit_set; };
@@ -508,6 +517,8 @@ class TestOrg_CollatzNumbers : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_CollatzNumbers { emp::vector<std::function<double(TestOrg_CollatzNumbers &)>> lexicase_fit_set; };
@@ -529,6 +540,8 @@ class TestOrg_ReplaceSpaceWithNewline : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_ReplaceSpaceWithNewline { emp::vector<std::function<double(TestOrg_ReplaceSpaceWithNewline &)>> lexicase_fit_set; };
@@ -550,6 +563,8 @@ class TestOrg_StringDifferences : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_StringDifferences { emp::vector<std::function<double(TestOrg_StringDifferences &)>> lexicase_fit_set; };
@@ -571,6 +586,8 @@ class TestOrg_EvenSquares : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_EvenSquares { emp::vector<std::function<double(TestOrg_EvenSquares &)>> lexicase_fit_set; };
@@ -593,6 +610,8 @@ class TestOrg_WallisPi : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_WallisPi { emp::vector<std::function<double(TestOrg_WallisPi &)>> lexicase_fit_set; };
@@ -615,6 +634,8 @@ class TestOrg_StringLengthsBackwards : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_StringLengthsBackwards { emp::vector<std::function<double(TestOrg_StringLengthsBackwards &)>> lexicase_fit_set; };
@@ -636,6 +657,8 @@ class TestOrg_LastIndexOfZero : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_LastIndexOfZero { emp::vector<std::function<double(TestOrg_LastIndexOfZero &)>> lexicase_fit_set; };
@@ -657,6 +680,8 @@ class TestOrg_VectorAverage : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_VectorAverage { emp::vector<std::function<double(TestOrg_VectorAverage &)>> lexicase_fit_set; };
@@ -679,6 +704,8 @@ class TestOrg_CountOdds : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_CountOdds { emp::vector<std::function<double(TestOrg_CountOdds &)>> lexicase_fit_set; };
@@ -701,6 +728,8 @@ class TestOrg_MirrorImage : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_MirrorImage { emp::vector<std::function<double(TestOrg_MirrorImage &)>> lexicase_fit_set; };
@@ -722,6 +751,8 @@ class TestOrg_SuperAnagrams : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_SuperAnagrams { emp::vector<std::function<double(TestOrg_SuperAnagrams &)>> lexicase_fit_set; };
@@ -743,6 +774,8 @@ class TestOrg_SumOfSquares : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_SumOfSquares { emp::vector<std::function<double(TestOrg_SumOfSquares &)>> lexicase_fit_set; };
@@ -765,6 +798,8 @@ class TestOrg_VectorsSummed: public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_VectorsSummed { emp::vector<std::function<double(TestOrg_VectorsSummed &)>> lexicase_fit_set; };
@@ -787,6 +822,8 @@ class TestOrg_XWordLines : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_XWordLines { emp::vector<std::function<double(TestOrg_XWordLines &)>> lexicase_fit_set; };
@@ -808,6 +845,8 @@ class TestOrg_PigLatin : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_PigLatin { emp::vector<std::function<double(TestOrg_PigLatin &)>> lexicase_fit_set; };
@@ -829,6 +868,8 @@ class TestOrg_NegativeToZero : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_NegativeToZero { emp::vector<std::function<double(TestOrg_NegativeToZero &)>> lexicase_fit_set; };
@@ -850,6 +891,8 @@ class TestOrg_ScrabbleScore : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_ScrabbleScore { emp::vector<std::function<double(TestOrg_ScrabbleScore &)>> lexicase_fit_set; };
@@ -889,6 +932,8 @@ class TestOrg_Checksum : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_Checksum { emp::vector<std::function<double(TestOrg_Checksum &)>> lexicase_fit_set; };
@@ -911,6 +956,8 @@ class TestOrg_Digits : public TestOrg_Base {
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
 
+    void CalcOut() { ; }
+
 };
 
 struct ProblemUtilities_Digits { emp::vector<std::function<double(TestOrg_Digits &)>> lexicase_fit_set; };
@@ -932,6 +979,8 @@ class TestOrg_Grade : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_Grade { emp::vector<std::function<double(TestOrg_Grade &)>> lexicase_fit_set; };
@@ -953,6 +1002,8 @@ class TestOrg_Median : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_Median { emp::vector<std::function<double(TestOrg_Median &)>> lexicase_fit_set; };
@@ -974,6 +1025,8 @@ class TestOrg_Smallest : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 struct ProblemUtilities_Smallest { emp::vector<std::function<double(TestOrg_Smallest &)>> lexicase_fit_set; };
@@ -995,6 +1048,8 @@ class TestOrg_Syllables : public TestOrg_Base {
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
+
+    void CalcOut() { ; }
 };
 
 
