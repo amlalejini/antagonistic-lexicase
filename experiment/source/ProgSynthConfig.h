@@ -51,9 +51,9 @@ EMP_BUILD_CONFIG(ProgramSynthesisConfig,
   VALUE(PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE, double, 0.1, "Per-double mutation rate."),
 
   GROUP(PROB_SMALL_OR_LARGE_GROUP, "Settings specific to the small or large problem."),
-  VALUE(PROB_SMALL_OR_LARGE__INT_MIN, int, -100, "Min value for input int."),
-  VALUE(PROB_SMALL_OR_LARGE__INT_MAX, int, 100, "Max value for input int."),
-  VALUE(PROB_SMALL_OR_LARGE__PER_INT_RATE, double, 0.1, "Per-integer mutation rate.")
+  VALUE(PROB_SMALL_OR_LARGE__INT_MIN, int, -10000, "Min value for input int."),
+  VALUE(PROB_SMALL_OR_LARGE__INT_MAX, int, 10000, "Max value for input int."),
+  VALUE(PROB_SMALL_OR_LARGE__MUTATION__PER_INT_RATE, double, 0.1, "Per-integer mutation rate."),
 
   GROUP(DATA_COLLECTION_GROUP, "Settings specific to data collection."),
   VALUE(DATA_DIRECTORY, std::string, "./output", "Where should we dump output files?"),
@@ -61,9 +61,6 @@ EMP_BUILD_CONFIG(ProgramSynthesisConfig,
   VALUE(SUMMARY_STATS_INTERVAL, size_t, 1000, "How often should we output summary stats?"),
   VALUE(SOLUTION_SCREEN_INTERVAL, size_t, 1000, "How often should we screen entire population for solutions?")
   
-
-
-
 )
 
 #endif

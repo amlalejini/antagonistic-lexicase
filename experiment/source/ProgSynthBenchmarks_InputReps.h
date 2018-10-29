@@ -416,7 +416,7 @@ struct ProblemUtilities_NumberIO {
 ////////////////////////////////////////////////////////////////
 
 // Generate random test input
-Problem_SmallOrLarge_output_t GenRandomTestInput_SmallOrLarge(emp::Random & rand, const std::pair<int,int> & int_range) {
+Problem_SmallOrLarge_input_t GenRandomTestInput_SmallOrLarge(emp::Random & rand, const std::pair<int,int> & int_range) {
   emp_assert(int_range.first < int_range.second);
   return rand.GetInt(int_range.first, int_range.second+1);
 }
@@ -464,8 +464,6 @@ struct ProblemUtilities_SmallOrLarge {
   
   using testcase_set_t = TestCaseSet<input_t, output_t>;
   
-  emp::vector<std::function<double(problem_org_t &)>> lexicase_fit_set; 
-
   testcase_set_t testing_set;
   testcase_set_t training_set;
 
@@ -506,16 +504,20 @@ struct ProblemUtilities_SmallOrLarge {
   }
 
   static std::pair<input_t, output_t> LoadTestCaseFromLine(const std::string & line) {
-    emp::vector<std::string> split_line = emp::slice(line, ',');
+    emp::vector<std::string> split_line = emp::slice(line + " ", ',');
     input_t input;    // int
     output_t output;  // std::string
+    std::cout << "LINE=" << line << std::endl;
     input = std::atof(split_line[0].c_str());
     output = split_line[1];
-    if (!(output == "" || output == "small" || output == "large")) {
+    if (!(output == " " || output == "small " || output == "large ")) {
       std::cout << "ERROR! Bad output ("<<output<<") from line: " << line << std::endl;
       exit(-1);
     }
-    return {input, output}
+    if (output == " ") output = "";
+    else if (output == "small ") output = "small";
+    else if (output == "large ") output = "large";
+    return {input, output};
   }
 
   void GenerateTestingSetPop() {
@@ -526,7 +528,7 @@ struct ProblemUtilities_SmallOrLarge {
   }
 
   std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
-    const bool pass = (double)sub == correct_test_output;
+    const bool pass = (sub == correct_test_output);
     return {(double)pass, pass};
   }
 };

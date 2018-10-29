@@ -296,6 +296,10 @@ protected:
   double PROB_NUMBER_IO__MUTATION__PER_INT_RATE;
   double PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE;
 
+  int PROB_SMALL_OR_LARGE__INT_MIN;
+  int PROB_SMALL_OR_LARGE__INT_MAX;
+  double PROB_SMALL_OR_LARGE__MUTATION__PER_INT_RATE;
+
   // - Data collection group -
   std::string DATA_DIRECTORY;
   size_t SUMMARY_STATS_INTERVAL;
@@ -723,9 +727,15 @@ protected:
   }
 
   // ---- Problem-specific instruction signatures ----
+  // -- NumberIO --
   void Inst_LoadInt_NumberIO(hardware_t & hw, const inst_t & inst);
   void Inst_LoadDouble_NumberIO(hardware_t & hw, const inst_t & inst);
   void Inst_SubmitNum_NumberIO(hardware_t & hw, const inst_t & inst); 
+  // -- SmallOrLarge
+  void Inst_LoadInt_SmallOrLarge(hardware_t & hw, const inst_t & inst);
+  void Inst_SubmitSmall_SmallOrLarge(hardware_t & hw, const inst_t & inst);
+  void Inst_SubmitLarge_SmallOrLarge(hardware_t & hw, const inst_t & inst);
+  void Inst_SubmitNone_SmallOrLarge(hardware_t & hw, const inst_t & inst);
 
 public:
   ProgramSynthesisExperiment() 
@@ -955,6 +965,10 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   PROB_NUMBER_IO__INT_MAX = config.PROB_NUMBER_IO__INT_MAX();
   PROB_NUMBER_IO__MUTATION__PER_INT_RATE = config.PROB_NUMBER_IO__MUTATION__PER_INT_RATE();
   PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE = config.PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE();
+
+  PROB_SMALL_OR_LARGE__INT_MIN = config.PROB_SMALL_OR_LARGE__INT_MIN();
+  PROB_SMALL_OR_LARGE__INT_MAX = config.PROB_SMALL_OR_LARGE__INT_MAX();
+  PROB_SMALL_OR_LARGE__MUTATION__PER_INT_RATE = config.PROB_SMALL_OR_LARGE__MUTATION__PER_INT_RATE();
 
   DATA_DIRECTORY = config.DATA_DIRECTORY();
   SUMMARY_STATS_INTERVAL = config.SUMMARY_STATS_INTERVAL();
@@ -1966,8 +1980,8 @@ void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() {
 
   // A few useful aliases.
   using test_org_t = TestOrg_SmallOrLarge;
-  using problem_utils_t = ProblemUtilities_SmallOrLarge;
-  using problem_world_t = prob_SmallOrLarge_world_t;
+  // using problem_utils_t = ProblemUtilities_SmallOrLarge;
+  // using problem_world_t = prob_SmallOrLarge_world_t;
 
   // A few useful references.
   // problem_utils_t & problem_utils = prob_utils_SmallOrLarge;
@@ -2085,7 +2099,7 @@ void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() {
       prob_utils_SmallOrLarge.mutator.MAX_INT = PROB_SMALL_OR_LARGE__INT_MAX;
       prob_utils_SmallOrLarge.mutator.PER_INT_RATE = 1.0;
       // (2) Hook mutator up to world.
-      prob_NumberIO_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+      prob_SmallOrLarge_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
         return prob_utils_SmallOrLarge.mutator.Mutate(rnd, test_org.GetGenome());
       });
     };
@@ -2110,9 +2124,146 @@ void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() {
     });
   };
 
-  // -- bookmark --
+  // Tell experiment how to configure hardware inputs when running program against a test.
+  begin_program_test.AddAction([this](prog_org_t & prog_org, emp::Ptr<TestOrg_Base> test_org_base_ptr) {
+    // Reset eval stuff
+    // Set current test org.
+    prob_utils_SmallOrLarge.cur_eval_test_org = test_org_base_ptr.Cast<test_org_t>(); // currently only place need testID for this?
+    prob_utils_SmallOrLarge.ResetTestEval();
+    emp_assert(eval_hardware->GetMemSize() >= 1);
+    // Configure inputs.
+    if (eval_hardware->GetCallStackSize()) {
+      // Grab some useful references.
+      Problem_SmallOrLarge_input_t & input = prob_utils_SmallOrLarge.cur_eval_test_org->GetGenome(); // std::pair<int, double>
+      hardware_t::CallState & state = eval_hardware->GetCurCallState();
+      hardware_t::Memory & wmem = state.GetWorkingMem();
+      // Set hardware input.
+      wmem.Set(0, input);
+    }
+  });
 
-  exit(-1); 
+  // Tell experiment how to snapshot test population.
+  SnapshotTests = [this]() {
+    std::string snapshot_dir = DATA_DIRECTORY + "pop_" + emp::to_string(prog_world->GetUpdate());
+    mkdir(snapshot_dir.c_str(), ACCESSPERMS);
+    
+    emp::DataFile file(snapshot_dir + "/test_pop_" + emp::to_string((int)prog_world->GetUpdate()) + ".csv");
+    // Test file contents:
+    // - test id
+    std::function<size_t(void)> get_test_id = [this]() { return stats_util.cur_testID; };
+    file.AddFun(get_test_id, "test_id");
+
+    // - test fitness
+    std::function<double(void)> get_test_fitness = [this]() { return prob_SmallOrLarge_world->CalcFitnessID(stats_util.cur_testID); };
+    file.AddFun(get_test_fitness, "fitness");
+
+    // - num passes
+    std::function<size_t(void)> get_test_num_passes = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_passes; };
+    file.AddFun(get_test_num_passes, "num_passes");
+
+    // - num fails
+    std::function<size_t(void)> get_test_num_fails = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_fails; };
+    file.AddFun(get_test_num_fails, "num_fails");
+
+    std::function<size_t(void)> get_num_tested = [this]() { return GetTestPhenotype(stats_util.cur_testID).test_passes.size(); };
+    file.AddFun(get_num_tested, "num_programs_tested_against");
+
+    // - test scores by program
+    std::function<std::string(void)> get_passes_by_program = [this]() {
+      std::string scores = "\"[";
+      test_org_phen_t & phen = GetTestPhenotype(stats_util.cur_testID);
+      for (size_t i = 0; i < phen.test_passes.size(); ++i) {
+        if (i) scores += ",";
+        scores += emp::to_string(phen.test_passes[i]);
+      }
+      scores += "]\"";
+      return scores;
+    };
+    file.AddFun(get_passes_by_program, "passes_by_program");
+
+    // - test
+    std::function<std::string(void)> get_test = [this]() {
+      std::ostringstream stream;
+      stream << "\"";
+      prob_SmallOrLarge_world->GetOrg(stats_util.cur_testID).Print(stream);
+      stream << "\"";
+      return stream.str();
+    };
+    file.AddFun(get_test, "test", "");
+
+    file.PrintHeaderKeys();
+
+    // Loop over tests, snapshotting each.
+    for (stats_util.cur_testID = 0; stats_util.cur_testID < prob_SmallOrLarge_world->GetSize(); ++stats_util.cur_testID) {
+      if (!prob_SmallOrLarge_world->IsOccupied(stats_util.cur_testID)) continue;
+      file.Update();
+    }
+  };
+
+  // Add default instructions to instruction set.
+  AddDefaultInstructions({"Add",
+                          "Sub",
+                          "Mult",
+                          "Div",
+                          "Mod",
+                          "TestNumEqu",
+                          "TestNumNEqu",
+                          "TestNumLess",
+                          "Floor",
+                          "Not",
+                          "Inc",
+                          "Dec",
+                          "CopyMem",
+                          "SwapMem",
+                          "Input",
+                          "Output",
+                          "CommitGlobal",
+                          "PullGlobal",
+                          "TestMemEqu",
+                          "TestMemNEqu",
+                          "If",
+                          "IfNot",
+                          "While",
+                          "Countdown",
+                          "Foreach",
+                          "Close",
+                          "Break",
+                          "Call",
+                          "Routine",
+                          "Return",
+                          "ModuleDef"
+  });
+
+  // -- Custom instructions --
+  // Add Terminals [0:16] -- TODO - may want these to be slightly more configurable.
+  for (size_t i = 0; i <= 16; ++i) {
+    inst_lib->AddInst("Set-" + emp::to_string(i),
+      [i](hardware_t & hw, const inst_t & inst) {
+        hardware_t::CallState & state = hw.GetCurCallState();
+        hardware_t::Memory & wmem = state.GetWorkingMem();
+        size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+        if (!hw.IsValidMemPos(posA)) return; // Do nothing
+        wmem.Set(posA, (double)i);
+      });
+  }
+
+  // - LoadInteger
+  inst_lib->AddInst("LoadInt", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadInt_SmallOrLarge(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("SubmitSmall", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_SubmitSmall_SmallOrLarge(hw, inst);
+  }, 0);
+
+  inst_lib->AddInst("SubmitLarge", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_SubmitLarge_SmallOrLarge(hw, inst);
+  }, 0);
+
+  inst_lib->AddInst("SubmitNone", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_SubmitNone_SmallOrLarge(hw, inst);
+  }, 0);
+
 };
 
 void ProgramSynthesisExperiment::SetupProblem_ForLoopIndex() { 
@@ -2282,6 +2433,32 @@ void ProgramSynthesisExperiment::Inst_SubmitNum_NumberIO(hardware_t & hw, const 
   emp_assert(prob_utils_NumberIO.cur_eval_test_org != nullptr);
   prob_utils_NumberIO.Submit(wmem.AccessVal(posA).GetNum());
 }
+
+// ----- SmallOrLarge -----
+void ProgramSynthesisExperiment::Inst_LoadInt_SmallOrLarge(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_SmallOrLarge.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_SmallOrLarge.cur_eval_test_org->GetGenome());
+}
+
+void ProgramSynthesisExperiment::Inst_SubmitSmall_SmallOrLarge(hardware_t & hw, const inst_t & inst) {
+  prob_utils_SmallOrLarge.Submit("small");
+}
+
+void ProgramSynthesisExperiment::Inst_SubmitLarge_SmallOrLarge(hardware_t & hw, const inst_t & inst) {
+  prob_utils_SmallOrLarge.Submit("large");
+}
+
+void ProgramSynthesisExperiment::Inst_SubmitNone_SmallOrLarge(hardware_t & hw, const inst_t & inst) {
+  prob_utils_SmallOrLarge.Submit("");
+}
+
 
 
 /*
