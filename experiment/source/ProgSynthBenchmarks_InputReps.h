@@ -189,6 +189,21 @@ struct Pair_IntDouble_Mutator {
   }
 };
 
+struct Int_Mutator {
+  int MIN_INT;
+  int MAX_INT;
+
+  double PER_INT_RATE;
+
+  size_t Mutate(emp::Random & rnd, int & mut_int) {
+    if (rnd.P(PER_INT_RATE)) {
+      mut_int = rnd.GetInt(MIN_INT, MAX_INT+1);
+      return 1;
+    }
+    return 0;
+  }
+};
+
 // Problem_SmallOrLarge_input_t = int;
 // Problem_ForLoopIndex_input_t = std::array<int, 3>;
 // Problem_CompareStringLengths_input_t = std::array<std::string, 3>;
@@ -400,6 +415,12 @@ struct ProblemUtilities_NumberIO {
 // - Output: string {'small', 'large', ''}
 ////////////////////////////////////////////////////////////////
 
+// Generate random test input
+Problem_SmallOrLarge_output_t GenRandomTestInput_SmallOrLarge(emp::Random & rand, const std::pair<int,int> & int_range) {
+  emp_assert(int_range.first < int_range.second);
+  return rand.GetInt(int_range.first, int_range.second+1);
+}
+
 Problem_SmallOrLarge_output_t GenCorrectOut_SmallOrLarge(const Problem_SmallOrLarge_input_t & input) {
   if (input < SmallOrLarge__SMALL_THRESH) return SmallOrLarge__SMALL_STR;
   else if (input >= SmallOrLarge__LARGE_THRESH) return SmallOrLarge__LARGE_STR;
@@ -425,10 +446,90 @@ class TestOrg_SmallOrLarge : public TestOrg_Base {
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
 
+    out_t & GetCorrectOut() { return out; }
+    const out_t & GetCorrectOut() const { return out; }
+
     void CalcOut() { out = GenCorrectOut_SmallOrLarge(genome); }
+
+    void Print(std::ostream & os=std::cout) const {
+      os << genome;
+    }
 };
 
-struct ProblemUtilities_SmallOrLarge { emp::vector<std::function<double(TestOrg_SmallOrLarge &)>> lexicase_fit_set; };
+struct ProblemUtilities_SmallOrLarge { 
+  using this_t = ProblemUtilities_SmallOrLarge;
+  using problem_org_t = TestOrg_SmallOrLarge;
+  using input_t = Problem_SmallOrLarge_input_t;
+  using output_t = Problem_SmallOrLarge_output_t;
+  
+  using testcase_set_t = TestCaseSet<input_t, output_t>;
+  
+  emp::vector<std::function<double(problem_org_t &)>> lexicase_fit_set; 
+
+  testcase_set_t testing_set;
+  testcase_set_t training_set;
+
+  emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
+
+  // --- Useful during a test evaluation ---
+  emp::Ptr<problem_org_t> cur_eval_test_org;
+  bool submitted;
+  std::string submitted_str;
+
+  // Mutation
+  Int_Mutator mutator;
+
+  // Selection
+  emp::vector<std::function<double(problem_org_t &)>> lexicase_fit_set;
+
+  ProblemUtilities_SmallOrLarge()
+    : testing_set(this_t::LoadTestCaseFromLine),
+      training_set(this_t::LoadTestCaseFromLine),
+      submitted(false), submitted_str("")
+  { ; }
+
+  ~ProblemUtilities_SmallOrLarge() {
+    for (size_t i = 0; i < testingset_pop.size(); ++i) testingset_pop[i].Delete();
+  }
+
+  testcase_set_t & GetTestingSet() { return testing_set; }
+  testcase_set_t & GetTrainingSet() { return training_set; }
+
+  void ResetTestEval() {
+    submitted = false;
+    submitted_str = "";
+  }
+
+  void Submit(const std::string & val) {
+    submitted = true;
+    submitted_str = val;
+  }
+
+  static std::pair<input_t, output_t> LoadTestCaseFromLine(const std::string & line) {
+    emp::vector<std::string> split_line = emp::slice(line, ',');
+    input_t input;    // int
+    output_t output;  // std::string
+    input = std::atof(split_line[0].c_str());
+    output = split_line[1];
+    if (!(output == "" || output == "small" || output == "large")) {
+      std::cout << "ERROR! Bad output ("<<output<<") from line: " << line << std::endl;
+      exit(-1);
+    }
+    return {input, output}
+  }
+
+  void GenerateTestingSetPop() {
+    for (size_t i = 0; i < testing_set.GetSize(); ++i) {
+      testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
+      testingset_pop[i]->CalcOut();
+    }
+  }
+
+  std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
+    const bool pass = (double)sub == correct_test_output;
+    return {(double)pass, pass};
+  }
+};
 
 
 

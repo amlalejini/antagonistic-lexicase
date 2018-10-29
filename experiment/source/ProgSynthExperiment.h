@@ -127,7 +127,8 @@ struct ProblemInfo {
 };
 
 std::unordered_map<std::string, ProblemInfo> problems = {
-  {"number-io", {PROBLEM_ID::NumberIO, "training-examples-number-io.csv", "testing-examples-number-io.csv"}}
+  {"number-io", {PROBLEM_ID::NumberIO, "training-examples-number-io.csv", "testing-examples-number-io.csv"}},
+  {"small-or-large", {PROBLEM_ID::SmallOrLarge, "training-examples-small-or-large.csv", "testing-examples-small-or-large.csv"}}
 };
 
 class ProgramSynthesisExperiment {
@@ -1600,15 +1601,6 @@ void ProgramSynthesisExperiment::InitProgPop_Random() {
   for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
     prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
   }
-  // New:
-  // emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
-  // hardware_t::Program sol(inst_lib);
-  // sol.PushInst("LoadInt", {matrix[0], matrix[0], matrix[0]});
-  // sol.PushInst("LoadDouble", {matrix[1], matrix[1], matrix[1]});
-  // sol.PushInst("Add", {matrix[0], matrix[1], matrix[2]});
-  // sol.PushInst("SubmitNum", {matrix[2], matrix[2], matrix[2]});
-  // sol.PushInst("Return", {matrix[0], matrix[0], matrix[0]});
-  // prog_world->Inject(sol, PROG_POP_SIZE);
 }
 
 void ProgramSynthesisExperiment::AddDefaultInstructions(const std::unordered_set<std::string> & includes={"Add","Sub","Mult","Div","Mod","TestNumEqu","TestNumNEqu","TestNumLess","Floor","Not","Inc","Dec",
@@ -1970,9 +1962,158 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
 }
 
 void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() { 
-  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
+  std::cout << "Setup problem SmallOrLarge." << std::endl;
+
+  // A few useful aliases.
+  using test_org_t = TestOrg_SmallOrLarge;
+  using problem_utils_t = ProblemUtilities_SmallOrLarge;
+  using problem_world_t = prob_SmallOrLarge_world_t;
+
+  // A few useful references.
+  // problem_utils_t & problem_utils = prob_utils_SmallOrLarge;
+  // emp::Ptr<problem_world_t> problem_world = prob_SmallOrLarge_world;
+
+  // Load testing examples from file.
+  if (BENCHMARK_DATA_DIR.back() != '/') BENCHMARK_DATA_DIR += '/';
+  std::string training_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTrainingSetFilename();  
+  std::string testing_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTestingSetFilename();  
+  prob_utils_SmallOrLarge.GetTrainingSet().LoadTestCases(training_examples_fpath);
+  prob_utils_SmallOrLarge.GetTestingSet().LoadTestCases(testing_examples_fpath);
+  prob_utils_SmallOrLarge.GenerateTestingSetPop();
+  std::cout << "Loaded training example set size = " << prob_utils_SmallOrLarge.GetTrainingSet().GetSize() << std::endl;
+  std::cout << "Loaded testing example set size = " << prob_utils_SmallOrLarge.GetTestingSet().GetSize() << std::endl;
+  std::cout << "Testing set (non-training examples used to evaluate program accuracy) size = " << prob_utils_SmallOrLarge.testingset_pop.size() << std::endl;
+
+  // Setup the world.
+  NewTestCaseWorld(prob_SmallOrLarge_world, *random, "SmallOrLarge world");
+
+  // Configure how the population should be initialized.
+  SetupTestCasePop_Init(prob_SmallOrLarge_world,
+                        prob_utils_SmallOrLarge.training_set,
+                        [this]() { return GenRandomTestInput_SmallOrLarge(*random, {PROB_SMALL_OR_LARGE__INT_MIN, PROB_SMALL_OR_LARGE__INT_MAX}); });
+
+  end_setup_sig.AddAction([this]() { std::cout << "TestCase world size= " << prob_SmallOrLarge_world->GetSize() << std::endl; });
+
+  // Tell the world to calculate the correct test output (given input) on placement.
+  prob_SmallOrLarge_world->OnPlacement([this](size_t pos) { prob_SmallOrLarge_world->GetOrg(pos).CalcOut(); });
+
+  // How are program results calculated on a test?
+  CalcProgramResultOnTest = [this](prog_org_t & prog_org, TestOrg_Base & test_org_base) {
+    test_org_t & test_org = static_cast<test_org_t&>(test_org_base);
+    TestResult result;
+    if (!prob_utils_SmallOrLarge.submitted) {
+      result.score = 0;
+      result.pass = false;
+      result.sub = false;
+    } else {
+      std::pair<double, bool> r(prob_utils_SmallOrLarge.CalcScorePassFail(test_org.GetCorrectOut(), prob_utils_SmallOrLarge.submitted_str));
+      result.score = r.first;
+      result.pass = r.second;
+      result.sub = true;
+    }
+    return result;
+  };
+  
+  // Setup how evaluation on world test should work.
+  EvaluateWorldTest = [this](prog_org_t & prog_org, size_t testID) {
+    emp::Ptr<test_org_t> test_org_ptr = prob_SmallOrLarge_world->GetOrgPtr(testID);
+    begin_program_test.Trigger(prog_org, test_org_ptr);
+    do_program_test.Trigger(prog_org, test_org_ptr);
+    end_program_test.Trigger(prog_org, test_org_ptr);
+    return CalcProgramResultOnTest(prog_org, *test_org_ptr);
+  };
+
+  // How should we validate programs on testing set?
+  DoTestingSetValidation = [this](prog_org_t & prog_org) { 
+    // evaluate program on full testing set; update stats utils with results
+    begin_program_eval.Trigger(prog_org);
+    stats_util.current_program__validation__test_results.resize(prob_utils_SmallOrLarge.testingset_pop.size());
+    stats_util.current_program__validation__total_score = 0;
+    stats_util.current_program__validation__total_passes = 0;
+    stats_util.current_program__validation__is_solution = false;
+    // For each test in validation set, evaluate program.
+    for (size_t testID = 0; testID < prob_utils_SmallOrLarge.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_SmallOrLarge.testingset_pop[testID];
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
+      stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+    }
+    stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_SmallOrLarge.testingset_pop.size();
+    end_program_eval.Trigger(prog_org);
+  };
+
+  // How should we screen for a solution?
+  ScreenForSolution = [this](prog_org_t & prog_org) {
+    begin_program_eval.Trigger(prog_org);
+    for (size_t testID = 0; testID < prob_utils_SmallOrLarge.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_SmallOrLarge.testingset_pop[testID];
+
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      
+      TestResult result = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      if (!result.pass) {
+        end_program_eval.Trigger(prog_org);
+        return false;
+      }
+    }
+    end_program_eval.Trigger(prog_org);
+    return true;
+  };
+
+  // Tell the experiment how to get test phenotypes.
+  GetTestPhenotype = [this](size_t testID) -> test_org_phen_t & {
+    emp_assert(prob_SmallOrLarge_world->IsOccupied(testID));
+    return prob_SmallOrLarge_world->GetOrg(testID).GetPhenotype();
+  };
+
+  // Setup how test world updates.
+  SetupTestCaseWorldUpdate(prob_SmallOrLarge_world);
+
+  // Setup how test cases mutate.
+  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::RANDOM) {
+    std::cout << "RANDOM training mode detected, configuring mutation function to RANDOMIZE organisms." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Configure mutator.
+      prob_utils_SmallOrLarge.mutator.MIN_INT = PROB_SMALL_OR_LARGE__INT_MIN;
+      prob_utils_SmallOrLarge.mutator.MAX_INT = PROB_SMALL_OR_LARGE__INT_MAX;
+      prob_utils_SmallOrLarge.mutator.PER_INT_RATE = 1.0;
+      // (2) Hook mutator up to world.
+      prob_NumberIO_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        return prob_utils_SmallOrLarge.mutator.Mutate(rnd, test_org.GetGenome());
+      });
+    };
+  } else {
+    std::cout << "Non-RANDOM training mode detected, configuring mutation function normally." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Configure mutator.
+      prob_utils_SmallOrLarge.mutator.MIN_INT = PROB_SMALL_OR_LARGE__INT_MIN;
+      prob_utils_SmallOrLarge.mutator.MAX_INT = PROB_SMALL_OR_LARGE__INT_MAX;
+      prob_utils_SmallOrLarge.mutator.PER_INT_RATE = PROB_SMALL_OR_LARGE__MUTATION__PER_INT_RATE;
+      // (2) Hook mutator up to world.
+      prob_SmallOrLarge_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        return prob_utils_SmallOrLarge.mutator.Mutate(rnd, test_org.GetGenome());
+      });
+    };
+  }
+
+  // Setup test case fitness function.
+  SetupTestFitFun = [this]() {
+    prob_SmallOrLarge_world->SetFitFun([](test_org_t & test_org) {
+      return (double)test_org.GetPhenotype().num_fails;
+    });
+  };
+
+  // -- bookmark --
+
   exit(-1); 
-}
+};
 
 void ProgramSynthesisExperiment::SetupProblem_ForLoopIndex() { 
   std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
