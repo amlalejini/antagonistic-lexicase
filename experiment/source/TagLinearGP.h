@@ -1992,8 +1992,9 @@ namespace TagLGP {
         double b = (vec[bi].GetType() == MemoryValue::MemoryType::NUM) ? vec[bi].GetNum() : 0;
         if (a < b) {
           std::swap(vec[ai], vec[bi]);
-        } else {
-        }
+        } 
+        // else {
+        // }
       }
     }
 

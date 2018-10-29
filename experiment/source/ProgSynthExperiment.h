@@ -49,7 +49,7 @@
 //    - [x] Simplest thing to do would be to add a pass_vector + score_vector to test/program phenotypes
 //  - Add submission test case(?) to encourage submitting *something* ==> For now, not doing this.
 //  - [x] Break apart score w/passes
-//  - [ ] Add selection pressure for small sizes
+//  - [x] Add selection pressure for small sizes
 // - DIAGNOSTICS
 //  - [ ] Clean up printing format
 // - Cleaning
@@ -490,7 +490,7 @@ protected:
   void SetupProgramFitFun();
   void SetupProgramStats();
 
-  void AddDefaultInstructions();
+  void AddDefaultInstructions(const std::unordered_set<std::string> & includes);
 
   void SnapshotPrograms();
 
@@ -785,7 +785,7 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
     std::cout << "solution found? " << solution_found << "; ";
     std::cout << "smallest solution? " << smallest_prog_sol_size << std::endl;
 
-    // if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger(); // todo - uncomment this!
+    if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger(); 
 
     prog_world->Update();
     prog_world->ClearCache();
@@ -1221,12 +1221,13 @@ void ProgramSynthesisExperiment::SetupProgramSelection() {
           return score;
         });
       }
-      // todo - add pressure for small size
-      // lexicase_prog_fit_set.push_back([](prog_org_t & prog_org) {
-      //   if () {
-
-      //   }
-      // });
+      // Add pressure for small size
+      lexicase_prog_fit_set.push_back([this](prog_org_t & prog_org) {
+        if (prog_org.GetPhenotype().num_passes == PROGRAM_MAX_PASSES) {
+          return (double)(MAX_PROG_SIZE - prog_org.GetGenome().GetSize());
+        } 
+        return 0.0;
+      });
       // Add selection action
       do_selection_sig.AddAction([this]() {
         emp::LexicaseSelect_NAIVE(*prog_world,
@@ -1250,7 +1251,13 @@ void ProgramSynthesisExperiment::SetupProgramSelection() {
           return score;
         });
       }
-      // todo - add something for minimizing size
+      // Selection pressure for small program size.
+      lexicase_prog_fit_set.push_back([this](prog_org_t & prog_org) {
+        if (prog_org.GetPhenotype().num_passes == PROGRAM_MAX_PASSES) {
+          return (double)(MAX_PROG_SIZE - prog_org.GetGenome().GetSize());
+        } 
+        return 0.0;
+      });
       // Add selection action
       do_selection_sig.AddAction([this]() {
         for (size_t cID = 0; cID < prog_cohorts.GetCohortCnt(); ++cID) {
@@ -1542,72 +1549,76 @@ void ProgramSynthesisExperiment::InitProgPop_Random() {
   // prog_world->Inject(sol, PROG_POP_SIZE);
 }
 
-// todo - add inclusion as argument
-void ProgramSynthesisExperiment::AddDefaultInstructions() {
-
+void ProgramSynthesisExperiment::AddDefaultInstructions(const std::unordered_set<std::string> & includes={"Add","Sub","Mult","Div","Mod","TestNumEqu","TestNumNEqu","TestNumLess","Floor","Not","Inc","Dec",
+                                                                                                  "CopyMem","SwapMem","Input","Output","CommitGlobal","PullGlobal","TestMemEqu","TestMemNEqu",
+                                                                                                  "MakeVector","VecGet","VecSet","VecLen","VecAppend","VecPop","VecRemove","VecReplaceAll","VecIndexOf","VecOccurrencesOf","VecReverse","VecSwapIfLess","VecGetFront","VecGetBack",
+                                                                                                  "IsNum","IsStr","IsVec",
+                                                                                                  "If","IfNot","While","Countdown","Foreach","Close","Break","Call","Routine","Return",
+                                                                                                  "ModuleDef"}) 
+{
   // Configure instructions
   // Math
-  inst_lib->AddInst("Add", hardware_t::Inst_Add, 3, "wmemANY[C] = wmemNUM[A] + wmemNUM[B]");
-  inst_lib->AddInst("Sub", hardware_t::Inst_Sub, 3, "wmemANY[C] = wmemNUM[A] - wmemNUM[B]");
-  inst_lib->AddInst("Mult", hardware_t::Inst_Mult, 3, "wmemANY[C] = wmemNUM[A] * wmemNUM[B]");
-  inst_lib->AddInst("Div", hardware_t::Inst_Div, 3, "if (wmemNUM[B] != 0) wmemANY[C] = wmemNUM[A] / wmemNUM[B]; else NOP");
-  inst_lib->AddInst("Mod", hardware_t::Inst_Mod, 3, "if (wmemNUM[B] != 0) wmemANY[C] = int(wmemNUM[A]) % int(wmemNUM[B]); else NOP");
-  inst_lib->AddInst("TestNumEqu", hardware_t::Inst_TestNumEqu, 3, "wmemANY[C] = wmemNUM[A] == wmemNUM[B]");
-  inst_lib->AddInst("TestNumNEqu", hardware_t::Inst_TestNumNEqu, 3, "wmemANY[C] = wmemNUM[A] != wmemNUM[B]");
-  inst_lib->AddInst("TestNumLess", hardware_t::Inst_TestNumLess, 3, "wmemANY[C] = wmemNUM[A] < wmemNUM[B]");
-  inst_lib->AddInst("Floor", hardware_t::Inst_Floor, 1, "wmemNUM[A] = floor(wmemNUM[A])");
-  inst_lib->AddInst("Not", hardware_t::Inst_Not, 1, "wmemNUM[A] = !wmemNUM[A]"); 
-  inst_lib->AddInst("Inc", hardware_t::Inst_Inc, 1, "wmemNUM[A] = wmemNUM[A] + 1");
-  inst_lib->AddInst("Dec", hardware_t::Inst_Dec, 1, "wmemNUM[A] = wmemNUM[A] - 1");
+  if (emp::Has(includes, "Add")) inst_lib->AddInst("Add", hardware_t::Inst_Add, 3, "wmemANY[C] = wmemNUM[A] + wmemNUM[B]");
+  if (emp::Has(includes, "Sub")) inst_lib->AddInst("Sub", hardware_t::Inst_Sub, 3, "wmemANY[C] = wmemNUM[A] - wmemNUM[B]");
+  if (emp::Has(includes, "Mult")) inst_lib->AddInst("Mult", hardware_t::Inst_Mult, 3, "wmemANY[C] = wmemNUM[A] * wmemNUM[B]");
+  if (emp::Has(includes, "Div")) inst_lib->AddInst("Div", hardware_t::Inst_Div, 3, "if (wmemNUM[B] != 0) wmemANY[C] = wmemNUM[A] / wmemNUM[B]; else NOP");
+  if (emp::Has(includes, "Mod")) inst_lib->AddInst("Mod", hardware_t::Inst_Mod, 3, "if (wmemNUM[B] != 0) wmemANY[C] = int(wmemNUM[A]) % int(wmemNUM[B]); else NOP");
+  if (emp::Has(includes, "TestNumEqu")) inst_lib->AddInst("TestNumEqu", hardware_t::Inst_TestNumEqu, 3, "wmemANY[C] = wmemNUM[A] == wmemNUM[B]");
+  if (emp::Has(includes, "TestNumNEqu")) inst_lib->AddInst("TestNumNEqu", hardware_t::Inst_TestNumNEqu, 3, "wmemANY[C] = wmemNUM[A] != wmemNUM[B]");
+  if (emp::Has(includes, "TestNumLess")) inst_lib->AddInst("TestNumLess", hardware_t::Inst_TestNumLess, 3, "wmemANY[C] = wmemNUM[A] < wmemNUM[B]");
+  if (emp::Has(includes, "Floor")) inst_lib->AddInst("Floor", hardware_t::Inst_Floor, 1, "wmemNUM[A] = floor(wmemNUM[A])");
+  if (emp::Has(includes, "Not")) inst_lib->AddInst("Not", hardware_t::Inst_Not, 1, "wmemNUM[A] = !wmemNUM[A]"); 
+  if (emp::Has(includes, "Inc")) inst_lib->AddInst("Inc", hardware_t::Inst_Inc, 1, "wmemNUM[A] = wmemNUM[A] + 1");
+  if (emp::Has(includes, "Dec")) inst_lib->AddInst("Dec", hardware_t::Inst_Dec, 1, "wmemNUM[A] = wmemNUM[A] - 1");
   
   // Memory manipulation
-  inst_lib->AddInst("CopyMem", hardware_t::Inst_CopyMem, 2, "wmemANY[B] = wmemANY[A] // Copy mem[A] to mem[B]");
-  inst_lib->AddInst("SwapMem", hardware_t::Inst_SwapMem, 2, "swap(wmemANY[A], wmemANY[B])");
-  inst_lib->AddInst("Input", hardware_t::Inst_Input, 2, "wmemANY[B] = imemANY[A]");
-  inst_lib->AddInst("Output", hardware_t::Inst_Output, 2, "omemANY[B] = wmemANY[A]");
-  inst_lib->AddInst("CommitGlobal", hardware_t::Inst_CommitGlobal, 2, "gmemANY[B] = wmemANY[A]");
-  inst_lib->AddInst("PullGlobal", hardware_t::Inst_PullGlobal, 2, "wmemANY[B] = gmemANY[A]");
-  inst_lib->AddInst("TestMemEqu", hardware_t::Inst_TestMemEqu, 3, "wmemANY[C] = wmemANY[A] == wmemANY[B]");
-  inst_lib->AddInst("TestMemNEqu", hardware_t::Inst_TestMemNEqu, 3, "wmemANY[C] = wmemANY[A] != wmemANY[B]");
+  if (emp::Has(includes, "CopyMem")) inst_lib->AddInst("CopyMem", hardware_t::Inst_CopyMem, 2, "wmemANY[B] = wmemANY[A] // Copy mem[A] to mem[B]");
+  if (emp::Has(includes, "SwapMem")) inst_lib->AddInst("SwapMem", hardware_t::Inst_SwapMem, 2, "swap(wmemANY[A], wmemANY[B])");
+  if (emp::Has(includes, "Input")) inst_lib->AddInst("Input", hardware_t::Inst_Input, 2, "wmemANY[B] = imemANY[A]");
+  if (emp::Has(includes, "Output")) inst_lib->AddInst("Output", hardware_t::Inst_Output, 2, "omemANY[B] = wmemANY[A]");
+  if (emp::Has(includes, "CommitGlobal")) inst_lib->AddInst("CommitGlobal", hardware_t::Inst_CommitGlobal, 2, "gmemANY[B] = wmemANY[A]");
+  if (emp::Has(includes, "PullGlobal")) inst_lib->AddInst("PullGlobal", hardware_t::Inst_PullGlobal, 2, "wmemANY[B] = gmemANY[A]");
+  if (emp::Has(includes, "TestMemEqu")) inst_lib->AddInst("TestMemEqu", hardware_t::Inst_TestMemEqu, 3, "wmemANY[C] = wmemANY[A] == wmemANY[B]");
+  if (emp::Has(includes, "TestMemNEqu")) inst_lib->AddInst("TestMemNEqu", hardware_t::Inst_TestMemNEqu, 3, "wmemANY[C] = wmemANY[A] != wmemANY[B]");
 
   // Vector-related instructions
-  // inst_lib->AddInst("MakeVector", hardware_t::Inst_MakeVector, 3, "");  // TODO - more descriptions
-  // inst_lib->AddInst("VecGet", hardware_t::Inst_VecGet, 3, "");
-  // inst_lib->AddInst("VecSet", hardware_t::Inst_VecSet, 3, "");
-  // inst_lib->AddInst("VecLen", hardware_t::Inst_VecLen, 3, "");
-  // inst_lib->AddInst("VecAppend", hardware_t::Inst_VecAppend, 3, "");
-  // inst_lib->AddInst("VecPop", hardware_t::Inst_VecPop, 3, "");
-  // inst_lib->AddInst("VecRemove", hardware_t::Inst_VecRemove, 3, "");
-  // inst_lib->AddInst("VecReplaceAll", hardware_t::Inst_VecReplaceAll, 3, "");
-  // inst_lib->AddInst("VecIndexOf", hardware_t::Inst_VecIndexOf, 3, "");
-  // inst_lib->AddInst("VecOccurrencesOf", hardware_t::Inst_VecOccurrencesOf, 3, "");
-  // inst_lib->AddInst("VecReverse", hardware_t::Inst_VecReverse, 3, "");
-  // inst_lib->AddInst("VecSwapIfLess", hardware_t::Inst_VecSwapIfLess, 3, "");
-  // inst_lib->AddInst("VecGetFront", hardware_t::Inst_VecGetFront, 3, "");
-  // inst_lib->AddInst("VecGetBack", hardware_t::Inst_VecGetBack, 3, "");
+  if (emp::Has(includes, "MakeVector")) inst_lib->AddInst("MakeVector", hardware_t::Inst_MakeVector, 3, "wmemANY[C]=Vector([wmemANY[min(A,B),max(A,B)])");  // TODO - more descriptions
+  if (emp::Has(includes, "VecGet")) inst_lib->AddInst("VecGet", hardware_t::Inst_VecGet, 3, "wmemANY[C]=wmemVEC[A][wmemNUM[B]]");
+  if (emp::Has(includes, "VecSet")) inst_lib->AddInst("VecSet", hardware_t::Inst_VecSet, 3, "wmemVEC[A][wmemNUM[B]]=wmemNUM/STR[C]");
+  if (emp::Has(includes, "VecLen")) inst_lib->AddInst("VecLen", hardware_t::Inst_VecLen, 2, "wmemANY[B]=wmemVEC[A]");
+  if (emp::Has(includes, "VecAppend")) inst_lib->AddInst("VecAppend", hardware_t::Inst_VecAppend, 2, "wmemVEC[A].Append(wmemNUM/STR[B])");
+  if (emp::Has(includes, "VecPop")) inst_lib->AddInst("VecPop", hardware_t::Inst_VecPop, 2, "wmemANY[B]=wmemVEC[A].pop()");
+  if (emp::Has(includes, "VecRemove")) inst_lib->AddInst("VecRemove", hardware_t::Inst_VecRemove, 2, "wmemVEC[A].Remove(wmemNUM[B])");
+  if (emp::Has(includes, "VecReplaceAll")) inst_lib->AddInst("VecReplaceAll", hardware_t::Inst_VecReplaceAll, 3, "Replace all values (wmemNUM/STR[B]) in wmemVEC[A] with wmemNUM/STR[C]");
+  if (emp::Has(includes, "VecIndexOf")) inst_lib->AddInst("VecIndexOf", hardware_t::Inst_VecIndexOf, 3, "wmemANY[C] = index of wmemNUM/STR[B] in wmemVEC[A]");
+  if (emp::Has(includes, "VecOccurrencesOf")) inst_lib->AddInst("VecOccurrencesOf", hardware_t::Inst_VecOccurrencesOf, 3, "wmemANY[C]= occurrances of wmemNUM/STR[B] in wmemVEC[A]");
+  if (emp::Has(includes, "VecReverse")) inst_lib->AddInst("VecReverse", hardware_t::Inst_VecReverse, 1, "wmemVEC[A] = Reverse(wmemVEC[A])");
+  if (emp::Has(includes, "VecSwapIfLess")) inst_lib->AddInst("VecSwapIfLess", hardware_t::Inst_VecSwapIfLess, 3, "Swap two indices in wmemVEC[A] if vec[wmemNUM[A]] < vec[wmemNUM[B]].");
+  if (emp::Has(includes, "VecGetFront")) inst_lib->AddInst("VecGetFront", hardware_t::Inst_VecGetFront, 2, "wmemANY[B] = front of wmemVEC[A]");
+  if (emp::Has(includes, "VecGetBack")) inst_lib->AddInst("VecGetBack", hardware_t::Inst_VecGetBack, 2, "wmemANY[B] = back of wmemVEC[A]");
   
   // Memory-type
-  // inst_lib->AddInst("IsNum", hardware_t::Inst_IsNum, 3, "");
-  // inst_lib->AddInst("IsStr", hardware_t::Inst_IsStr, 3, "");
-  // inst_lib->AddInst("IsVec", hardware_t::Inst_IsVec, 3, "");
+  if (emp::Has(includes, "IsNum")) inst_lib->AddInst("IsNum", hardware_t::Inst_IsNum, 2, "wmemANY[B] = IsNum(wmemANY[A])");
+  if (emp::Has(includes, "IsStr")) inst_lib->AddInst("IsStr", hardware_t::Inst_IsStr, 2, "wmemANY[B] = IsStr(wmemANY[A])");
+  if (emp::Has(includes, "IsVec")) inst_lib->AddInst("IsVec", hardware_t::Inst_IsVec, 2, "wmemANY[B] = IsVec(wmemANY[A])");
 
   // Flow control
-  // inst_lib->AddInst("If", hardware_t::Inst_If, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
-  // inst_lib->AddInst("IfNot", hardware_t::Inst_IfNot, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
-  // inst_lib->AddInst("While", hardware_t::Inst_While, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
-  // inst_lib->AddInst("Countdown", hardware_t::Inst_Countdown, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
-  // inst_lib->AddInst("Foreach", hardware_t::Inst_Foreach, 3, "", {inst_lib_t::InstProperty::BEGIN_FLOW});
-  // inst_lib->AddInst("Close", hardware_t::Inst_Close, 3, "", {inst_lib_t::InstProperty::END_FLOW});
-  // inst_lib->AddInst("Break", hardware_t::Inst_Break, 3, "");
-  // inst_lib->AddInst("Call", hardware_t::Inst_Call, 3, "");
-  // inst_lib->AddInst("Routine", hardware_t::Inst_Routine, 3, "");
-  // inst_lib->AddInst("Return", hardware_t::Inst_Return, 3, "");
+  if (emp::Has(includes, "If")) inst_lib->AddInst("If", hardware_t::Inst_If, 1, "Execute next flow if(wmemANY[A]) // To be true, mem loc must be non-zero number", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  if (emp::Has(includes, "IfNot")) inst_lib->AddInst("IfNot", hardware_t::Inst_IfNot, 1, "Execute next flow if(!wmemANY[A])", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  if (emp::Has(includes, "While")) inst_lib->AddInst("While", hardware_t::Inst_While, 1, "While loop over wmemANY[A]", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  if (emp::Has(includes, "Countdown")) inst_lib->AddInst("Countdown", hardware_t::Inst_Countdown, 1, "Countdown loop with wmemANY as index.", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  if (emp::Has(includes, "Foreach")) inst_lib->AddInst("Foreach", hardware_t::Inst_Foreach, 2, "For each thing in wmemVEC[B]", {inst_lib_t::InstProperty::BEGIN_FLOW});
+  if (emp::Has(includes, "Close")) inst_lib->AddInst("Close", hardware_t::Inst_Close, 0, "Close flow", {inst_lib_t::InstProperty::END_FLOW});
+  if (emp::Has(includes, "Break")) inst_lib->AddInst("Break", hardware_t::Inst_Break, 0, "Break current flow");
+  if (emp::Has(includes, "Call")) inst_lib->AddInst("Call", hardware_t::Inst_Call, 1, "Call module using A for tag-based reference");
+  if (emp::Has(includes, "Routine")) inst_lib->AddInst("Routine", hardware_t::Inst_Routine, 1, "Call module as a routine (don't use call stack)");
+  if (emp::Has(includes, "Return")) inst_lib->AddInst("Return", hardware_t::Inst_Return, 0, "Return from current routine/call");
 
   // Module
-  // inst_lib->AddInst("ModuleDef", hardware_t::Inst_Nop, 3, "", {inst_lib_t::InstProperty::MODULE});
+  if (emp::Has(includes, "ModuleDef")) inst_lib->AddInst("ModuleDef", hardware_t::Inst_Nop, 1, "Define module with tag A", {inst_lib_t::InstProperty::MODULE});
 
   // Misc
-  // inst_lib->AddInst("Nop", hardware_t::Inst_Nop, 3, "");
+  // inst_lib->AddInst("Nop", hardware_t::Inst_Nop, 3, "Do nothing");
 }
 
 // ================= PROBLEM SETUPS ======================
@@ -1809,6 +1820,8 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
     };
     file.AddFun(get_test, "test", "");
 
+    file.PrintHeaderKeys();
+
     // Loop over tests, snapshotting each.
     for (stats_util.cur_testID = 0; stats_util.cur_testID < prob_NumberIO_world->GetSize(); ++stats_util.cur_testID) {
       if (!prob_NumberIO_world->IsOccupied(stats_util.cur_testID)) continue;
@@ -1817,7 +1830,38 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
 
   };
 
-  AddDefaultInstructions();
+  AddDefaultInstructions({"Add",
+                          "Sub",
+                          "Mult",
+                          "Div",
+                          "Mod",
+                          "TestNumEqu",
+                          "TestNumNEqu",
+                          "TestNumLess",
+                          "Floor",
+                          "Not",
+                          "Inc",
+                          "Dec",
+                          "CopyMem",
+                          "SwapMem",
+                          "Input",
+                          "Output",
+                          "CommitGlobal",
+                          "PullGlobal",
+                          "TestMemEqu",
+                          "TestMemNEqu",
+                          "If",
+                          "IfNot",
+                          "While",
+                          "Countdown",
+                          "Foreach",
+                          "Close",
+                          "Break",
+                          "Call",
+                          "Routine",
+                          "Return",
+                          "ModuleDef"
+  });
 
   // Add Terminals [0:16] -- TODO - may want these to be slightly more configurable.
   for (size_t i = 0; i <= 16; ++i) {
