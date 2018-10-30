@@ -15,6 +15,7 @@
 #include "tools/Random.h"
 #include "tools/random_utils.h"
 #include "tools/math.h"
+#include "tools/sequence_utils.h"
 #include "tools/string_utils.h"
 #include "tools/stats.h"
 
@@ -204,34 +205,6 @@ struct Int_Mutator {
   }
 };
 
-// Problem_SmallOrLarge_input_t = int;
-// Problem_ForLoopIndex_input_t = std::array<int, 3>;
-// Problem_CompareStringLengths_input_t = std::array<std::string, 3>;
-// Problem_DoubleLetters_input_t = std::string;
-// Problem_CollatzNumbers_input_t = int;
-// Problem_ReplaceSpaceWithNewline_input_t = std::string;
-// Problem_StringDifferences_input_t = std::array<std::string, 2>;
-// Problem_EvenSquares_input_t = int;
-// Problem_WallisPi_input_t = int;
-// Problem_StringLengthsBackwards_input_t = emp::vector<std::string>;
-// Problem_LastIndexOfZero_input_t = emp::vector<int>;
-// Problem_VectorAverage_input_t = emp::vector<double>;
-// Problem_CountOdds_input_t = emp::vector<int>;
-// Problem_MirrorImage_input_t = std::array<emp::vector<int>, 2>;
-// Problem_SuperAnagrams_input_t = std::array<std::string, 2>;
-// Problem_SumOfSquares_input_t = int;
-// Problem_VectorsSummed_input_t = std::array<emp::vector<int>, 2>;
-// Problem_XWordLines_input_t = std::pair<int, std::string>;
-// Problem_PigLatin_input_t = std::string;
-// Problem_NegativeToZero_input_t = emp::vector<int>;
-// Problem_ScrabbleScore_input_t = std::string;
-// Problem_Checksum_input_t = std::string;
-// Problem_Digits_input_t = int;
-// Problem_Grade_input_t = std::array<int, 5>;
-// Problem_Median_input_t = std::array<int, 3>;
-// Problem_Smallest_input_t = std::array<int, 4>;
-// Problem_Syllables_input_t = std::string;
-
 // ================ Problem Organism Classes ================
 
 // Test org base class
@@ -285,11 +258,15 @@ class TestOrg_Base {
 };
 
 
-////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Problem: NumberIO
 // - Input type: [double, integer]
 // - Output type: double 
-////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Problem_NumberIO_input_t GenRandomTestInput_NumberIO(emp::Random & rand, const std::pair<int, int> & int_range, const std::pair<double, double> & double_range) {
   emp_assert(double_range.first < double_range.second);
@@ -409,11 +386,15 @@ struct ProblemUtilities_NumberIO {
 
 };
 
-////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Problem: Small or large
 // - Input: integer
 // - Output: string {'small', 'large', ''}
-////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Generate random test input
 Problem_SmallOrLarge_input_t GenRandomTestInput_SmallOrLarge(emp::Random & rand, const std::pair<int,int> & int_range) {
@@ -533,32 +514,213 @@ struct ProblemUtilities_SmallOrLarge {
   }
 };
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Problem: ForLoopIndex
+// - Input: std::array<int, 3>;
+// - Output: emp::vector<int>;
+// - Description: Given 3 integer inputs (start, end, step), print the integers in the sequence:
+//              - n0 = start
+//              - ni = ni-1 + step
+//              - for each ni < end
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// Generate random test input
+Problem_ForLoopIndex_input_t GenRandomTestInput_ForLoopIndex(emp::Random & rand,
+                                                         const std::pair<int,int> & start_end_range,
+                                                         const std::pair<int,int> & step_range) {
+  // Guarantee that start comes before end.
+  int start, end, step;
+  start = rand.GetInt(start_end_range.first, start_end_range.second+1);
+  end = rand.GetInt(start_end_range.first, start_end_range.second+1);
+  step = rand.GetInt(step_range.first, step_range.second+1);
 
-/// ForLoopIndex: Array<Integer, 3>
+  // Need to follow the following rules:
+  // (1) start < end               // -> Start should come before end
+  // (2) start + (20xstep)+1 > end // -> Enumeration should take no more than 20 steps
+  while (true) {
+    if (end < start) std::swap(end, start);
+    if (start + (20*step) + 1 > end) break;
+    start = rand.GetInt(start_end_range.first, start_end_range.second+1);
+    end = rand.GetInt(start_end_range.first, start_end_range.second+1);
+    step = rand.GetInt(step_range.first, step_range.second+1);
+  }
+  return {start, end, step};
+}
+
+/// Generate correct output
+Problem_ForLoopIndex_output_t GenCorrectOut_ForLoopIndex(const Problem_ForLoopIndex_input_t & input) {
+  emp::vector<int> out;
+  for (int i = input[0]; i < input[1]; i+= input[2]) {
+    out.emplace_back(i);
+  }
+  return out;
+}
+
 class TestOrg_ForLoopIndex : public TestOrg_Base {
   public:
     using parent_t = TestOrg_Base;
     using parent_t::phenotype;
 
     using genome_t = std::array<int, 3>;
+    using out_t = Problem_ForLoopIndex_output_t;
 
   protected:
     genome_t genome;
+    out_t out;
 
   public:
-    TestOrg_ForLoopIndex(const genome_t & _g) : genome(_g) { ; }
+    TestOrg_ForLoopIndex(const genome_t & _g) : genome(_g), out() { ; }
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
 
-    void CalcOut() { ; }
+    void CalcOut() { out = GenCorrectOut_ForLoopIndex(genome); }
+
+    out_t & GetCorrectOut() { return out; }
+    const out_t & GetCorrectOut() const { return out; }   
+
+    void Print(std::ostream & os=std::cout) {
+      os << genome[0] << "," << genome[1] << "," << genome[2];
+    }
 };
 
-struct ProblemUtilities_ForLoopIndex { emp::vector<std::function<double(TestOrg_ForLoopIndex &)>> lexicase_fit_set; };
+struct ProblemUtilities_ForLoopIndex { 
+  using this_t = ProblemUtilities_ForLoopIndex;
+  using problem_org_t = TestOrg_ForLoopIndex;
+  using input_t = Problem_ForLoopIndex_input_t;
+  using output_t = Problem_ForLoopIndex_output_t;
+  
+  using testcase_set_t = TestCaseSet<input_t, output_t>;
+  
+  testcase_set_t testing_set;
+  testcase_set_t training_set;
 
+  emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
 
+  // --- Useful during a test evaluation ---
+  emp::Ptr<problem_org_t> cur_eval_test_org;
+  bool submitted;
+  emp::vector<int> submitted_vec;
 
+  // Mutation - Handle here...
+  int MIN_START_END;
+  int MAX_START_END;
+  int MIN_STEP;
+  int MAX_STEP;
+  double MUT_RATE;  
+
+  size_t Mutate(emp::Random & rnd, Problem_ForLoopIndex_input_t & mut_input) {
+    size_t muts = 0;
+
+    int start = mut_input[0];
+    int end = mut_input[1];
+    int step = mut_input[2];
+
+    // Mutate start
+    if (rnd.P(MUT_RATE)) { // Mutate start?
+      start = rnd.GetInt(MIN_START_END, MAX_START_END+1);
+      muts++;
+    }
+    // Mutate end
+    if (rnd.P(MUT_RATE)) {
+      end = rnd.GetInt(MIN_START_END, MAX_START_END+1);
+      muts++;
+    }
+    // Mutate step
+    if (rnd.P(MUT_RATE)) {
+      step = rnd.GetInt(MIN_STEP, MAX_STEP+1);
+      muts++;
+    }
+    
+    // Ensure that start still comes before end.  
+    if (end == start) end++;
+    if (end < start) std::swap(start, end);
+    if (!(start + (20*step) + 1 > end)) {
+      // Move end closer to start
+      end = rnd.GetInt(start, start + (20*step)+1);
+    }
+
+    mut_input[0] = start;
+    mut_input[1] = end;
+    mut_input[2] = step;
+    
+    return muts;
+  }
+
+  // Selection
+  emp::vector<std::function<double(problem_org_t &)>> lexicase_fit_set;
+
+  ProblemUtilities_ForLoopIndex()
+    : testing_set(this_t::LoadTestCaseFromLine),
+      training_set(this_t::LoadTestCaseFromLine),
+      submitted(false), submitted_vec()
+  { ; }
+
+  ~ProblemUtilities_ForLoopIndex() {
+    for (size_t i = 0; i < testingset_pop.size(); ++i) testingset_pop[i].Delete();
+  }
+
+  testcase_set_t & GetTestingSet() { return testing_set; }
+  testcase_set_t & GetTrainingSet() { return training_set; }
+
+  void ResetTestEval() {
+    submitted = false;
+    submitted_vec.clear();
+  }
+
+  void Submit(int val) {
+    submitted = true;
+    submitted_vec.emplace_back(val);
+  }
+
+  static std::pair<input_t, output_t> LoadTestCaseFromLine(const std::string & line) {
+    emp::vector<std::string> split_line = emp::slice(line, ',');
+    input_t input;    // int
+    output_t output;  // std::string
+    // Start = line[0]
+    input[0] = std::atof(split_line[0].c_str());
+    // End = line[1]
+    input[1] = std::atof(split_line[1].c_str());
+    // Step = line[2]
+    input[2] = std::atof(split_line[2].c_str());
+    output = GenCorrectOut_ForLoopIndex(input);  
+    return {input, output};
+  }
+
+  void GenerateTestingSetPop() {
+    for (size_t i = 0; i < testing_set.GetSize(); ++i) {
+      testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
+      testingset_pop[i]->CalcOut();
+    }
+  }
+
+  std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
+    const bool pass = (sub == correct_test_output);
+    return {(double)pass, pass};
+  }
+
+  std::pair<double, bool> CalcScoreGradient(const output_t & correct_test_output, const output_t & sub) {
+    const double max_dist = emp::Max(correct_test_output.size(), sub.size());
+    double dist = emp::calc_edit_distance(correct_test_output, sub);
+    if (dist == 0) {
+      return {1.0, true};
+    } else {
+      return {(max_dist - dist)/max_dist, false};
+    }
+  } // todo - test this
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Problem: 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Compare String Lengths: Array<String, 3>
 class TestOrg_CompareStringLengths: public TestOrg_Base {
   public:

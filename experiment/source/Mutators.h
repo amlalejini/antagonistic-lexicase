@@ -363,7 +363,7 @@ struct TagLGPMutator {
           modules[i].mut = ModuleMutType::DUP; 
           expected_size += modules[i].GetSize(); 
         }
-        if (mod_del && (((int)expected_size - (int)modules[i].GetSize()) >= MIN_PROGRAM_LEN) ) { 
+        if (mod_del && (((int)expected_size - (int)modules[i].GetSize()) >= (int)MIN_PROGRAM_LEN) ) { 
           mod_mut_cnt++; 
           mut_cnt++; 
           modules[i].mut = ModuleMutType::DEL; 
@@ -377,7 +377,7 @@ struct TagLGPMutator {
         program_t new_program(program.GetInstLibPtr()); // Program we're writing to. (will be copied over.) 
         // for (rhead = 0; rhead < program.GetSize(); ++rhead) {
         rhead = 0;
-        while (new_program.GetSize() < expected_size) {
+        while ((int)new_program.GetSize() < expected_size) {
           const size_t cur_module = module_membership[rhead];
           // Did we find a new module?
           if (ilib.HasProperty(program[rhead].id, inst_prop_t::MODULE)) {
@@ -419,13 +419,13 @@ struct TagLGPMutator {
         const int slip_dup_size = 1 + (int)slip_end - (int)slip_begin;
         const int slip_del_size = 1 + (int)slip_begin - (int)slip_end;
 
-        if (slip_dup && ((expected_size+slip_dup_size) > MAX_PROGRAM_LEN)) { 
+        if (slip_dup && ((expected_size+slip_dup_size) > (int)MAX_PROGRAM_LEN)) { 
           // If slip-dup would break constraints, don't slip.
           slip = false; slip_dup=false; 
         } 
         if (slip_dup) { expected_size += slip_dup_size; }
 
-        if (slip_del && ((expected_size-slip_del_size) < MIN_PROGRAM_LEN)) { 
+        if (slip_del && ((expected_size-slip_del_size) < (int)MIN_PROGRAM_LEN)) { 
           // If slip-del would break constraints, don't slip.
           slip = false; slip_del = false; 
         } 
@@ -435,9 +435,9 @@ struct TagLGPMutator {
     }
 
     program_t new_program(program.GetInstLibPtr());
-    for (rhead = 0; rhead < program.GetSize(); ++rhead) {
+    for (rhead = 0; rhead < (int)program.GetSize(); ++rhead) {
       // Check for slip.
-      if (slip_dup && rhead == slip_end) {
+      if (slip_dup && rhead == (int)slip_end) {
         // Copy over inst.
         new_program.PushInst(program[rhead]);
         // Duplicate slip segment.
@@ -446,14 +446,14 @@ struct TagLGPMutator {
         }
         mut_cnt++;
         continue;
-      } else if (slip_del && rhead == slip_end) {
+      } else if (slip_del && rhead == (int)slip_end) {
         mut_cnt++;
         rhead = slip_begin;
         continue;
       }
       
       // Instruction deletion
-      if (rnd.P(PER_INST_DEL) && ((expected_size-1)>=MIN_PROGRAM_LEN)) {
+      if (rnd.P(PER_INST_DEL) && ((expected_size-1)>=(int)MIN_PROGRAM_LEN)) {
         --expected_size;
         ++mut_cnt;
         continue;
@@ -464,7 +464,7 @@ struct TagLGPMutator {
       new_program.PushInst(program[rhead]);
 
       // Instruction insertion
-      if (rnd.P(PER_INST_INS) && ((expected_size+1)<=MAX_PROGRAM_LEN)) {
+      if (rnd.P(PER_INST_INS) && ((expected_size+1)<=(int)MAX_PROGRAM_LEN)) {
         ++expected_size;
         ++mut_cnt;
         new_program.PushInst(TagLGP::GenRandTagGPInst(rnd, ilib));

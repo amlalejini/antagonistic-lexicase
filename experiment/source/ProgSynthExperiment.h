@@ -128,7 +128,9 @@ struct ProblemInfo {
 
 std::unordered_map<std::string, ProblemInfo> problems = {
   {"number-io", {PROBLEM_ID::NumberIO, "training-examples-number-io.csv", "testing-examples-number-io.csv"}},
-  {"small-or-large", {PROBLEM_ID::SmallOrLarge, "training-examples-small-or-large.csv", "testing-examples-small-or-large.csv"}}
+  {"small-or-large", {PROBLEM_ID::SmallOrLarge, "training-examples-small-or-large.csv", "testing-examples-small-or-large.csv"}},
+  {"for-loop-index", {PROBLEM_ID::ForLoopIndex, "training-examples-for-loop-index.csv", "testing-examples-for-loop-index.csv"}}
+
 };
 
 class ProgramSynthesisExperiment {
@@ -299,6 +301,12 @@ protected:
   int PROB_SMALL_OR_LARGE__INT_MIN;
   int PROB_SMALL_OR_LARGE__INT_MAX;
   double PROB_SMALL_OR_LARGE__MUTATION__PER_INT_RATE;
+
+  int PROB_FOR_LOOP_INDEX__START_END_MIN;
+  int PROB_FOR_LOOP_INDEX__START_END_MAX;
+  int PROB_FOR_LOOP_INDEX__STEP_MIN;
+  int PROB_FOR_LOOP_INDEX__STEP_MAX;
+  double PROB_FOR_LOOP_INDEX__MUTATION__MUT_RATE;
 
   // - Data collection group -
   std::string DATA_DIRECTORY;
@@ -731,11 +739,16 @@ protected:
   void Inst_LoadInt_NumberIO(hardware_t & hw, const inst_t & inst);
   void Inst_LoadDouble_NumberIO(hardware_t & hw, const inst_t & inst);
   void Inst_SubmitNum_NumberIO(hardware_t & hw, const inst_t & inst); 
-  // -- SmallOrLarge
+  // -- SmallOrLarge --
   void Inst_LoadInt_SmallOrLarge(hardware_t & hw, const inst_t & inst);
   void Inst_SubmitSmall_SmallOrLarge(hardware_t & hw, const inst_t & inst);
   void Inst_SubmitLarge_SmallOrLarge(hardware_t & hw, const inst_t & inst);
   void Inst_SubmitNone_SmallOrLarge(hardware_t & hw, const inst_t & inst);
+  // -- ForLoopIndex --
+  void Inst_LoadStart_ForLoopIndex(hardware_t & hw, const inst_t & inst);
+  void Inst_LoadEnd_ForLoopIndex(hardware_t & hw, const inst_t & inst);
+  void Inst_LoadStep_ForLoopIndex(hardware_t & hw, const inst_t & inst);
+  void Inst_SubmitNum_ForLoopIndex(hardware_t & hw, const inst_t & inst);
 
 public:
   ProgramSynthesisExperiment() 
@@ -910,11 +923,11 @@ void ProgramSynthesisExperiment::Run() {
 
 /// Run a single step of the experiment
 void ProgramSynthesisExperiment::RunStep() {
-  std::cout << "-- Doing Evaluation --" << std::endl;
+  // std::cout << "-- Doing Evaluation --" << std::endl;
   do_evaluation_sig.Trigger();  // (1) Evaluate all members of program (& test) population(s).
-  std::cout << "-- Doing Selection --" << std::endl;
+  // std::cout << "-- Doing Selection --" << std::endl;
   do_selection_sig.Trigger();   // (2) Select who gets to reproduce!
-  std::cout << "-- Doing Update --" << std::endl;
+  // std::cout << "-- Doing Update --" << std::endl;
   do_update_sig.Trigger();      // (3) Run update on relevant worlds (population turnover, etc).
 }
 
@@ -969,6 +982,12 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   PROB_SMALL_OR_LARGE__INT_MIN = config.PROB_SMALL_OR_LARGE__INT_MIN();
   PROB_SMALL_OR_LARGE__INT_MAX = config.PROB_SMALL_OR_LARGE__INT_MAX();
   PROB_SMALL_OR_LARGE__MUTATION__PER_INT_RATE = config.PROB_SMALL_OR_LARGE__MUTATION__PER_INT_RATE();
+
+  PROB_FOR_LOOP_INDEX__START_END_MIN = config.PROB_FOR_LOOP_INDEX__START_END_MIN();
+  PROB_FOR_LOOP_INDEX__START_END_MAX = config.PROB_FOR_LOOP_INDEX__START_END_MAX();
+  PROB_FOR_LOOP_INDEX__STEP_MIN = config.PROB_FOR_LOOP_INDEX__STEP_MIN();
+  PROB_FOR_LOOP_INDEX__STEP_MAX = config.PROB_FOR_LOOP_INDEX__STEP_MAX();
+  PROB_FOR_LOOP_INDEX__MUTATION__MUT_RATE = config.PROB_FOR_LOOP_INDEX__MUTATION__MUT_RATE();
 
   DATA_DIRECTORY = config.DATA_DIRECTORY();
   SUMMARY_STATS_INTERVAL = config.SUMMARY_STATS_INTERVAL();
@@ -1615,6 +1634,18 @@ void ProgramSynthesisExperiment::InitProgPop_Random() {
   for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
     prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
   }
+  // -- solution(?) --
+  // emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  // hardware_t::Program sol(inst_lib);
+  // sol.PushInst("CopyMem",     {matrix[0], matrix[4], matrix[7]});
+  // sol.PushInst("Inc",         {matrix[5], matrix[7], matrix[7]});
+  // sol.PushInst("While",       {matrix[5], matrix[7], matrix[7]});
+  // sol.PushInst("SubmitNum",   {matrix[4], matrix[7], matrix[7]});
+  // sol.PushInst("Add",         {matrix[4], matrix[2], matrix[4]});
+  // sol.PushInst("TestNumLess", {matrix[4], matrix[1], matrix[5]});
+  // sol.PushInst("Close",       {matrix[7], matrix[7], matrix[7]});
+  // sol.PushInst("Return",      {matrix[7], matrix[7], matrix[7]});
+  // prog_world->Inject(sol, PROG_POP_SIZE);
 }
 
 void ProgramSynthesisExperiment::AddDefaultInstructions(const std::unordered_set<std::string> & includes={"Add","Sub","Mult","Div","Mod","TestNumEqu","TestNumNEqu","TestNumLess","Floor","Not","Inc","Dec",
@@ -2267,8 +2298,286 @@ void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() {
 };
 
 void ProgramSynthesisExperiment::SetupProblem_ForLoopIndex() { 
-  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
-  exit(-1); 
+  std::cout << "Setup problem - ForLoopIndex" << std::endl;
+
+  // A few useful aliases.
+  using test_org_t = TestOrg_ForLoopIndex;
+
+  if (BENCHMARK_DATA_DIR.back() != '/') BENCHMARK_DATA_DIR += '/';
+  std::string training_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTrainingSetFilename();  
+  std::string testing_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTestingSetFilename();  
+  std::cout << "Loading training examples." << std::endl;
+  prob_utils_ForLoopIndex.GetTrainingSet().LoadTestCases(training_examples_fpath);
+  std::cout << "Loading testing examples." << std::endl;
+  prob_utils_ForLoopIndex.GetTestingSet().LoadTestCases(testing_examples_fpath);
+  std::cout << "Generating testing set population." << std::endl;
+  prob_utils_ForLoopIndex.GenerateTestingSetPop();
+  std::cout << "Loaded training example set size = " << prob_utils_ForLoopIndex.GetTrainingSet().GetSize() << std::endl;
+  std::cout << "Loaded testing example set size = " << prob_utils_ForLoopIndex.GetTestingSet().GetSize() << std::endl;
+  std::cout << "Testing set (non-training examples used to evaluate program accuracy) size = " << prob_utils_ForLoopIndex.testingset_pop.size() << std::endl;
+
+  // Setup the world
+  NewTestCaseWorld(prob_ForLoopIndex_world, *random, "ForLoopIndex world");
+
+  // Configure how the population should be initialized
+  SetupTestCasePop_Init(prob_ForLoopIndex_world,
+                        prob_utils_ForLoopIndex.training_set,
+                        [this]() { return GenRandomTestInput_ForLoopIndex(*random, 
+                                                                          {PROB_FOR_LOOP_INDEX__START_END_MIN, PROB_FOR_LOOP_INDEX__START_END_MAX},
+                                                                          {PROB_FOR_LOOP_INDEX__STEP_MIN, PROB_FOR_LOOP_INDEX__STEP_MAX}
+                                                                         ); 
+                                  }
+                        );
+  end_setup_sig.AddAction([this]() { std::cout << "TestCase world size= " << prob_ForLoopIndex_world->GetSize() << std::endl; });
+
+  // Tell the world to calculate the correct test output (given input) on placement.
+  prob_ForLoopIndex_world->OnPlacement([this](size_t pos) { prob_ForLoopIndex_world->GetOrg(pos).CalcOut(); });
+
+  // How are program results calculated on a test?
+  CalcProgramResultOnTest = [this](prog_org_t & prog_org, TestOrg_Base & test_org_base) {
+    test_org_t & test_org = static_cast<test_org_t&>(test_org_base);
+    TestResult result;
+    if (!prob_utils_ForLoopIndex.submitted) {
+      result.score = 0;
+      result.pass = false;
+      result.sub = false;
+    } else {
+      std::pair<double, bool> r(prob_utils_ForLoopIndex.CalcScoreGradient(test_org.GetCorrectOut(), prob_utils_ForLoopIndex.submitted_vec));
+      result.score = r.first;
+      result.pass = r.second;
+      result.sub = true;
+    }
+    return result;
+  };
+
+  // Setup how evaluation on world test should work.
+  EvaluateWorldTest = [this](prog_org_t & prog_org, size_t testID) {
+    emp::Ptr<test_org_t> test_org_ptr = prob_ForLoopIndex_world->GetOrgPtr(testID);
+    begin_program_test.Trigger(prog_org, test_org_ptr);
+    do_program_test.Trigger(prog_org, test_org_ptr);
+    end_program_test.Trigger(prog_org, test_org_ptr);
+    return CalcProgramResultOnTest(prog_org, *test_org_ptr);
+  };
+
+  // How should we validate programs on testing set?
+  DoTestingSetValidation = [this](prog_org_t & prog_org) { 
+    // evaluate program on full testing set; update stats utils with results
+    begin_program_eval.Trigger(prog_org);
+    stats_util.current_program__validation__test_results.resize(prob_utils_ForLoopIndex.testingset_pop.size());
+    stats_util.current_program__validation__total_score = 0;
+    stats_util.current_program__validation__total_passes = 0;
+    stats_util.current_program__validation__is_solution = false;
+    // For each test in validation set, evaluate program.
+    for (size_t testID = 0; testID < prob_utils_ForLoopIndex.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_ForLoopIndex.testingset_pop[testID];
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
+      stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+    }
+    stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_ForLoopIndex.testingset_pop.size();
+    end_program_eval.Trigger(prog_org);
+  };
+
+  // How should we screen for a solution?
+  ScreenForSolution = [this](prog_org_t & prog_org) {
+    begin_program_eval.Trigger(prog_org);
+    for (size_t testID = 0; testID < prob_utils_ForLoopIndex.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_ForLoopIndex.testingset_pop[testID];
+
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      
+      TestResult result = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      if (!result.pass) {
+        end_program_eval.Trigger(prog_org);
+        return false;
+      }
+    }
+    end_program_eval.Trigger(prog_org);
+    return true;
+  };
+
+  // Tell the experiment how to get test phenotypes.
+  GetTestPhenotype = [this](size_t testID) -> test_org_phen_t & {
+    emp_assert(prob_ForLoopIndex_world->IsOccupied(testID));
+    return prob_ForLoopIndex_world->GetOrg(testID).GetPhenotype();
+  };
+
+  // Setup how test world updates.
+  SetupTestCaseWorldUpdate(prob_ForLoopIndex_world);
+
+  // Setup how test cases mutate.
+  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::RANDOM) {
+    std::cout << "RANDOM training mode detected, configuring mutation function to RANDOMIZE organisms." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Configure mutator.
+      prob_utils_ForLoopIndex.MIN_START_END = PROB_FOR_LOOP_INDEX__START_END_MIN;
+      prob_utils_ForLoopIndex.MAX_START_END = PROB_FOR_LOOP_INDEX__START_END_MAX;
+      prob_utils_ForLoopIndex.MIN_STEP = PROB_FOR_LOOP_INDEX__STEP_MIN;
+      prob_utils_ForLoopIndex.MAX_STEP = PROB_FOR_LOOP_INDEX__STEP_MAX;
+      prob_utils_ForLoopIndex.MUT_RATE = 1;
+      // (2) Hook mutator up to world.
+      prob_ForLoopIndex_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        return prob_utils_ForLoopIndex.Mutate(rnd, test_org.GetGenome());
+      });
+    };
+  } else {
+    std::cout << "Non-RANDOM training mode detected, configuring mutation function normally." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Configure mutator.
+      prob_utils_ForLoopIndex.MIN_START_END = PROB_FOR_LOOP_INDEX__START_END_MIN;
+      prob_utils_ForLoopIndex.MAX_START_END = PROB_FOR_LOOP_INDEX__START_END_MAX;
+      prob_utils_ForLoopIndex.MIN_STEP = PROB_FOR_LOOP_INDEX__STEP_MIN;
+      prob_utils_ForLoopIndex.MAX_STEP = PROB_FOR_LOOP_INDEX__STEP_MAX;
+      prob_utils_ForLoopIndex.MUT_RATE = PROB_FOR_LOOP_INDEX__MUTATION__MUT_RATE;
+      // (2) Hook mutator up to world.
+      prob_ForLoopIndex_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        return prob_utils_ForLoopIndex.Mutate(rnd, test_org.GetGenome());
+      });
+    };
+  }
+
+  // Setup test case fitness function.
+  SetupTestFitFun = [this]() {
+    prob_ForLoopIndex_world->SetFitFun([](test_org_t & test_org) {
+      return (double)test_org.GetPhenotype().num_fails;
+    });
+  };
+
+  // Tell experiment how to configure hardware inputs when running program against a test.
+  begin_program_test.AddAction([this](prog_org_t & prog_org, emp::Ptr<TestOrg_Base> test_org_base_ptr) {
+    // Reset eval stuff
+    // Set current test org.
+    prob_utils_ForLoopIndex.cur_eval_test_org = test_org_base_ptr.Cast<test_org_t>(); // currently only place need testID for this?
+    prob_utils_ForLoopIndex.ResetTestEval();
+    emp_assert(eval_hardware->GetMemSize() >= 1);
+    // Configure inputs.
+    if (eval_hardware->GetCallStackSize()) {
+      // Grab some useful references.
+      Problem_ForLoopIndex_input_t & input = prob_utils_ForLoopIndex.cur_eval_test_org->GetGenome(); // std::pair<int, double>
+      hardware_t::CallState & state = eval_hardware->GetCurCallState();
+      hardware_t::Memory & wmem = state.GetWorkingMem();
+      // Set hardware input.
+      wmem.Set(0, input[0]);
+      wmem.Set(1, input[1]);
+      wmem.Set(2, input[2]);
+    }
+  });
+
+  // Tell experiment how to snapshot test population.
+  SnapshotTests = [this]() {
+    std::string snapshot_dir = DATA_DIRECTORY + "pop_" + emp::to_string(prog_world->GetUpdate());
+    mkdir(snapshot_dir.c_str(), ACCESSPERMS);
+    
+    emp::DataFile file(snapshot_dir + "/test_pop_" + emp::to_string((int)prog_world->GetUpdate()) + ".csv");
+    // Test file contents:
+    // - test id
+    std::function<size_t(void)> get_test_id = [this]() { return stats_util.cur_testID; };
+    file.AddFun(get_test_id, "test_id");
+
+    // - test fitness
+    std::function<double(void)> get_test_fitness = [this]() { return prob_ForLoopIndex_world->CalcFitnessID(stats_util.cur_testID); };
+    file.AddFun(get_test_fitness, "fitness");
+
+    // - num passes
+    std::function<size_t(void)> get_test_num_passes = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_passes; };
+    file.AddFun(get_test_num_passes, "num_passes");
+
+    // - num fails
+    std::function<size_t(void)> get_test_num_fails = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_fails; };
+    file.AddFun(get_test_num_fails, "num_fails");
+
+    std::function<size_t(void)> get_num_tested = [this]() { return GetTestPhenotype(stats_util.cur_testID).test_passes.size(); };
+    file.AddFun(get_num_tested, "num_programs_tested_against");
+
+    // - test scores by program
+    std::function<std::string(void)> get_passes_by_program = [this]() {
+      std::string scores = "\"[";
+      test_org_phen_t & phen = GetTestPhenotype(stats_util.cur_testID);
+      for (size_t i = 0; i < phen.test_passes.size(); ++i) {
+        if (i) scores += ",";
+        scores += emp::to_string(phen.test_passes[i]);
+      }
+      scores += "]\"";
+      return scores;
+    };
+    file.AddFun(get_passes_by_program, "passes_by_program");
+
+    // - test
+    std::function<std::string(void)> get_test = [this]() {
+      std::ostringstream stream;
+      stream << "\"";
+      prob_ForLoopIndex_world->GetOrg(stats_util.cur_testID).Print(stream);
+      stream << "\"";
+      return stream.str();
+    };
+    file.AddFun(get_test, "test", "");
+
+    file.PrintHeaderKeys();
+
+    // Loop over tests, snapshotting each.
+    for (stats_util.cur_testID = 0; stats_util.cur_testID < prob_ForLoopIndex_world->GetSize(); ++stats_util.cur_testID) {
+      if (!prob_ForLoopIndex_world->IsOccupied(stats_util.cur_testID)) continue;
+      file.Update();
+    }
+  };
+
+  // Add default instructions to instruction set.
+  AddDefaultInstructions({"Add",
+                          "Sub",
+                          "Mult",
+                          "Div",
+                          "Mod",
+                          "TestNumEqu",
+                          "TestNumNEqu",
+                          "TestNumLess",
+                          "Floor",
+                          "Not",
+                          "Inc",
+                          "Dec",
+                          "CopyMem",
+                          "SwapMem",
+                          "Input",
+                          "Output",
+                          "CommitGlobal",
+                          "PullGlobal",
+                          "TestMemEqu",
+                          "TestMemNEqu",
+                          "If",
+                          "IfNot",
+                          "While",
+                          "Countdown",
+                          "Foreach",
+                          "Close",
+                          "Break",
+                          "Call",
+                          "Routine",
+                          "Return",
+                          "ModuleDef"
+  });
+
+  // -- Custom instructions --
+  inst_lib->AddInst("LoadStart", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadStart_ForLoopIndex(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("LoadStep", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadStep_ForLoopIndex(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("LoadEnd", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadEnd_ForLoopIndex(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("SubmitNum", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_SubmitNum_ForLoopIndex(hw, inst);
+  }, 0);
 }
 
 void ProgramSynthesisExperiment::SetupProblem_CompareStringLengths() { 
@@ -2458,6 +2767,57 @@ void ProgramSynthesisExperiment::Inst_SubmitLarge_SmallOrLarge(hardware_t & hw, 
 void ProgramSynthesisExperiment::Inst_SubmitNone_SmallOrLarge(hardware_t & hw, const inst_t & inst) {
   prob_utils_SmallOrLarge.Submit("");
 }
+
+// ----- ForLoopIndex -----
+void ProgramSynthesisExperiment::Inst_LoadStart_ForLoopIndex(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_ForLoopIndex.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_ForLoopIndex.cur_eval_test_org->GetGenome()[0]);
+}
+
+void ProgramSynthesisExperiment::Inst_LoadEnd_ForLoopIndex(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_ForLoopIndex.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_ForLoopIndex.cur_eval_test_org->GetGenome()[1]);
+}
+
+void ProgramSynthesisExperiment::Inst_LoadStep_ForLoopIndex(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_ForLoopIndex.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_ForLoopIndex.cur_eval_test_org->GetGenome()[2]);
+}
+
+void ProgramSynthesisExperiment::Inst_SubmitNum_ForLoopIndex(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), hardware_t::MemPosType::NUM);
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_ForLoopIndex.cur_eval_test_org != nullptr);
+  prob_utils_ForLoopIndex.Submit((int)wmem.AccessVal(posA).GetNum());
+}
+
+// ------------------------
 
 
 

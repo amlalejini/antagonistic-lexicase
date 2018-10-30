@@ -55,6 +55,13 @@ EMP_BUILD_CONFIG(ProgramSynthesisConfig,
   VALUE(PROB_SMALL_OR_LARGE__INT_MAX, int, 10000, "Max value for input int."),
   VALUE(PROB_SMALL_OR_LARGE__MUTATION__PER_INT_RATE, double, 0.1, "Per-integer mutation rate."),
 
+  GROUP(PROB_FOR_LOOP_INDEX_GROUP, "Settings specific to the for loop index problem."),
+  VALUE(PROB_FOR_LOOP_INDEX__START_END_MIN, int, -500, ". value for ."),
+  VALUE(PROB_FOR_LOOP_INDEX__START_END_MAX, int, 500, ". value for ."),
+  VALUE(PROB_FOR_LOOP_INDEX__STEP_MIN, int, 1, ". value for ."),
+  VALUE(PROB_FOR_LOOP_INDEX__STEP_MAX, int, 10, ". value for ."),
+  VALUE(PROB_FOR_LOOP_INDEX__MUTATION__MUT_RATE, double, 0.1, "Per-integer mutation rate."),
+
   GROUP(DATA_COLLECTION_GROUP, "Settings specific to data collection."),
   VALUE(DATA_DIRECTORY, std::string, "./output", "Where should we dump output files?"),
   VALUE(SNAPSHOT_INTERVAL, size_t, 1000, "How often should we take population snapshots?"),
