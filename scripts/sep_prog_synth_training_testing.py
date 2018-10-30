@@ -48,6 +48,28 @@ def main():
                 testing_content.append(line)
             else:
                 training_content.append(line)
+
+        ########################################################################
+        ########################################################################
+        # Extra, problem-specific processing.
+        ########################################################################
+        if problem == "for-loop-index":
+            processed_testing_content = []
+            for line in testing_content:
+                if "," in line: 
+                    processed_testing_content.append(line)
+                    continue
+                processed_testing_content[-1] += "," + line
+            testing_content = processed_testing_content
+
+            processed_training_content = []
+            for line in training_content:
+                if "," in line: 
+                    processed_training_content.append(line)
+                    continue
+                processed_training_content[-1] += "," + line
+            training_content = processed_training_content
+        ########################################################################
         
         testing_fname = "testing-examples-{}.csv".format(problem)
         training_fname = "training-examples-{}.csv".format(problem)
@@ -56,25 +78,6 @@ def main():
         with open(os.path.join(dump_dir, training_fname), "w") as fp:
             fp.write("\n".join(training_content).strip()) 
         
-        '''
-        for line in content:
-            if line[0] == "test_input_1": 
-                testing = True
-                print(">> Found test set.")
-            if testing:
-                testing_content.append(line)
-            else:
-                training_content.append(line)
-
-        testing_fname = "testing-examples-{}.csv".format(problem)
-        training_fname = "training-examples-{}.csv".format(problem)
-        with open(os.path.join(dump_dir, testing_fname), "w", newline='') as fp:
-            writer = csv.writer(fp, quotechar='"', delimiter=',', quoting=csv.QUOTE_ALL, skipinitialspace=True)
-            for line in testing_content: writer.writerow(line)
-
-        # with open(os.path.join(dump_dir, training_fname), "w", newline='') as fp:
-        #     fp.write(training_content.strip()) 
-        '''
 
 if __name__ == "__main__":
     main()
