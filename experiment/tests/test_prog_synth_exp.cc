@@ -14,6 +14,8 @@
 #include "Utilities.h"
 #include "Mutators.h"
 
+#include "parser.hpp"
+
 
 TEST_CASE("TagLGP_Mutator", "[taglgp]") {
   constexpr size_t TAG_WIDTH = 4;
@@ -78,5 +80,39 @@ TEST_CASE("HammingDistance", "[utilities]") {
   emp::BitSet<TAG_WIDTH> z;
   std::cout << HammingDist(matrix[0], z) << std::endl;
 
+
+}
+
+TEST_CASE("CSVReader", "[csv]") {
+
+  std::string training_fpath = "../../data/prog-synth-examples/testing-examples-compare-string-lengths.csv";
+
+  std::ifstream f(training_fpath);
+  aria::csv::CsvParser parser(f);
+  parser.delimiter(',');
+  parser.quote('"');
+
+  for (auto & row : parser) {
+    std::cout << "------- ROW -------" << std::endl;
+    emp::vector<std::string> fields;
+    for (auto & field : row) {
+      std::cout << "- FIELD: " << field << "\n";
+      fields.emplace_back(field);
+    }
+    // Check if output field matches what we'd expect
+    bool calc_out = false;
+    if (fields[0].size() < fields[1].size() && fields[1].size() < fields[2].size()) {
+      calc_out = true;
+    }
+    bool read_out = false;
+    if (fields[3] == "true") read_out = true;
+    else if (fields[3] == "false") read_out = false;
+    else {
+      std::cout << "!!!! Bad output value? !!!!" << std::endl;
+    }
+    std::cout << "read out (" << read_out << ") == calc out (" << calc_out << ") ? " << (read_out == calc_out) << std::endl;
+    REQUIRE(read_out == calc_out);
+    std::cout << std::endl;
+  }
 
 }
