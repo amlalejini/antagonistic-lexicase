@@ -1,9 +1,10 @@
 # Project-specific settings
 EXP_NAMES := sorting_networks prog_synth
 EMP_DIR := ../../Empirical/source
+CSV_READER_DIR := ../../csv-parser
 
 # Flags to use regardless of compiler
-CFLAGS_all := -Wall -Wno-unused-function -std=c++14 -I$(EMP_DIR)/
+CFLAGS_all := -Wall -Wno-unused-function -std=c++14 -I$(EMP_DIR)/ -I$(CSV_READER_DIR)/
 
 # Native compiler information
 CXX_nat := g++-8

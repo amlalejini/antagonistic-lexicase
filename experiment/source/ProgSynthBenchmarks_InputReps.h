@@ -488,7 +488,7 @@ struct ProblemUtilities_SmallOrLarge {
     emp::vector<std::string> split_line = emp::slice(line + " ", ',');
     input_t input;    // int
     output_t output;  // std::string
-    std::cout << "LINE=" << line << std::endl;
+    // std::cout << "LINE=" << line << std::endl;
     input = std::atof(split_line[0].c_str());
     output = split_line[1];
     if (!(output == " " || output == "small " || output == "large ")) {
@@ -717,10 +717,47 @@ struct ProblemUtilities_ForLoopIndex {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Problem: 
+// Problem: CompareStringLengths
+// - Input: std::array<std::string, 3>;
+// - Output: bool;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// /// Generate random test input
+Problem_CompareStringLengths_input_t GenRandomTestInput_CompareStringLengths(emp::Random & rand,
+                                                                             std::pair<size_t, size_t> str_size_range) {
+  // Valid characters: \n, \t, [32, 127)
+  emp::vector<char> valid_chars = {'\n', '\t'};
+  for (size_t i = 32; i < 127; ++i) valid_chars.emplace_back((char)i);
+
+  // String 1
+  size_t str_size = rand.GetUInt(str_size_range.first, str_size_range.second+1);
+  std::string str1;
+  for (size_t i = 0; i < str_size; ++i) str1.push_back(valid_chars[rand.GetUInt(valid_chars.size())]);
+
+  // String 2
+  str_size = rand.GetUInt(str_size_range.first, str_size_range.second+1);
+  std::string str2;
+  for (size_t i = 0; i < str_size; ++i) str2.push_back(valid_chars[rand.GetUInt(valid_chars.size())]);
+
+  // String 3
+  str_size = rand.GetUInt(str_size_range.first, str_size_range.second+1);
+  std::string str3;
+  for (size_t i = 0; i < str_size; ++i) str3.push_back(valid_chars[rand.GetUInt(valid_chars.size())]);
+  // std::cout << "---- RANDOM STRING ----" << std::endl;
+  // std::cout << "String 1: " << str1 << std::endl;
+  // std::cout << "String 2: " << str2 << std::endl;
+  // std::cout << "String 3: " << str3 << std::endl;
+  return {str1, str2, str3};
+}
+
+/// Generate correct output
+Problem_CompareStringLengths_output_t GenCorrectOut_CompareStringLengths(const Problem_CompareStringLengths_input_t & input) {
+  if (input[0].size() < input[1].size() && input[1].size() < input[2].size()) return true;
+  return false;
+}
+
 /// Compare String Lengths: Array<String, 3>
 class TestOrg_CompareStringLengths: public TestOrg_Base {
   public:
@@ -728,21 +765,169 @@ class TestOrg_CompareStringLengths: public TestOrg_Base {
     using parent_t::phenotype;
 
     using genome_t = std::array<std::string, 3>;
+    using out_t = Problem_CompareStringLengths_output_t;
+
   protected:
     genome_t genome;
+    out_t out;
 
   public:
-    TestOrg_CompareStringLengths(const genome_t & _g) : genome(_g) { ; }
+    TestOrg_CompareStringLengths(const genome_t & _g) : genome(_g), out() { ; }
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
 
-    void CalcOut() { ; }
+    void CalcOut() { out = GenCorrectOut_CompareStringLengths(genome); }
+
+    out_t & GetCorrectOut() { return out; }
+    const out_t & GetCorrectOut() const { return out; }   
+
+    void Print(std::ostream & os=std::cout) {
+      os << "\"" << genome[0] << "\"," << "\"" << genome[1] << "\"," << "\"" << genome[2] << "\"";
+    }
+
 };
 
-struct ProblemUtilities_CompareStringLengths { emp::vector<std::function<double(TestOrg_CompareStringLengths &)>> lexicase_fit_set; };
+struct ProblemUtilities_CompareStringLengths { 
+  using this_t = ProblemUtilities_CompareStringLengths;
+  using problem_org_t = TestOrg_CompareStringLengths;
+  using input_t = Problem_CompareStringLengths_input_t;
+  using output_t = Problem_CompareStringLengths_output_t;
+  
+  using testcase_set_t = TestCaseSet<input_t, output_t>;
+  
+  testcase_set_t testing_set;
+  testcase_set_t training_set;
 
+  emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
 
+  // --- Useful during a test evaluation ---
+  emp::Ptr<problem_org_t> cur_eval_test_org;
+  bool submitted;
+  bool submitted_val;
+
+  // Mutation - Handle here...
+  int MIN_STR_LEN;
+  int MAX_STR_LEN;
+  double PER_SITE_INS_RATE;
+  double PER_SITE_DEL_RATE;
+  double PER_SITE_SUB_RATE; 
+  double PER_STR_SWAP_RATE; 
+  emp::vector<char> valid_chars;
+  
+  size_t Mutate(emp::Random & rnd, input_t & mut_input) {
+    size_t muts = 0;
+
+    for (size_t i = 0; i < mut_input.size(); ++i) {
+      std::string & str = mut_input[i];
+      int expected_size = (int)str.size();
+      std::string new_string = "";
+
+      for (size_t s = 0; s < str.size(); ++s) {
+        
+        // Per-site insertions
+        if (rnd.P(PER_SITE_INS_RATE) && (expected_size+1 <= MAX_STR_LEN)) {
+          // Insert a random character.
+          new_string.push_back(valid_chars[rnd.GetUInt(valid_chars.size())]);
+          ++expected_size;
+          ++muts;
+        }
+        // Per-site deletions
+        if (rnd.P(PER_SITE_DEL_RATE) && (expected_size-1 >= MIN_STR_LEN)) {
+          --expected_size;
+          ++muts;
+          continue;
+        }
+        size_t whead = new_string.size();
+        new_string.push_back(str[s]); 
+        // Per-site substitutions
+        if (rnd.P(PER_SITE_SUB_RATE)) {
+          new_string[whead] = valid_chars[rnd.GetUInt(valid_chars.size())];
+          ++muts;
+        }
+      }
+      mut_input[i] = new_string;
+    }
+
+    for (size_t i = 0; i < mut_input.size(); ++i) {
+      if (rnd.P(PER_STR_SWAP_RATE)) {
+        ++muts;
+        // Swap position i with a random different position
+        size_t other = rnd.GetUInt(mut_input.size());
+        while (other == i) other = rnd.GetUInt(mut_input.size());
+        std::swap(mut_input[i], mut_input[other]);
+      }
+    }
+
+    return muts;
+  } // todo - test
+
+  // Selection
+  emp::vector<std::function<double(problem_org_t &)>> lexicase_fit_set;
+
+  ProblemUtilities_CompareStringLengths()
+    : testing_set(this_t::LoadTestCaseFromLine),
+      training_set(this_t::LoadTestCaseFromLine),
+      submitted(false), submitted_val(false)
+  { 
+    valid_chars = {'\n', '\t'};
+    for (size_t i = 32; i < 127; ++i) valid_chars.emplace_back((char)i); 
+  }
+
+  ~ProblemUtilities_CompareStringLengths() {
+    for (size_t i = 0; i < testingset_pop.size(); ++i) testingset_pop[i].Delete();
+  }
+
+  testcase_set_t & GetTestingSet() { return testing_set; }
+  testcase_set_t & GetTrainingSet() { return training_set; }
+
+  void ResetTestEval() {
+    submitted = false;
+    submitted_val = false;
+  }
+
+  void Submit(bool val) {
+    submitted = true;
+    submitted_val = val;
+  }
+
+  static std::pair<input_t, output_t> LoadTestCaseFromLine(const emp::vector<std::string> & line) {
+    input_t input;   
+    output_t output; 
+    // Load input.
+    input[0] = line[0];
+    input[1] = line[1];
+    input[2] = line[2];
+    // Load output.
+    if (line[3] == "false") output = false;
+    else if (line[3] == "true") output = true;
+    else {
+      std::cout << "ERROR when loading test case output (" << line[3] << "). Exiting." << std::endl;
+      exit(-1);
+    }
+    return {input, output};
+  }
+
+  void GenerateTestingSetPop() {
+    for (size_t i = 0; i < testing_set.GetSize(); ++i) {
+      testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
+      testingset_pop[i]->CalcOut();
+    }
+  }
+
+  std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
+    const bool pass = (sub == correct_test_output);
+    return {(double)pass, pass};
+  }
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Problem:
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Double Letters: String
 class TestOrg_DoubleLetters : public TestOrg_Base {
@@ -765,7 +950,13 @@ class TestOrg_DoubleLetters : public TestOrg_Base {
 
 struct ProblemUtilities_DoubleLetters { emp::vector<std::function<double(TestOrg_DoubleLetters &)>> lexicase_fit_set; };
 
-
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Problem:
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Collatz Numbers: Integer
 class TestOrg_CollatzNumbers : public TestOrg_Base {

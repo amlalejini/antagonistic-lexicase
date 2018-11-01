@@ -16,6 +16,8 @@
 #include "tools/Random.h"
 #include "tools/random_utils.h"
 
+#include "parser.hpp"
+
 template <typename INPUT_TYPE, typename OUTPUT_TYPE>
 class TestCaseSet {
 protected:
@@ -23,24 +25,33 @@ protected:
     using output_t = OUTPUT_TYPE;
     using test_case_t = std::pair<input_t, output_t>;
 
-    using load_test_case_fun_t = std::function<test_case_t(const std::string &)>;
+    using fun_load_test_case_from_line_str_t = std::function<test_case_t(const std::string &)>;
+    using fun_load_test_case_from_line_vec_t = std::function<test_case_t(const emp::vector<std::string> &)>;
     
     emp::vector<test_case_t> test_cases;
 
-    load_test_case_fun_t fun_load_test_case;
+    fun_load_test_case_from_line_str_t fun_load_test_case_from_line_str;
+    fun_load_test_case_from_line_vec_t fun_load_test_case_from_line_vec;
 
 public:
-    TestCaseSet(const load_test_case_fun_t & load_fun, const std::string & filename) {
-        fun_load_test_case = load_fun;
-        LoadTestCases(filename);
+    // TestCaseSet(const load_test_case_fun_t & load_fun, const std::string & filename) {
+    //     fun_load_test_case = load_fun;
+    //     LoadTestCases(filename);
+    // }
+
+    TestCaseSet(const fun_load_test_case_from_line_str_t & load_fun) {
+        fun_load_test_case_from_line_str = load_fun;
+        fun_load_test_case_from_line_vec = [](const emp::vector<std::string> &) -> std::pair<input_t, output_t> { return {input_t(), output_t()}; };
     }
 
-    TestCaseSet(const load_test_case_fun_t & load_fun) {
-        fun_load_test_case = load_fun;
+    TestCaseSet(const fun_load_test_case_from_line_vec_t & load_fun) {
+        fun_load_test_case_from_line_str = [](const std::string &) -> std::pair<input_t, output_t> { return {input_t(), output_t()}; };
+        fun_load_test_case_from_line_vec = load_fun;
     }
 
     TestCaseSet() {
-        fun_load_test_case = [](const std::string &) -> std::pair<input_t, output_t> { return {input_t(), output_t()}; };
+        fun_load_test_case_from_line_str = [](const std::string &) -> std::pair<input_t, output_t> { return {input_t(), output_t()}; };
+        fun_load_test_case_from_line_vec = [](const emp::vector<std::string> &) -> std::pair<input_t, output_t> { return {input_t(), output_t()}; };
     }
 
     test_case_t & operator[](size_t id) { return test_cases[id]; }
@@ -70,12 +81,13 @@ public:
         return test_cases[testID].second;
     }
 
-
     /// Get test case set
     emp::vector<test_case_t> & GetTestCaseSet() { return test_cases; }
 
-    void SetLoadFun(const load_test_case_fun_t & load_fun) { fun_load_test_case = load_fun; }
+    void SetLoadFun(const fun_load_test_case_from_line_str_t & load_fun) { fun_load_test_case_from_line_str = load_fun; }
+    void SetLoadFun(const fun_load_test_case_from_line_vec_t & load_fun) { fun_load_test_case_from_line_vec = load_fun; }
     
+    /// NOTE - in future, deprecate this way of reading things in.
     void LoadTestCases(std::string filename) {
         std::ifstream infile(filename);
         std::string line;
@@ -86,9 +98,25 @@ public:
         // Ignore header
         getline(infile, line);
         while (getline(infile, line)) {
-            test_cases.emplace_back(fun_load_test_case(line));
+            test_cases.emplace_back(fun_load_test_case_from_line_str(line));
         }
         infile.close();
+    }
+
+    /// NOTE - in future, move forward with this way of reading test case input!
+    void LoadTestCasesWithCSVReader(std::string filename) {
+        std::ifstream infile(filename);
+        aria::csv::CsvParser parser(infile);
+        
+        bool header = true;
+        for (auto & row : parser) {
+            if (header) { header = false; continue; } // Skip over header row
+            emp::vector<std::string> fields;
+            for (auto & field : row) {
+                fields.emplace_back(field);
+            }
+            test_cases.emplace_back(fun_load_test_case_from_line_vec(fields));
+        }
     }
 
     bool EvaluateOnTest(size_t testID, const output_t & out) {

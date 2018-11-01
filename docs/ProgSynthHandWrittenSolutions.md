@@ -5,6 +5,7 @@
 - [Problem - Number IO](#problem---number-io)
 - [Problem - Small or Large](#problem---small-or-large)
 - [Problem - ForLoopIndex](#problem---forloopindex)
+- [Problem - CompareStringLengths](#problem---comparestringlengths)
 
 <!-- /TOC -->
 
@@ -67,5 +68,26 @@
   sol.PushInst("Close",       {matrix[7], matrix[7], matrix[7]});
   sol.PushInst("Return",      {matrix[7], matrix[7], matrix[7]});
 
+  prog_world->Inject(sol, PROG_POP_SIZE);
+```
+
+## Problem - CompareStringLengths
+
+```{C++}
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  hardware_t::Program sol(inst_lib);
+
+  sol.PushInst("StrLength",   {matrix[0], matrix[0], matrix[4]});
+  sol.PushInst("StrLength",   {matrix[1], matrix[1], matrix[4]});
+  sol.PushInst("StrLength",   {matrix[2], matrix[2], matrix[4]});
+  sol.PushInst("TestNumLess", {matrix[0], matrix[1], matrix[3]});
+  sol.PushInst("If",          {matrix[3], matrix[4], matrix[4]});
+  sol.PushInst("TestNumLess", {matrix[1], matrix[2], matrix[3]});
+  sol.PushInst("If",          {matrix[3], matrix[4], matrix[4]});
+  sol.PushInst("SubmitVal",   {matrix[3], matrix[4], matrix[4]});
+  sol.PushInst("Close",       {matrix[4], matrix[4], matrix[4]});
+  sol.PushInst("Close",       {matrix[4], matrix[4], matrix[4]});
+  sol.PushInst("SubmitVal",   {matrix[3], matrix[4], matrix[4]});
+  
   prog_world->Inject(sol, PROG_POP_SIZE);
 ```

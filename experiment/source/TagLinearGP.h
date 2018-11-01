@@ -2028,6 +2028,52 @@ namespace TagLGP {
       }
     }
 
+    // - str instructions -
+    static void Inst_StrLength(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+      
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::STR);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+
+      wmem.Set(posB, wmem.AccessVal(posA).GetStr().size());
+    } // todo - test
+
+    static void Inst_StrConcat(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::STR);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::STR);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+      //  mem[C] = mem[A] + mem[B]
+      const std::string & A = wmem.AccessVal(posA).GetStr();
+      const std::string & B = wmem.AccessVal(posB).GetStr();
+      wmem.Set(posC, A + B);
+    } // todo - test
+
+    static void Inst_StrToVec(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::STR);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      //  mem[C] = mem[A] + mem[B]
+      const std::string & A = wmem.AccessVal(posA).GetStr();
+      emp::vector<std::string> vec;
+      for (size_t i = 0; i < A.size(); ++i) {
+        vec.emplace_back(A[i]);
+      }
+      wmem.Set(posB, vec);
+    } // todo - test
+
     // - types -
     static void Inst_IsStr(hardware_t & hw, const inst_t & inst) {
       CallState & state = hw.GetCurCallState();
