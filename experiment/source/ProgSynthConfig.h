@@ -70,6 +70,12 @@ EMP_BUILD_CONFIG(ProgramSynthesisConfig,
   VALUE(PROB_COMPARE_STRING_LENGTHS__PER_SITE_SUB_RATE, double, 0.1, "."),
   VALUE(PROB_COMPARE_STRING_LENGTHS__PER_STR_SWAP_RATE, double, 0.1, "."),
 
+  GROUP(PROB_SMALLEST_GROUP, "Settings specific to the smallest problem"),
+  VALUE(PROB_SMALLEST__MIN_NUM, int, -100, "."),
+  VALUE(PROB_SMALLEST__MAX_NUM, int, 100, "."),
+  VALUE(PROB_SMALLEST__MUTATION__PER_NUM_SUB_RATE, double, 0.1, "."),
+  VALUE(PROB_SMALLEST__MUTATION__PER_NUM_SWAP_RATE, double, 0.1, "."),
+
   GROUP(DATA_COLLECTION_GROUP, "Settings specific to data collection."),
   VALUE(DATA_DIRECTORY, std::string, "./output", "Where should we dump output files?"),
   VALUE(SNAPSHOT_INTERVAL, size_t, 1000, "How often should we take population snapshots?"),

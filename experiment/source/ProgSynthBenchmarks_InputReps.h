@@ -1464,7 +1464,34 @@ class TestOrg_Median : public TestOrg_Base {
 
 struct ProblemUtilities_Median { emp::vector<std::function<double(TestOrg_Median &)>> lexicase_fit_set; };
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Problem: Smallest
+// - Input: Array<Integer, 4>
+// - Output: int
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// Generate random test input
+Problem_Smallest_input_t GenRandomTestInput_Smallest(emp::Random & rand,
+                                                     std::pair<int, int> num_range) {
+  Problem_Smallest_input_t input;
+  for (size_t i = 0; i < input.size(); ++i) {
+    input[i] = rand.GetInt(num_range.first, num_range.second+1);
+  }
+  return input;
+}
+
+/// Generate correct output
+Problem_Smallest_output_t GenCorrectOut_Smallest(const Problem_Smallest_input_t & input) {
+  int smallest = input[0];
+  for (size_t i = 1; i < input.size(); ++i) {
+    if (input[i] < smallest) smallest = input[i];
+  }
+  return smallest;
+}
 
 /// Smallest: Array<Integer, 4>
 class TestOrg_Smallest : public TestOrg_Base {
@@ -1473,8 +1500,11 @@ class TestOrg_Smallest : public TestOrg_Base {
     using parent_t::phenotype;
 
     using genome_t = std::array<int, 4>;
+    using out_t = Problem_Smallest_output_t;
+
   protected:
     genome_t genome;
+    out_t out;
 
   public:
     TestOrg_Smallest(const genome_t & _g) : genome(_g) { ; }
@@ -1482,12 +1512,126 @@ class TestOrg_Smallest : public TestOrg_Base {
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
 
-    void CalcOut() { ; }
+    void CalcOut() { out = GenCorrectOut_Smallest(genome); }
+
+    out_t & GetCorrectOut() { return out; }
+    const out_t & GetCorrectOut() const { return out; }  
+
+    void Print(std::ostream & os=std::cout) {
+      for (size_t i = 0; i < genome.size(); ++i) {
+        if (i) os << ",";
+        os << genome[i];
+      }
+    }
 };
 
-struct ProblemUtilities_Smallest { emp::vector<std::function<double(TestOrg_Smallest &)>> lexicase_fit_set; };
+struct ProblemUtilities_Smallest { 
+  using this_t = ProblemUtilities_Smallest;
+  using problem_org_t = TestOrg_Smallest;
+  using input_t = Problem_Smallest_input_t;
+  using output_t = Problem_Smallest_output_t;
+  
+  using testcase_set_t = TestCaseSet<input_t, output_t>;
+  
+  testcase_set_t testing_set;
+  testcase_set_t training_set;
 
+  emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
 
+  // // --- Useful during a test evaluation ---
+  emp::Ptr<problem_org_t> cur_eval_test_org;
+  bool submitted;
+  int submitted_val;
+
+  // // Mutation - Handle here...
+  int MIN_NUM;
+  int MAX_NUM;
+  double PER_NUM_SUB_RATE;
+  double PER_NUM_SWAP_RATE;
+  
+  size_t Mutate(emp::Random & rnd, input_t & mut_input) {
+    size_t muts = 0;
+
+    for (size_t i = 0; i < mut_input.size(); ++i) {
+      if (rnd.P(PER_NUM_SUB_RATE)) {
+        ++muts;
+        mut_input[i] = rnd.GetInt(MIN_NUM, MAX_NUM+1);
+      }
+    }
+
+    for (size_t i = 0; i < mut_input.size(); ++i) {
+      if (rnd.P(PER_NUM_SWAP_RATE)) {
+        ++muts;
+        size_t other_pos = rnd.GetUInt(mut_input.size());
+        while (other_pos == i) other_pos = rnd.GetUInt(mut_input.size());
+        std::swap(mut_input[i], mut_input[other_pos]);
+      }
+    }
+
+    return muts;
+  } // todo - test
+
+  // Selection
+  emp::vector<std::function<double(problem_org_t &)>> lexicase_fit_set;
+
+  ProblemUtilities_Smallest()
+    : testing_set(this_t::LoadTestCaseFromLine),
+      training_set(this_t::LoadTestCaseFromLine),
+      submitted(false), submitted_val(false)
+  { ; }
+
+  ~ProblemUtilities_Smallest() {
+    for (size_t i = 0; i < testingset_pop.size(); ++i) testingset_pop[i].Delete();
+  }
+
+  testcase_set_t & GetTestingSet() { return testing_set; }
+  testcase_set_t & GetTrainingSet() { return training_set; }
+
+  void ResetTestEval() {
+    submitted = false;
+    submitted_val = 0;
+  }
+
+  void Submit(int val) {
+    submitted = true;
+    submitted_val = val;
+  }
+
+  static std::pair<input_t, output_t> LoadTestCaseFromLine(const emp::vector<std::string> & line) {
+    input_t input;   
+    output_t output; 
+    // Load input.
+    input[0] = std::atof(line[0].c_str());
+    input[1] = std::atof(line[1].c_str());
+    input[2] = std::atof(line[2].c_str());
+    input[3] = std::atof(line[3].c_str());
+    // Load output.
+    output = std::atof(line[4].c_str());
+    emp_assert(output == GenCorrectOut_Smallest(input));
+    return {input, output};
+  }
+
+  void GenerateTestingSetPop() {
+    for (size_t i = 0; i < testing_set.GetSize(); ++i) {
+      testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
+      testingset_pop[i]->CalcOut();
+    }
+  }
+
+  std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
+    const bool pass = (sub == correct_test_output);
+    return {(double)pass, pass};
+  }
+
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Problem: Syllables
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Syllables: String
 class TestOrg_Syllables : public TestOrg_Base {
