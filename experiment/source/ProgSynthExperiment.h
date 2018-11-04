@@ -131,6 +131,7 @@ std::unordered_map<std::string, ProblemInfo> problems = {
   {"small-or-large", {PROBLEM_ID::SmallOrLarge, "training-examples-small-or-large.csv", "testing-examples-small-or-large.csv"}},
   {"for-loop-index", {PROBLEM_ID::ForLoopIndex, "training-examples-for-loop-index.csv", "testing-examples-for-loop-index.csv"}},
   {"compare-string-lengths", {PROBLEM_ID::CompareStringLengths, "training-examples-compare-string-lengths.csv", "testing-examples-compare-string-lengths.csv"}},
+  {"median", {PROBLEM_ID::Median, "training-examples-median.csv", "testing-examples-median.csv"}},
   {"smallest", {PROBLEM_ID::Smallest, "training-examples-smallest.csv", "testing-examples-smallest.csv"}}
 };
 
@@ -297,7 +298,7 @@ protected:
   int PROB_NUMBER_IO__INT_MIN;
   int PROB_NUMBER_IO__INT_MAX;
   double PROB_NUMBER_IO__MUTATION__PER_INT_RATE;
-  double PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE;
+  double PROB_NUMBER_IO__MUTATION__PER_DOUBLE_RATE; 
 
   int PROB_SMALL_OR_LARGE__INT_MIN;
   int PROB_SMALL_OR_LARGE__INT_MAX;
@@ -315,6 +316,12 @@ protected:
   double PROB_COMPARE_STRING_LENGTHS__PER_SITE_DEL_RATE;
   double PROB_COMPARE_STRING_LENGTHS__PER_SITE_SUB_RATE;
   double PROB_COMPARE_STRING_LENGTHS__PER_STR_SWAP_RATE;
+
+  int PROB_MEDIAN__MIN_NUM;
+  int PROB_MEDIAN__MAX_NUM;
+  double PROB_MEDIAN__MUTATION__PER_NUM_COPY_RATE;
+  double PROB_MEDIAN__MUTATION__PER_NUM_SUB_RATE;
+  double PROB_MEDIAN__MUTATION__PER_NUM_SWAP_RATE;
 
   int PROB_SMALLEST__MIN_NUM;
   int PROB_SMALLEST__MAX_NUM;
@@ -769,6 +776,11 @@ protected:
   void Inst_SubmitTrue_CompareStringLengths(hardware_t & hw, const inst_t & inst);
   void Inst_SubmitFalse_CompareStringLengths(hardware_t & hw, const inst_t & inst);
   void Inst_SubmitVal_CompareStringLengths(hardware_t & hw, const inst_t & inst);
+  // -- Median --
+  void Inst_LoadNum1_Median(hardware_t & hw, const inst_t & inst);
+  void Inst_LoadNum2_Median(hardware_t & hw, const inst_t & inst);
+  void Inst_LoadNum3_Median(hardware_t & hw, const inst_t & inst);
+  void Inst_SubmitNum_Median(hardware_t & hw, const inst_t & inst);
   // -- Smallest --
   void Inst_LoadNum1_Smallest(hardware_t & hw, const inst_t & inst);
   void Inst_LoadNum2_Smallest(hardware_t & hw, const inst_t & inst);
@@ -1022,6 +1034,12 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   PROB_COMPARE_STRING_LENGTHS__PER_SITE_SUB_RATE = config.PROB_COMPARE_STRING_LENGTHS__PER_SITE_SUB_RATE();
   PROB_COMPARE_STRING_LENGTHS__PER_STR_SWAP_RATE = config.PROB_COMPARE_STRING_LENGTHS__PER_STR_SWAP_RATE();
 
+  PROB_MEDIAN__MIN_NUM = config.PROB_MEDIAN__MIN_NUM();
+  PROB_MEDIAN__MAX_NUM = config.PROB_MEDIAN__MAX_NUM();
+  PROB_MEDIAN__MUTATION__PER_NUM_COPY_RATE = config.PROB_MEDIAN__MUTATION__PER_NUM_COPY_RATE();
+  PROB_MEDIAN__MUTATION__PER_NUM_SUB_RATE = config.PROB_MEDIAN__MUTATION__PER_NUM_SUB_RATE();
+  PROB_MEDIAN__MUTATION__PER_NUM_SWAP_RATE = config.PROB_MEDIAN__MUTATION__PER_NUM_SWAP_RATE();
+  
   PROB_SMALLEST__MIN_NUM = config.PROB_SMALLEST__MIN_NUM();
   PROB_SMALLEST__MAX_NUM = config.PROB_SMALLEST__MAX_NUM();
   PROB_SMALLEST__MUTATION__PER_NUM_SUB_RATE = config.PROB_SMALLEST__MUTATION__PER_NUM_SUB_RATE();
@@ -1112,10 +1130,16 @@ void ProgramSynthesisExperiment::SetupHardware() {
   // - For specified evaluation time, advance evaluation hardware. If at any point
   //   the program's call stack is empty, automatically finish the evaluation.
   do_program_test.AddAction([this](prog_org_t & prog_org, emp::Ptr<TestOrg_Base> test_org_ptr) {
+    // std::cout << "--- DO PROGRAM TEST ---" << std::endl;
+    // std::cout << "==== Initial hardware state ====" << std::endl;
+    // eval_hardware->PrintHardwareState();
     for (eval_time = 0; eval_time < PROG_EVAL_TIME; ++eval_time) {
+      // std::cout << "==== Time = " << eval_time << "==== " << std::endl;
       do_program_advance.Trigger(prog_org);
+      // eval_hardware->PrintHardwareState();
       if (eval_hardware->GetCallStackSize() == 0) break; // If call stack is ever completely empty, program is done early.
     }
+    // exit(-1);
   });
   
   // How do we advance the evaluation hardware?
@@ -1676,19 +1700,24 @@ void ProgramSynthesisExperiment::InitProgPop_Random() {
   // emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
   // hardware_t::Program sol(inst_lib);
 
-  // sol.PushInst("LoadNum1",    {matrix[0], matrix[7], matrix[7]});
-  // sol.PushInst("LoadNum2",    {matrix[1], matrix[7], matrix[7]});
-  // sol.PushInst("LoadNum3",    {matrix[2], matrix[7], matrix[7]});
-  // sol.PushInst("LoadNum4",    {matrix[3], matrix[7], matrix[7]});
-  // sol.PushInst("MakeVector",  {matrix[0], matrix[3], matrix[4]});
-  // sol.PushInst("Foreach",     {matrix[5], matrix[4], matrix[7]});
-  // sol.PushInst("TestNumLess", {matrix[5], matrix[0], matrix[6]});
-  // sol.PushInst("If",          {matrix[6], matrix[7], matrix[7]});
-  // sol.PushInst("CopyMem",     {matrix[5], matrix[0], matrix[7]});
-  // sol.PushInst("Close",       {matrix[7], matrix[7], matrix[7]});
-  // sol.PushInst("Close",       {matrix[7], matrix[7], matrix[7]});
-  // sol.PushInst("SubmitNum",   {matrix[0], matrix[7], matrix[7]});
-  
+  // sol.PushInst("MakeVector",    {matrix[0], matrix[2], matrix[4]});
+  // sol.PushInst("LoadNum1",      {matrix[5], matrix[0], matrix[0]});
+  // sol.PushInst("LoadNum1",      {matrix[6], matrix[0], matrix[0]});
+  // sol.PushInst("Foreach",       {matrix[0], matrix[4], matrix[0]});
+  // sol.PushInst(  "TestNumLess", {matrix[0], matrix[5], matrix[1]});
+  // sol.PushInst(  "If",          {matrix[1], matrix[0], matrix[0]});
+  // sol.PushInst(    "CopyMem",   {matrix[0], matrix[5], matrix[0]});
+  // sol.PushInst(  "Close",       {matrix[0], matrix[0], matrix[0]});
+  // sol.PushInst(  "TestNumLess", {matrix[6], matrix[0], matrix[1]});
+  // sol.PushInst(  "If",          {matrix[1], matrix[0], matrix[0]});
+  // sol.PushInst(    "CopyMem",   {matrix[0], matrix[6], matrix[0]});
+  // sol.PushInst(  "Close",       {matrix[0], matrix[0], matrix[0]});
+  // sol.PushInst(  "Add",         {matrix[0], matrix[7], matrix[7]});
+  // sol.PushInst("Close",         {matrix[0], matrix[0], matrix[0]});
+  // sol.PushInst("Sub",           {matrix[7], matrix[5], matrix[7]});
+  // sol.PushInst("Sub",           {matrix[7], matrix[6], matrix[7]});
+  // sol.PushInst("SubmitNum",     {matrix[7], matrix[0], matrix[0]});
+
   // prog_world->Inject(sol, PROG_POP_SIZE);
 }
 
@@ -3026,8 +3055,300 @@ void ProgramSynthesisExperiment::SetupProblem_Grade() {
 }
 
 void ProgramSynthesisExperiment::SetupProblem_Median() { 
-  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
-  exit(-1); 
+  std::cout << "Setting up problem - Median" << std::endl;
+
+  // A few useful aliases
+  using test_org_t = TestOrg_Median;
+
+  // Load benchmark data for problem.
+  if (BENCHMARK_DATA_DIR.back() != '/') BENCHMARK_DATA_DIR += '/';
+  std::string training_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTrainingSetFilename();  
+  std::string testing_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTestingSetFilename();  
+  std::cout << "Loading training examples." << std::endl;
+  prob_utils_Median.GetTrainingSet().LoadTestCasesWithCSVReader(training_examples_fpath);
+  std::cout << "Loading testing examples." << std::endl;
+  prob_utils_Median.GetTestingSet().LoadTestCasesWithCSVReader(testing_examples_fpath);
+  std::cout << "Generating testing set population." << std::endl;
+  prob_utils_Median.GenerateTestingSetPop();
+  std::cout << "Loaded training example set size = " << prob_utils_Median.GetTrainingSet().GetSize() << std::endl;
+  std::cout << "Loaded testing example set size = " << prob_utils_Median.GetTestingSet().GetSize() << std::endl;
+  std::cout << "Testing set (non-training examples used to evaluate program accuracy) size = " << prob_utils_Median.testingset_pop.size() << std::endl;
+
+  // Setup the world
+  NewTestCaseWorld(prob_Median_world, *random, "Median world");
+
+  // Configure how the population should be initialized
+  SetupTestCasePop_Init(prob_Median_world,
+                        prob_utils_Median.training_set,
+                        [this]() { return GenRandomTestInput_Median(*random, 
+                                                                    {PROB_MEDIAN__MIN_NUM, PROB_MEDIAN__MAX_NUM}); 
+                                  }
+                        );
+  end_setup_sig.AddAction([this]() { std::cout << "TestCase world size= " << prob_Median_world->GetSize() << std::endl; });
+
+  // Tell the world to calculate the correct test output (given input) on placement.
+  prob_Median_world->OnPlacement([this](size_t pos) { prob_Median_world->GetOrg(pos).CalcOut(); });
+
+  // How are program results calculated on a test?
+  CalcProgramResultOnTest = [this](prog_org_t & prog_org, TestOrg_Base & test_org_base) {
+    test_org_t & test_org = static_cast<test_org_t&>(test_org_base);
+    TestResult result;
+    if (!prob_utils_Median.submitted) {
+      result.score = 0;
+      result.pass = false;
+      result.sub = false;
+    } else {
+      std::pair<double, bool> r(prob_utils_Median.CalcScorePassFail(test_org.GetCorrectOut(), prob_utils_Median.submitted_val));
+      result.score = r.first;
+      result.pass = r.second;
+      result.sub = true;
+    }
+    return result;
+  };
+
+  // Setup how evaluation on world test should work.
+  EvaluateWorldTest = [this](prog_org_t & prog_org, size_t testID) {
+    emp::Ptr<test_org_t> test_org_ptr = prob_Median_world->GetOrgPtr(testID);
+    begin_program_test.Trigger(prog_org, test_org_ptr);
+    do_program_test.Trigger(prog_org, test_org_ptr);
+    end_program_test.Trigger(prog_org, test_org_ptr);
+    return CalcProgramResultOnTest(prog_org, *test_org_ptr);
+  };
+
+  // How should we validate programs on testing set?
+  DoTestingSetValidation = [this](prog_org_t & prog_org) { 
+    // evaluate program on full testing set; update stats utils with results
+    begin_program_eval.Trigger(prog_org);
+    stats_util.current_program__validation__test_results.resize(prob_utils_Median.testingset_pop.size());
+    stats_util.current_program__validation__total_score = 0;
+    stats_util.current_program__validation__total_passes = 0;
+    stats_util.current_program__validation__is_solution = false;
+    // For each test in validation set, evaluate program.
+    for (size_t testID = 0; testID < prob_utils_Median.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_Median.testingset_pop[testID];
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
+      stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+    }
+    stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_Median.testingset_pop.size();
+    end_program_eval.Trigger(prog_org);
+  };
+
+  // How should we screen for a solution?
+  ScreenForSolution = [this](prog_org_t & prog_org) {
+    begin_program_eval.Trigger(prog_org);
+    for (size_t testID = 0; testID < prob_utils_Median.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_Median.testingset_pop[testID];
+
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      
+      TestResult result = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      if (!result.pass) {
+        end_program_eval.Trigger(prog_org);
+        return false;
+      }
+    }
+    end_program_eval.Trigger(prog_org);
+    return true;
+  };
+
+  // Tell the experiment how to get test phenotypes.
+  GetTestPhenotype = [this](size_t testID) -> test_org_phen_t & {
+    emp_assert(prob_Median_world->IsOccupied(testID));
+    return prob_Median_world->GetOrg(testID).GetPhenotype();
+  };
+
+  // Setup how test world updates.
+  SetupTestCaseWorldUpdate(prob_Median_world);
+
+  // todo - test that RANDOM is actually making random things every update..
+
+  // Setup how test cases mutate.
+  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::RANDOM) {
+    std::cout << "RANDOM training mode detected, configuring mutation function to RANDOMIZE organisms." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Randomize organism genome on mutate.
+      prob_Median_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        test_org.GetGenome() = GenRandomTestInput_Median(*random, {PROB_MEDIAN__MIN_NUM, PROB_MEDIAN__MAX_NUM}); 
+        return 1;
+      });
+    };
+  } else {
+    std::cout << "Non-RANDOM training mode detected, configuring mutation function normally." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Configure mutator.
+      prob_utils_Median.MIN_NUM = PROB_MEDIAN__MIN_NUM;
+      prob_utils_Median.MAX_NUM = PROB_MEDIAN__MAX_NUM;
+      prob_utils_Median.PER_NUM_COPY_RATE = PROB_MEDIAN__MUTATION__PER_NUM_COPY_RATE;
+      prob_utils_Median.PER_NUM_SUB_RATE = PROB_MEDIAN__MUTATION__PER_NUM_SUB_RATE;
+      prob_utils_Median.PER_NUM_SWAP_RATE = PROB_MEDIAN__MUTATION__PER_NUM_SWAP_RATE;
+      // (2) Hook mutator up to world.
+      prob_Median_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        return prob_utils_Median.Mutate(rnd, test_org.GetGenome());
+      });
+    };
+  }
+
+  // Setup test case fitness function.
+  SetupTestFitFun = [this]() {
+    prob_Median_world->SetFitFun([](test_org_t & test_org) {
+      return (double)test_org.GetPhenotype().num_fails;
+    });
+  };
+
+  // Tell experiment how to configure hardware inputs when running program against a test.
+  begin_program_test.AddAction([this](prog_org_t & prog_org, emp::Ptr<TestOrg_Base> test_org_base_ptr) {
+    // Reset eval stuff
+    // Set current test org.
+    prob_utils_Median.cur_eval_test_org = test_org_base_ptr.Cast<test_org_t>(); // currently only place need testID for this?
+    prob_utils_Median.ResetTestEval();
+    emp_assert(eval_hardware->GetMemSize() >= 3);
+    // Configure inputs.
+    if (eval_hardware->GetCallStackSize()) {
+      // Grab some useful references.
+      Problem_Median_input_t & input = prob_utils_Median.cur_eval_test_org->GetGenome(); // std::pair<int, double>
+      hardware_t::CallState & state = eval_hardware->GetCurCallState();
+      hardware_t::Memory & wmem = state.GetWorkingMem();
+      // Set hardware input.
+      wmem.Set(0, input[0]);
+      wmem.Set(1, input[1]);
+      wmem.Set(2, input[2]);
+    }
+  });
+
+  // Tell experiment how to snapshot test population.
+  SnapshotTests = [this]() {
+    std::string snapshot_dir = DATA_DIRECTORY + "pop_" + emp::to_string(prog_world->GetUpdate());
+    mkdir(snapshot_dir.c_str(), ACCESSPERMS);
+    
+    emp::DataFile file(snapshot_dir + "/test_pop_" + emp::to_string((int)prog_world->GetUpdate()) + ".csv");
+    // Test file contents:
+    // - test id
+    std::function<size_t(void)> get_test_id = [this]() { return stats_util.cur_testID; };
+    file.AddFun(get_test_id, "test_id");
+
+    // - test fitness
+    std::function<double(void)> get_test_fitness = [this]() { return prob_Median_world->CalcFitnessID(stats_util.cur_testID); };
+    file.AddFun(get_test_fitness, "fitness");
+
+    // - num passes
+    std::function<size_t(void)> get_test_num_passes = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_passes; };
+    file.AddFun(get_test_num_passes, "num_passes");
+
+    // - num fails
+    std::function<size_t(void)> get_test_num_fails = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_fails; };
+    file.AddFun(get_test_num_fails, "num_fails");
+
+    std::function<size_t(void)> get_num_tested = [this]() { return GetTestPhenotype(stats_util.cur_testID).test_passes.size(); };
+    file.AddFun(get_num_tested, "num_programs_tested_against");
+
+    // - test scores by program
+    std::function<std::string(void)> get_passes_by_program = [this]() {
+      std::string scores = "\"[";
+      test_org_phen_t & phen = GetTestPhenotype(stats_util.cur_testID);
+      for (size_t i = 0; i < phen.test_passes.size(); ++i) {
+        if (i) scores += ",";
+        scores += emp::to_string(phen.test_passes[i]);
+      }
+      scores += "]\"";
+      return scores;
+    };
+    file.AddFun(get_passes_by_program, "passes_by_program");
+
+    // - test
+    std::function<std::string(void)> get_test = [this]() {
+      std::ostringstream stream;
+      stream << "\"";
+      prob_Median_world->GetOrg(stats_util.cur_testID).Print(stream);
+      stream << "\"";
+      return stream.str();
+    };
+    file.AddFun(get_test, "test");
+
+    file.PrintHeaderKeys();
+
+    // Loop over tests, snapshotting each.
+    for (stats_util.cur_testID = 0; stats_util.cur_testID < prob_Median_world->GetSize(); ++stats_util.cur_testID) {
+      if (!prob_Median_world->IsOccupied(stats_util.cur_testID)) continue;
+      file.Update();
+    }
+  };
+
+  // Add default instructions to instruction set.
+  AddDefaultInstructions({"Add",
+                          "Sub",
+                          "Mult",
+                          "Div",
+                          "Mod",
+                          "TestNumEqu",
+                          "TestNumNEqu",
+                          "TestNumLess",
+                          "Floor",
+                          "Not",
+                          "Inc",
+                          "Dec",
+                          "CopyMem",
+                          "SwapMem",
+                          "Input",
+                          "Output",
+                          "CommitGlobal",
+                          "PullGlobal",
+                          "TestMemEqu",
+                          "TestMemNEqu",
+                          "If",
+                          "IfNot",
+                          "While",
+                          "Countdown",
+                          "Foreach",
+                          "Close",
+                          "Break",
+                          "Call",
+                          "Routine",
+                          "Return",
+                          "ModuleDef",
+                          "MakeVector",
+                          "VecGet",
+                          "VecSet",
+                          "VecLen",
+                          "VecAppend",
+                          "VecPop",
+                          "VecRemove",
+                          "VecReplaceAll",
+                          "VecIndexOf",
+                          "VecOccurrencesOf",
+                          "VecReverse",
+                          "VecSwapIfLess",
+                          "VecGetFront",
+                          "VecGetBack",
+                          "IsNum",
+                          "IsVec"
+  });
+
+  // -- Custom Instructions --
+  inst_lib->AddInst("LoadNum1", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadNum1_Median(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("LoadNum2", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadNum2_Median(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("LoadNum3", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadNum3_Median(hw, inst);
+  }, 1);
+
+
+  inst_lib->AddInst("SubmitNum", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_SubmitNum_Median(hw, inst);
+  }, 1);
+
 }
 
 void ProgramSynthesisExperiment::SetupProblem_Smallest() { 
@@ -3184,7 +3505,7 @@ void ProgramSynthesisExperiment::SetupProblem_Smallest() {
     // Set current test org.
     prob_utils_Smallest.cur_eval_test_org = test_org_base_ptr.Cast<test_org_t>(); // currently only place need testID for this?
     prob_utils_Smallest.ResetTestEval();
-    emp_assert(eval_hardware->GetMemSize() >= 1);
+    emp_assert(eval_hardware->GetMemSize() >= 4);
     // Configure inputs.
     if (eval_hardware->GetCallStackSize()) {
       // Grab some useful references.
@@ -3195,6 +3516,7 @@ void ProgramSynthesisExperiment::SetupProblem_Smallest() {
       wmem.Set(0, input[0]);
       wmem.Set(1, input[1]);
       wmem.Set(2, input[2]);
+      wmem.Set(3, input[3]);
     }
   });
 
@@ -3503,6 +3825,55 @@ void ProgramSynthesisExperiment::Inst_SubmitVal_CompareStringLengths(hardware_t 
 
   emp_assert(prob_utils_CompareStringLengths.cur_eval_test_org != nullptr);
   prob_utils_CompareStringLengths.Submit((bool)wmem.AccessVal(posA).GetNum());
+}
+
+// ----- Median -----
+void ProgramSynthesisExperiment::Inst_LoadNum1_Median(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_Median.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_Median.cur_eval_test_org->GetGenome()[0]);
+}
+
+void ProgramSynthesisExperiment::Inst_LoadNum2_Median(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_Median.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_Median.cur_eval_test_org->GetGenome()[1]);
+}
+
+void ProgramSynthesisExperiment::Inst_LoadNum3_Median(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_Median.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_Median.cur_eval_test_org->GetGenome()[2]);
+}
+
+void ProgramSynthesisExperiment::Inst_SubmitNum_Median(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), hardware_t::MemPosType::NUM);
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_Median.cur_eval_test_org != nullptr);
+  prob_utils_Median.Submit((int)wmem.AccessVal(posA).GetNum());
 }
 
 // ----- Smallest -----

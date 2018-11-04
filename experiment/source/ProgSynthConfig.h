@@ -76,6 +76,13 @@ EMP_BUILD_CONFIG(ProgramSynthesisConfig,
   VALUE(PROB_SMALLEST__MUTATION__PER_NUM_SUB_RATE, double, 0.1, "."),
   VALUE(PROB_SMALLEST__MUTATION__PER_NUM_SWAP_RATE, double, 0.1, "."),
 
+  GROUP(PROB_MEDIAN_GROUP, "Settings specific to the median problem"),
+  VALUE(PROB_MEDIAN__MIN_NUM, int, -100, "."),
+  VALUE(PROB_MEDIAN__MAX_NUM, int, 100, "."),
+  VALUE(PROB_MEDIAN__MUTATION__PER_NUM_COPY_RATE, double, 0.1, "."),
+  VALUE(PROB_MEDIAN__MUTATION__PER_NUM_SUB_RATE, double, 0.1, "."),
+  VALUE(PROB_MEDIAN__MUTATION__PER_NUM_SWAP_RATE, double, 0.1, "."),
+
   GROUP(DATA_COLLECTION_GROUP, "Settings specific to data collection."),
   VALUE(DATA_DIRECTORY, std::string, "./output", "Where should we dump output files?"),
   VALUE(SNAPSHOT_INTERVAL, size_t, 1000, "How often should we take population snapshots?"),

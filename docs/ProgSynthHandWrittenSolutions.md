@@ -6,6 +6,8 @@
 - [Problem - Small or Large](#problem---small-or-large)
 - [Problem - ForLoopIndex](#problem---forloopindex)
 - [Problem - CompareStringLengths](#problem---comparestringlengths)
+- [Problem - Median](#problem---median)
+- [Problem - Smallest](#problem---smallest)
 
 <!-- /TOC -->
 
@@ -88,6 +90,54 @@
   sol.PushInst("Close",       {matrix[4], matrix[4], matrix[4]});
   sol.PushInst("Close",       {matrix[4], matrix[4], matrix[4]});
   sol.PushInst("SubmitVal",   {matrix[3], matrix[4], matrix[4]});
+  
+  prog_world->Inject(sol, PROG_POP_SIZE);
+```
+## Problem - Median
+
+```{C++}
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  hardware_t::Program sol(inst_lib);
+
+  sol.PushInst("MakeVector",    {matrix[0], matrix[2], matrix[4]});
+  sol.PushInst("LoadNum1",      {matrix[5], matrix[0], matrix[0]});
+  sol.PushInst("LoadNum1",      {matrix[6], matrix[0], matrix[0]});
+  sol.PushInst("Foreach",       {matrix[0], matrix[4], matrix[0]});
+  sol.PushInst(  "TestNumLess", {matrix[0], matrix[5], matrix[1]});
+  sol.PushInst(  "If",          {matrix[1], matrix[0], matrix[0]});
+  sol.PushInst(    "CopyMem",   {matrix[0], matrix[5], matrix[0]});
+  sol.PushInst(  "Close",       {matrix[0], matrix[0], matrix[0]});
+  sol.PushInst(  "TestNumLess", {matrix[6], matrix[0], matrix[1]});
+  sol.PushInst(  "If",          {matrix[1], matrix[0], matrix[0]});
+  sol.PushInst(    "CopyMem",   {matrix[0], matrix[6], matrix[0]});
+  sol.PushInst(  "Close",       {matrix[0], matrix[0], matrix[0]});
+  sol.PushInst(  "Add",         {matrix[0], matrix[7], matrix[7]});
+  sol.PushInst("Close",         {matrix[0], matrix[0], matrix[0]});
+  sol.PushInst("Sub",           {matrix[7], matrix[5], matrix[7]});
+  sol.PushInst("Sub",           {matrix[7], matrix[6], matrix[7]});
+  sol.PushInst("SubmitNum",     {matrix[7], matrix[0], matrix[0]});
+
+  prog_world->Inject(sol, PROG_POP_SIZE);
+```
+
+## Problem - Smallest
+
+```{C++}
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  hardware_t::Program sol(inst_lib);
+
+  sol.PushInst("LoadNum1",    {matrix[0], matrix[7], matrix[7]});
+  sol.PushInst("LoadNum2",    {matrix[1], matrix[7], matrix[7]});
+  sol.PushInst("LoadNum3",    {matrix[2], matrix[7], matrix[7]});
+  sol.PushInst("LoadNum4",    {matrix[3], matrix[7], matrix[7]});
+  sol.PushInst("MakeVector",  {matrix[0], matrix[3], matrix[4]});
+  sol.PushInst("Foreach",     {matrix[5], matrix[4], matrix[7]});
+  sol.PushInst("TestNumLess", {matrix[5], matrix[0], matrix[6]});
+  sol.PushInst("If",          {matrix[6], matrix[7], matrix[7]});
+  sol.PushInst("CopyMem",     {matrix[5], matrix[0], matrix[7]});
+  sol.PushInst("Close",       {matrix[7], matrix[7], matrix[7]});
+  sol.PushInst("Close",       {matrix[7], matrix[7], matrix[7]});
+  sol.PushInst("SubmitNum",   {matrix[0], matrix[7], matrix[7]});
   
   prog_world->Inject(sol, PROG_POP_SIZE);
 ```
