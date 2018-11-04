@@ -16,11 +16,12 @@
 
 ## Solution evolution at a glance
 
-Things I've seen solutions evolve  for:
+Things I've seen solutions evolve for:
 
 - NumberIO
 - CompareStringLengths
 - Smallest
+- Median
 
 Things I haven't seen yet:
 

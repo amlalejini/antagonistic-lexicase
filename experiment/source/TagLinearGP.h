@@ -1635,6 +1635,57 @@ namespace TagLGP {
       wmem.Set(posC, A < B);
     }
 
+    static void Inst_TestNumLessTEqu(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+
+      const double A = wmem.AccessVal(posA).GetNum();
+      const double B = wmem.AccessVal(posB).GetNum();
+      wmem.Set(posC, A <= B);
+    }
+
+    static void Inst_TestNumGreater(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+
+      const double A = wmem.AccessVal(posA).GetNum();
+      const double B = wmem.AccessVal(posB).GetNum();
+      wmem.Set(posC, A > B);
+    }
+
+    static void Inst_TestNumGreaterTEqu(hardware_t & hw, const inst_t & inst) {
+      CallState & state = hw.GetCurCallState();
+      memory_t & wmem = state.GetWorkingMem();
+
+      // Find arguments.
+      size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posA)) return; // Do nothing
+      size_t posB = hw.FindBestMemoryMatch(wmem, inst.arg_tags[1], hw.GetMinTagSpecificity(), MemPosType::NUM);
+      if (!hw.IsValidMemPos(posB)) return; // Do nothing
+      size_t posC = hw.FindBestMemoryMatch(wmem, inst.arg_tags[2], hw.GetMinTagSpecificity());
+      if (!hw.IsValidMemPos(posC)) return;
+
+      const double A = wmem.AccessVal(posA).GetNum();
+      const double B = wmem.AccessVal(posB).GetNum();
+      wmem.Set(posC, A >= B);
+    }
+
     static void Inst_Floor(hardware_t & hw, const inst_t & inst) {
       CallState & state = hw.GetCurCallState();
       memory_t & wmem = state.GetWorkingMem();

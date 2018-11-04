@@ -1721,7 +1721,9 @@ void ProgramSynthesisExperiment::InitProgPop_Random() {
   // prog_world->Inject(sol, PROG_POP_SIZE);
 }
 
-void ProgramSynthesisExperiment::AddDefaultInstructions(const std::unordered_set<std::string> & includes={"Add","Sub","Mult","Div","Mod","TestNumEqu","TestNumNEqu","TestNumLess","Floor","Not","Inc","Dec",
+void ProgramSynthesisExperiment::AddDefaultInstructions(const std::unordered_set<std::string> & includes={"Add","Sub","Mult","Div","Mod",
+                                                                                                  "TestNumEqu","TestNumNEqu","TestNumLess","TestNumLessTEqu","TestNumGreater","TestNumGreaterTEqu",
+                                                                                                  "Floor","Not","Inc","Dec",
                                                                                                   "CopyMem","SwapMem","Input","Output","CommitGlobal","PullGlobal","TestMemEqu","TestMemNEqu",
                                                                                                   "MakeVector","VecGet","VecSet","VecLen","VecAppend","VecPop","VecRemove","VecReplaceAll","VecIndexOf","VecOccurrencesOf","VecReverse","VecSwapIfLess","VecGetFront","VecGetBack",
                                                                                                   "StrLength","StrConcat",
@@ -1739,6 +1741,9 @@ void ProgramSynthesisExperiment::AddDefaultInstructions(const std::unordered_set
   if (emp::Has(includes, "TestNumEqu")) inst_lib->AddInst("TestNumEqu", hardware_t::Inst_TestNumEqu, 3, "wmemANY[C] = wmemNUM[A] == wmemNUM[B]");
   if (emp::Has(includes, "TestNumNEqu")) inst_lib->AddInst("TestNumNEqu", hardware_t::Inst_TestNumNEqu, 3, "wmemANY[C] = wmemNUM[A] != wmemNUM[B]");
   if (emp::Has(includes, "TestNumLess")) inst_lib->AddInst("TestNumLess", hardware_t::Inst_TestNumLess, 3, "wmemANY[C] = wmemNUM[A] < wmemNUM[B]");
+  if (emp::Has(includes, "TestNumLessTEqu")) inst_lib->AddInst("TestNumLessTEqu", hardware_t::Inst_TestNumLessTEqu, 3, "wmemANY[C] = wmemNUM[A] <= wmemNUM[B]");
+  if (emp::Has(includes, "TestNumGreater")) inst_lib->AddInst("TestNumGreater", hardware_t::Inst_TestNumGreater, 3, "wmemANY[C] = wmemNUM[A] > wmemNUM[B]");
+  if (emp::Has(includes, "TestNumGreaterTEqu")) inst_lib->AddInst("TestNumGreaterTEqu", hardware_t::Inst_TestNumGreaterTEqu, 3, "wmemANY[C] = wmemNUM[A] >= wmemNUM[B]");
   if (emp::Has(includes, "Floor")) inst_lib->AddInst("Floor", hardware_t::Inst_Floor, 1, "wmemNUM[A] = floor(wmemNUM[A])");
   if (emp::Has(includes, "Not")) inst_lib->AddInst("Not", hardware_t::Inst_Not, 1, "wmemNUM[A] = !wmemNUM[A]"); 
   if (emp::Has(includes, "Inc")) inst_lib->AddInst("Inc", hardware_t::Inst_Inc, 1, "wmemNUM[A] = wmemNUM[A] + 1");
@@ -2032,6 +2037,9 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
                           "TestNumEqu",
                           "TestNumNEqu",
                           "TestNumLess",
+                          "TestNumLessTEqu",
+                          "TestNumGreater",
+                          "TestNumGreaterTEqu",
                           "Floor",
                           "Not",
                           "Inc",
@@ -2318,6 +2326,9 @@ void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() {
                           "TestNumEqu",
                           "TestNumNEqu",
                           "TestNumLess",
+                          "TestNumLessTEqu",
+                          "TestNumGreater",
+                          "TestNumGreaterTEqu",
                           "Floor",
                           "Not",
                           "Inc",
@@ -2615,6 +2626,9 @@ void ProgramSynthesisExperiment::SetupProblem_ForLoopIndex() {
                           "TestNumEqu",
                           "TestNumNEqu",
                           "TestNumLess",
+                          "TestNumLessTEqu",
+                          "TestNumGreater",
+                          "TestNumGreaterTEqu",
                           "Floor",
                           "Not",
                           "Inc",
@@ -2893,6 +2907,9 @@ void ProgramSynthesisExperiment::SetupProblem_CompareStringLengths() {
                           "TestNumEqu",
                           "TestNumNEqu",
                           "TestNumLess",
+                          "TestNumLessTEqu",
+                          "TestNumGreater",
+                          "TestNumGreaterTEqu",
                           "Floor",
                           "Not",
                           "Inc",
@@ -3290,6 +3307,9 @@ void ProgramSynthesisExperiment::SetupProblem_Median() {
                           "TestNumEqu",
                           "TestNumNEqu",
                           "TestNumLess",
+                          "TestNumLessTEqu",
+                          "TestNumGreater",
+                          "TestNumGreaterTEqu",
                           "Floor",
                           "Not",
                           "Inc",
@@ -3587,6 +3607,9 @@ void ProgramSynthesisExperiment::SetupProblem_Smallest() {
                           "TestNumEqu",
                           "TestNumNEqu",
                           "TestNumLess",
+                          "TestNumLessTEqu",
+                          "TestNumGreater",
+                          "TestNumGreaterTEqu",
                           "Floor",
                           "Not",
                           "Inc",
