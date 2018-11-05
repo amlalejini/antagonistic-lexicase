@@ -131,6 +131,7 @@ std::unordered_map<std::string, ProblemInfo> problems = {
   {"small-or-large", {PROBLEM_ID::SmallOrLarge, "training-examples-small-or-large.csv", "testing-examples-small-or-large.csv"}},
   {"for-loop-index", {PROBLEM_ID::ForLoopIndex, "training-examples-for-loop-index.csv", "testing-examples-for-loop-index.csv"}},
   {"compare-string-lengths", {PROBLEM_ID::CompareStringLengths, "training-examples-compare-string-lengths.csv", "testing-examples-compare-string-lengths.csv"}},
+  {"collatz-numbers", {PROBLEM_ID::CollatzNumbers, "training-examples-collatz-numbers.csv", "testing-examples-collatz-numbers.csv"}},
   {"median", {PROBLEM_ID::Median, "training-examples-median.csv", "testing-examples-median.csv"}},
   {"smallest", {PROBLEM_ID::Smallest, "training-examples-smallest.csv", "testing-examples-smallest.csv"}}
 };
@@ -316,6 +317,10 @@ protected:
   double PROB_COMPARE_STRING_LENGTHS__PER_SITE_DEL_RATE;
   double PROB_COMPARE_STRING_LENGTHS__PER_SITE_SUB_RATE;
   double PROB_COMPARE_STRING_LENGTHS__PER_STR_SWAP_RATE;
+
+  int PROB_COLLATZ_NUMBERS__MIN_NUM;
+  int PROB_COLLATZ_NUMBERS__MAX_NUM;
+  double PROB_COLLATZ_NUMBERS__MUTATION__PER_NUM_SUB_RATE;
 
   int PROB_MEDIAN__MIN_NUM;
   int PROB_MEDIAN__MAX_NUM;
@@ -776,6 +781,9 @@ protected:
   void Inst_SubmitTrue_CompareStringLengths(hardware_t & hw, const inst_t & inst);
   void Inst_SubmitFalse_CompareStringLengths(hardware_t & hw, const inst_t & inst);
   void Inst_SubmitVal_CompareStringLengths(hardware_t & hw, const inst_t & inst);
+  // -- CollatzNumbers ---
+  void Inst_LoadNum_CollatzNumbers(hardware_t & hw, const inst_t & inst);
+  void Inst_SubmitNum_CollatzNumbers(hardware_t & hw, const inst_t & inst);
   // -- Median --
   void Inst_LoadNum1_Median(hardware_t & hw, const inst_t & inst);
   void Inst_LoadNum2_Median(hardware_t & hw, const inst_t & inst);
@@ -1033,6 +1041,10 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   PROB_COMPARE_STRING_LENGTHS__PER_SITE_DEL_RATE = config.PROB_COMPARE_STRING_LENGTHS__PER_SITE_DEL_RATE();
   PROB_COMPARE_STRING_LENGTHS__PER_SITE_SUB_RATE = config.PROB_COMPARE_STRING_LENGTHS__PER_SITE_SUB_RATE();
   PROB_COMPARE_STRING_LENGTHS__PER_STR_SWAP_RATE = config.PROB_COMPARE_STRING_LENGTHS__PER_STR_SWAP_RATE();
+
+  PROB_COLLATZ_NUMBERS__MIN_NUM = config.PROB_COLLATZ_NUMBERS__MIN_NUM();
+  PROB_COLLATZ_NUMBERS__MAX_NUM = config.PROB_COLLATZ_NUMBERS__MAX_NUM();
+  PROB_COLLATZ_NUMBERS__MUTATION__PER_NUM_SUB_RATE = config.PROB_COLLATZ_NUMBERS__MUTATION__PER_NUM_SUB_RATE();
 
   PROB_MEDIAN__MIN_NUM = config.PROB_MEDIAN__MIN_NUM();
   PROB_MEDIAN__MAX_NUM = config.PROB_MEDIAN__MAX_NUM();
@@ -1692,33 +1704,34 @@ void ProgramSynthesisExperiment::SnapshotPrograms() {
 
 // ================= PROGRAM-RELATED FUNCTIONS ===========
 void ProgramSynthesisExperiment::InitProgPop_Random() {
-  std::cout << "Randomly initializing program population." << std::endl;
-  for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
-    prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
-  }
+  // std::cout << "Randomly initializing program population." << std::endl;
+  // for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
+  //   prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
+  // }
   // -- solution(?) --
-  // emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
-  // hardware_t::Program sol(inst_lib);
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  hardware_t::Program sol(inst_lib);
 
-  // sol.PushInst("MakeVector",    {matrix[0], matrix[2], matrix[4]});
-  // sol.PushInst("LoadNum1",      {matrix[5], matrix[0], matrix[0]});
-  // sol.PushInst("LoadNum1",      {matrix[6], matrix[0], matrix[0]});
-  // sol.PushInst("Foreach",       {matrix[0], matrix[4], matrix[0]});
-  // sol.PushInst(  "TestNumLess", {matrix[0], matrix[5], matrix[1]});
-  // sol.PushInst(  "If",          {matrix[1], matrix[0], matrix[0]});
-  // sol.PushInst(    "CopyMem",   {matrix[0], matrix[5], matrix[0]});
-  // sol.PushInst(  "Close",       {matrix[0], matrix[0], matrix[0]});
-  // sol.PushInst(  "TestNumLess", {matrix[6], matrix[0], matrix[1]});
-  // sol.PushInst(  "If",          {matrix[1], matrix[0], matrix[0]});
-  // sol.PushInst(    "CopyMem",   {matrix[0], matrix[6], matrix[0]});
-  // sol.PushInst(  "Close",       {matrix[0], matrix[0], matrix[0]});
-  // sol.PushInst(  "Add",         {matrix[0], matrix[7], matrix[7]});
-  // sol.PushInst("Close",         {matrix[0], matrix[0], matrix[0]});
-  // sol.PushInst("Sub",           {matrix[7], matrix[5], matrix[7]});
-  // sol.PushInst("Sub",           {matrix[7], matrix[6], matrix[7]});
-  // sol.PushInst("SubmitNum",     {matrix[7], matrix[0], matrix[0]});
-
-  // prog_world->Inject(sol, PROG_POP_SIZE);
+  sol.PushInst("Inc",           {matrix[1], matrix[8], matrix[8]});
+  sol.PushInst("Set-2",         {matrix[2], matrix[8], matrix[8]});
+  sol.PushInst("Set-3",         {matrix[3], matrix[8], matrix[8]});
+  sol.PushInst("Inc",           {matrix[4], matrix[8], matrix[8]});
+  sol.PushInst("TestNumNEqu",   {matrix[1], matrix[0], matrix[5]});
+  sol.PushInst("While",         {matrix[5], matrix[8], matrix[8]});
+  sol.PushInst(  "Inc",         {matrix[4], matrix[8], matrix[8]});
+  sol.PushInst(  "Mod",         {matrix[0], matrix[2], matrix[6]});
+  sol.PushInst(  "IfNot",       {matrix[6], matrix[8], matrix[8]});
+  sol.PushInst(    "Div",       {matrix[0], matrix[2], matrix[0]});
+  sol.PushInst(  "Close",       {matrix[8], matrix[8], matrix[8]});
+  sol.PushInst(  "If",          {matrix[6], matrix[8], matrix[8]});
+  sol.PushInst(    "Mult",      {matrix[0], matrix[3], matrix[0]});
+  sol.PushInst(    "Inc",       {matrix[0], matrix[8], matrix[8]});
+  sol.PushInst(  "Close",       {matrix[8], matrix[8], matrix[8]});
+  sol.PushInst(  "TestNumNEqu", {matrix[1], matrix[0], matrix[5]});
+  sol.PushInst("Close",         {matrix[8], matrix[8], matrix[8]});
+  sol.PushInst("SubmitNum",     {matrix[4], matrix[8], matrix[8]});
+  
+  prog_world->Inject(sol, PROG_POP_SIZE);
 }
 
 void ProgramSynthesisExperiment::AddDefaultInstructions(const std::unordered_set<std::string> & includes={"Add","Sub","Mult","Div","Mod",
@@ -2972,8 +2985,303 @@ void ProgramSynthesisExperiment::SetupProblem_DoubleLetters() {
 }
 
 void ProgramSynthesisExperiment::SetupProblem_CollatzNumbers() { 
-  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
-  exit(-1); 
+  std::cout << "Setting up problem - Collatz Numbers" << std::endl;
+
+  // A few useful aliases
+  using test_org_t = TestOrg_CollatzNumbers;
+
+  // Load benchmark data for problem.
+  if (BENCHMARK_DATA_DIR.back() != '/') BENCHMARK_DATA_DIR += '/';
+  std::string training_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTrainingSetFilename();  
+  std::string testing_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTestingSetFilename();  
+  std::cout << "Loading training examples." << std::endl;
+  prob_utils_CollatzNumbers.GetTrainingSet().LoadTestCasesWithCSVReader(training_examples_fpath);
+  std::cout << "Loading testing examples." << std::endl;
+  prob_utils_CollatzNumbers.GetTestingSet().LoadTestCasesWithCSVReader(testing_examples_fpath);
+  std::cout << "Generating testing set population." << std::endl;
+  prob_utils_CollatzNumbers.GenerateTestingSetPop();
+  std::cout << "Loaded training example set size = " << prob_utils_CollatzNumbers.GetTrainingSet().GetSize() << std::endl;
+  std::cout << "Loaded testing example set size = " << prob_utils_CollatzNumbers.GetTestingSet().GetSize() << std::endl;
+  std::cout << "Testing set (non-training examples used to evaluate program accuracy) size = " << prob_utils_CollatzNumbers.testingset_pop.size() << std::endl;
+ 
+  // Setup the world
+  NewTestCaseWorld(prob_CollatzNumbers_world, *random, "Median world");
+
+  // Configure how the population should be initialized
+  SetupTestCasePop_Init(prob_CollatzNumbers_world,
+                        prob_utils_CollatzNumbers.training_set,
+                        [this]() { return GenRandomTestInput_CollatzNumbers(*random, 
+                                                                           {PROB_COLLATZ_NUMBERS__MIN_NUM, PROB_COLLATZ_NUMBERS__MAX_NUM}); 
+                                  }
+                        );
+  end_setup_sig.AddAction([this]() { std::cout << "TestCase world size= " << prob_CollatzNumbers_world->GetSize() << std::endl; });
+
+  // Tell the world to calculate the correct test output (given input) on placement.
+  prob_CollatzNumbers_world->OnPlacement([this](size_t pos) { 
+    prob_CollatzNumbers_world->GetOrg(pos).SetCache(prob_utils_CollatzNumbers.out_cache);
+    prob_CollatzNumbers_world->GetOrg(pos).CalcOut(); 
+  });
+
+  // How are program results calculated on a test?
+  CalcProgramResultOnTest = [this](prog_org_t & prog_org, TestOrg_Base & test_org_base) {
+    test_org_t & test_org = static_cast<test_org_t&>(test_org_base);
+    TestResult result;
+    if (!prob_utils_CollatzNumbers.submitted) {
+      result.score = 0;
+      result.pass = false;
+      result.sub = false;
+    } else {
+      std::pair<double, bool> r(prob_utils_CollatzNumbers.CalcScorePassFail(test_org.GetCorrectOut(), prob_utils_CollatzNumbers.submitted_val));
+      result.score = r.first;
+      result.pass = r.second;
+      result.sub = true;
+    }
+    return result;
+  };
+
+  // Setup how evaluation on world test should work.
+  EvaluateWorldTest = [this](prog_org_t & prog_org, size_t testID) {
+    emp::Ptr<test_org_t> test_org_ptr = prob_CollatzNumbers_world->GetOrgPtr(testID);
+    begin_program_test.Trigger(prog_org, test_org_ptr);
+    do_program_test.Trigger(prog_org, test_org_ptr);
+    end_program_test.Trigger(prog_org, test_org_ptr);
+    return CalcProgramResultOnTest(prog_org, *test_org_ptr);
+  };
+
+  // How should we validate programs on testing set?
+  DoTestingSetValidation = [this](prog_org_t & prog_org) { 
+    // evaluate program on full testing set; update stats utils with results
+    begin_program_eval.Trigger(prog_org);
+    stats_util.current_program__validation__test_results.resize(prob_utils_CollatzNumbers.testingset_pop.size());
+    stats_util.current_program__validation__total_score = 0;
+    stats_util.current_program__validation__total_passes = 0;
+    stats_util.current_program__validation__is_solution = false;
+    // For each test in validation set, evaluate program.
+    for (size_t testID = 0; testID < prob_utils_CollatzNumbers.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_CollatzNumbers.testingset_pop[testID];
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
+      stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+    }
+    stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_CollatzNumbers.testingset_pop.size();
+    end_program_eval.Trigger(prog_org);
+  };
+
+  // How should we screen for a solution?
+  ScreenForSolution = [this](prog_org_t & prog_org) {
+    begin_program_eval.Trigger(prog_org);
+    for (size_t testID = 0; testID < prob_utils_CollatzNumbers.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_CollatzNumbers.testingset_pop[testID];
+
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      
+      TestResult result = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      if (!result.pass) {
+        end_program_eval.Trigger(prog_org);
+        return false;
+      }
+    }
+    end_program_eval.Trigger(prog_org);
+    return true;
+  };
+
+  // Tell the experiment how to get test phenotypes.
+  GetTestPhenotype = [this](size_t testID) -> test_org_phen_t & {
+    emp_assert(prob_CollatzNumbers_world->IsOccupied(testID));
+    return prob_CollatzNumbers_world->GetOrg(testID).GetPhenotype();
+  };
+
+  // Setup how test world updates.
+  SetupTestCaseWorldUpdate(prob_CollatzNumbers_world);
+
+  // Setup how test cases mutate.
+  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::RANDOM) {
+    std::cout << "RANDOM training mode detected, configuring mutation function to RANDOMIZE organisms." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Randomize organism genome on mutate.
+      prob_CollatzNumbers_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        test_org.GetGenome() = GenRandomTestInput_CollatzNumbers(*random, {PROB_COLLATZ_NUMBERS__MIN_NUM, PROB_COLLATZ_NUMBERS__MAX_NUM}); 
+        return 1;
+      });
+    };
+  } else {
+    std::cout << "Non-RANDOM training mode detected, configuring mutation function normally." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Configure mutator.
+      prob_utils_CollatzNumbers.MIN_NUM = PROB_COLLATZ_NUMBERS__MIN_NUM;
+      prob_utils_CollatzNumbers.MAX_NUM = PROB_COLLATZ_NUMBERS__MAX_NUM;
+      prob_utils_CollatzNumbers.NUM_SUB_RATE = PROB_COLLATZ_NUMBERS__MUTATION__PER_NUM_SUB_RATE;
+      // (2) Hook mutator up to world.
+      prob_CollatzNumbers_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        return prob_utils_CollatzNumbers.Mutate(rnd, test_org.GetGenome());
+      });
+    };
+  }
+
+  // Setup test case fitness function.
+  SetupTestFitFun = [this]() {
+    prob_CollatzNumbers_world->SetFitFun([](test_org_t & test_org) {
+      return (double)test_org.GetPhenotype().num_fails;
+    });
+  };
+
+  // Tell experiment how to configure hardware inputs when running program against a test.
+  begin_program_test.AddAction([this](prog_org_t & prog_org, emp::Ptr<TestOrg_Base> test_org_base_ptr) {
+    // Reset eval stuff
+    // Set current test org.
+    prob_utils_CollatzNumbers.cur_eval_test_org = test_org_base_ptr.Cast<test_org_t>(); // currently only place need testID for this?
+    prob_utils_CollatzNumbers.ResetTestEval();
+    emp_assert(eval_hardware->GetMemSize() >= 3);
+    // Configure inputs.
+    if (eval_hardware->GetCallStackSize()) {
+      // Grab some useful references.
+      Problem_CollatzNumbers_input_t & input = prob_utils_CollatzNumbers.cur_eval_test_org->GetGenome(); // std::pair<int, double>
+      hardware_t::CallState & state = eval_hardware->GetCurCallState();
+      hardware_t::Memory & wmem = state.GetWorkingMem();
+      // Set hardware input.
+      wmem.Set(0, input);
+    }
+  });
+
+  // Tell experiment how to snapshot test population.
+  SnapshotTests = [this]() {
+    std::string snapshot_dir = DATA_DIRECTORY + "pop_" + emp::to_string(prog_world->GetUpdate());
+    mkdir(snapshot_dir.c_str(), ACCESSPERMS);
+    
+    emp::DataFile file(snapshot_dir + "/test_pop_" + emp::to_string((int)prog_world->GetUpdate()) + ".csv");
+    // Test file contents:
+    // - test id
+    std::function<size_t(void)> get_test_id = [this]() { return stats_util.cur_testID; };
+    file.AddFun(get_test_id, "test_id");
+
+    // - test fitness
+    std::function<double(void)> get_test_fitness = [this]() { return prob_CollatzNumbers_world->CalcFitnessID(stats_util.cur_testID); };
+    file.AddFun(get_test_fitness, "fitness");
+
+    // - num passes
+    std::function<size_t(void)> get_test_num_passes = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_passes; };
+    file.AddFun(get_test_num_passes, "num_passes");
+
+    // - num fails
+    std::function<size_t(void)> get_test_num_fails = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_fails; };
+    file.AddFun(get_test_num_fails, "num_fails");
+
+    std::function<size_t(void)> get_num_tested = [this]() { return GetTestPhenotype(stats_util.cur_testID).test_passes.size(); };
+    file.AddFun(get_num_tested, "num_programs_tested_against");
+
+    // - test scores by program
+    std::function<std::string(void)> get_passes_by_program = [this]() {
+      std::string scores = "\"[";
+      test_org_phen_t & phen = GetTestPhenotype(stats_util.cur_testID);
+      for (size_t i = 0; i < phen.test_passes.size(); ++i) {
+        if (i) scores += ",";
+        scores += emp::to_string(phen.test_passes[i]);
+      }
+      scores += "]\"";
+      return scores;
+    };
+    file.AddFun(get_passes_by_program, "passes_by_program");
+
+    // - test
+    std::function<std::string(void)> get_test = [this]() {
+      std::ostringstream stream;
+      stream << "\"";
+      prob_CollatzNumbers_world->GetOrg(stats_util.cur_testID).Print(stream);
+      stream << "\"";
+      return stream.str();
+    };
+    file.AddFun(get_test, "test");
+
+    file.PrintHeaderKeys();
+
+    // Loop over tests, snapshotting each.
+    for (stats_util.cur_testID = 0; stats_util.cur_testID < prob_CollatzNumbers_world->GetSize(); ++stats_util.cur_testID) {
+      if (!prob_CollatzNumbers_world->IsOccupied(stats_util.cur_testID)) continue;
+      file.Update();
+    }
+  };
+
+  // Add default instructions to instruction set.
+  AddDefaultInstructions({"Add",
+                          "Sub",
+                          "Mult",
+                          "Div",
+                          "Mod",
+                          "TestNumEqu",
+                          "TestNumNEqu",
+                          "TestNumLess",
+                          "TestNumLessTEqu",
+                          "TestNumGreater",
+                          "TestNumGreaterTEqu",
+                          "Floor",
+                          "Not",
+                          "Inc",
+                          "Dec",
+                          "CopyMem",
+                          "SwapMem",
+                          "Input",
+                          "Output",
+                          "CommitGlobal",
+                          "PullGlobal",
+                          "TestMemEqu",
+                          "TestMemNEqu",
+                          "If",
+                          "IfNot",
+                          "While",
+                          "Countdown",
+                          "Foreach",
+                          "Close",
+                          "Break",
+                          "Call",
+                          "Routine",
+                          "Return",
+                          "ModuleDef",
+                          "MakeVector",
+                          "VecGet",
+                          "VecSet",
+                          "VecLen",
+                          "VecAppend",
+                          "VecPop",
+                          "VecRemove",
+                          "VecReplaceAll",
+                          "VecIndexOf",
+                          "VecOccurrencesOf",
+                          "VecReverse",
+                          "VecSwapIfLess",
+                          "VecGetFront",
+                          "VecGetBack",
+                          "IsNum",
+                          "IsVec"
+  });
+
+  // -- Custom Instructions --
+
+  for (size_t i = 0; i <= 10; ++i) {
+    inst_lib->AddInst("Set-" + emp::to_string(i),
+      [i](hardware_t & hw, const inst_t & inst) {
+        hardware_t::CallState & state = hw.GetCurCallState();
+        hardware_t::Memory & wmem = state.GetWorkingMem();
+        size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+        if (!hw.IsValidMemPos(posA)) return; // Do nothing
+        wmem.Set(posA, (double)i);
+      });
+  }
+
+  inst_lib->AddInst("LoadNum", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadNum_CollatzNumbers(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("SubmitNum", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_SubmitNum_CollatzNumbers(hw, inst);
+  }, 1);
+
 }
 
 void ProgramSynthesisExperiment::SetupProblem_ReplaceSpaceWithNewline() { 
@@ -3848,6 +4156,31 @@ void ProgramSynthesisExperiment::Inst_SubmitVal_CompareStringLengths(hardware_t 
 
   emp_assert(prob_utils_CompareStringLengths.cur_eval_test_org != nullptr);
   prob_utils_CompareStringLengths.Submit((bool)wmem.AccessVal(posA).GetNum());
+}
+
+// ----- CollatzNumbers -----
+void ProgramSynthesisExperiment::Inst_LoadNum_CollatzNumbers(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_CollatzNumbers.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_CollatzNumbers.cur_eval_test_org->GetGenome());
+}
+
+void ProgramSynthesisExperiment::Inst_SubmitNum_CollatzNumbers(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), hardware_t::MemPosType::NUM);
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_CollatzNumbers.cur_eval_test_org != nullptr);
+  prob_utils_CollatzNumbers.Submit((int)wmem.AccessVal(posA).GetNum());
 }
 
 // ----- Median -----

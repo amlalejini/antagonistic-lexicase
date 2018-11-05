@@ -70,6 +70,11 @@ EMP_BUILD_CONFIG(ProgramSynthesisConfig,
   VALUE(PROB_COMPARE_STRING_LENGTHS__PER_SITE_SUB_RATE, double, 0.1, "."),
   VALUE(PROB_COMPARE_STRING_LENGTHS__PER_STR_SWAP_RATE, double, 0.1, "."),
 
+  GROUP(PROB_COLLATZ_NUMBERS_GROUP, "Settings specific to the collatz numbers problem."),
+  VALUE(PROB_COLLATZ_NUMBERS__MIN_NUM, int, 1, "."),
+  VALUE(PROB_COLLATZ_NUMBERS__MAX_NUM, int, 10000, "."),
+  VALUE(PROB_COLLATZ_NUMBERS__MUTATION__PER_NUM_SUB_RATE, double, 0.1, "."),
+
   GROUP(PROB_SMALLEST_GROUP, "Settings specific to the smallest problem"),
   VALUE(PROB_SMALLEST__MIN_NUM, int, -100, "."),
   VALUE(PROB_SMALLEST__MAX_NUM, int, 100, "."),

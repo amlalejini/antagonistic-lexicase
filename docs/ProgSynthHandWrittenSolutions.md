@@ -6,6 +6,7 @@
 - [Problem - Small or Large](#problem---small-or-large)
 - [Problem - ForLoopIndex](#problem---forloopindex)
 - [Problem - CompareStringLengths](#problem---comparestringlengths)
+- [Problem - CollatzNumbers](#problem---collatznumbers)
 - [Problem - Median](#problem---median)
 - [Problem - Smallest](#problem---smallest)
 
@@ -93,6 +94,35 @@
   
   prog_world->Inject(sol, PROG_POP_SIZE);
 ```
+
+## Problem - CollatzNumbers
+
+```{C++}
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  hardware_t::Program sol(inst_lib);
+
+  sol.PushInst("Inc",           {matrix[1], matrix[8], matrix[8]});
+  sol.PushInst("Set-2",         {matrix[2], matrix[8], matrix[8]});
+  sol.PushInst("Set-3",         {matrix[3], matrix[8], matrix[8]});
+  sol.PushInst("Inc",           {matrix[4], matrix[8], matrix[8]});
+  sol.PushInst("TestNumNEqu",   {matrix[1], matrix[0], matrix[5]});
+  sol.PushInst("While",         {matrix[5], matrix[8], matrix[8]});
+  sol.PushInst(  "Inc",         {matrix[4], matrix[8], matrix[8]});
+  sol.PushInst(  "Mod",         {matrix[0], matrix[2], matrix[6]});
+  sol.PushInst(  "IfNot",       {matrix[6], matrix[8], matrix[8]});
+  sol.PushInst(    "Div",       {matrix[0], matrix[2], matrix[0]});
+  sol.PushInst(  "Close",       {matrix[8], matrix[8], matrix[8]});
+  sol.PushInst(  "If",          {matrix[6], matrix[8], matrix[8]});
+  sol.PushInst(    "Mult",      {matrix[0], matrix[3], matrix[0]});
+  sol.PushInst(    "Inc",       {matrix[0], matrix[8], matrix[8]});
+  sol.PushInst(  "Close",       {matrix[8], matrix[8], matrix[8]});
+  sol.PushInst(  "TestNumNEqu", {matrix[1], matrix[0], matrix[5]});
+  sol.PushInst("Close",         {matrix[8], matrix[8], matrix[8]});
+  sol.PushInst("SubmitNum",     {matrix[4], matrix[8], matrix[8]});
+  
+  prog_world->Inject(sol, PROG_POP_SIZE);
+```
+
 ## Problem - Median
 
 ```{C++}

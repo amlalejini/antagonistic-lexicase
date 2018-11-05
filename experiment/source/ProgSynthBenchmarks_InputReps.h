@@ -953,10 +953,31 @@ struct ProblemUtilities_DoubleLetters { emp::vector<std::function<double(TestOrg
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Problem:
+// Problem: Collatz Numbers
+// - Input: int
+// - Output: int
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Generate random test input
+Problem_CollatzNumbers_input_t GenRandomTestInput_CollatzNumbers(emp::Random & rand,
+                                                                 const std::pair<int, int> & num_range) {
+  return rand.GetInt(num_range.first, num_range.second+1);
+}
+
+Problem_CollatzNumbers_output_t GenCorrectOut_CollatzNumbers(const Problem_CollatzNumbers_input_t & input) {
+  emp_assert(input > 0);
+  // std::cout << "Generating collatz seq - input = " << input << std::endl;
+  emp::vector<int> seq;
+  seq.emplace_back(input);
+  while (seq.back() != 1) {
+    if (seq.back() % 2 == 0) seq.emplace_back(seq.back() / 2);
+    else seq.emplace_back((3*seq.back())+1);
+  }
+  // std::cout << "Generating collatz seq - output = " << seq.size() << std::endl;
+  return seq.size();
+}
 
 /// Collatz Numbers: Integer
 class TestOrg_CollatzNumbers : public TestOrg_Base {
@@ -964,20 +985,148 @@ class TestOrg_CollatzNumbers : public TestOrg_Base {
     using parent_t = TestOrg_Base;
     using parent_t::phenotype;
 
-    using genome_t = int;
+    using genome_t = Problem_CollatzNumbers_input_t;
+    using out_t = Problem_CollatzNumbers_output_t;
+
   protected:
     genome_t genome;
+    out_t out;
 
+    emp::Ptr<std::unordered_map<int, int>> out_cache;
+
+    void CalcOutCache() {
+      // std::cout << "Calc out w/cache!" << std::endl;
+      emp_assert(out_cache != nullptr);
+      if (emp::Has(*out_cache, genome)) {
+        out = (*out_cache)[genome];
+      } else {
+        out = GenCorrectOut_CollatzNumbers(genome);
+        (*out_cache)[genome] = out;
+      }
+    }
+
+    void CalcOutNoCache() {
+      // std::cout << "Calc out w/ no cache!" << std::endl;
+      out = GenCorrectOut_CollatzNumbers(genome);
+    }
+    
   public:
-    TestOrg_CollatzNumbers(const genome_t & _g) : genome(_g) { ; }
+    TestOrg_CollatzNumbers(const genome_t & _g) : genome(_g), out(), out_cache(nullptr) { ; }
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
 
-    void CalcOut() { ; }
+    void SetCache(emp::Ptr<std::unordered_map<int, int>> cache_ptr) {
+      out_cache = cache_ptr;
+    }
+
+    void CalcOut() { 
+      if (out_cache) {
+        CalcOutCache();
+      } else {
+        CalcOutNoCache();
+      }
+    }
+
+    out_t & GetCorrectOut() { return out; }
+    const out_t & GetCorrectOut() const { return out; }  
+
+    void Print(std::ostream & os=std::cout) {
+      os << genome;
+    }
+
 };
 
-struct ProblemUtilities_CollatzNumbers { emp::vector<std::function<double(TestOrg_CollatzNumbers &)>> lexicase_fit_set; };
+struct ProblemUtilities_CollatzNumbers {  
+  using this_t = ProblemUtilities_CollatzNumbers;
+  using problem_org_t = TestOrg_CollatzNumbers;
+  using input_t = Problem_CollatzNumbers_input_t;
+  using output_t = Problem_CollatzNumbers_output_t;
+  
+  using testcase_set_t = TestCaseSet<input_t, output_t>;
+  
+  testcase_set_t testing_set;
+  testcase_set_t training_set;
+
+  emp::Ptr<std::unordered_map<int, int>> out_cache;
+
+  emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
+
+  // // --- Useful during a test evaluation ---
+  emp::Ptr<problem_org_t> cur_eval_test_org;
+  bool submitted;
+  int submitted_val;
+
+  // // Mutation - Handle here...
+  int MIN_NUM;
+  int MAX_NUM;
+  double NUM_SUB_RATE;
+  
+  size_t Mutate(emp::Random & rnd, input_t & mut_input) {
+    size_t muts = 0;
+
+    if (rnd.P(NUM_SUB_RATE)) {
+      ++muts;
+      mut_input = rnd.GetUInt(MIN_NUM, MAX_NUM);
+    }
+
+    return muts;
+  } // todo - test
+
+  // Selection
+  emp::vector<std::function<double(problem_org_t &)>> lexicase_fit_set;
+
+  ProblemUtilities_CollatzNumbers()
+    : testing_set(this_t::LoadTestCaseFromLine),
+      training_set(this_t::LoadTestCaseFromLine),
+      submitted(false), submitted_val(0)
+  { 
+    out_cache = emp::NewPtr<std::unordered_map<int, int>>(); 
+  }
+
+  ~ProblemUtilities_CollatzNumbers() {
+    out_cache.Delete();
+    for (size_t i = 0; i < testingset_pop.size(); ++i) testingset_pop[i].Delete();
+  }
+
+  testcase_set_t & GetTestingSet() { return testing_set; }
+  testcase_set_t & GetTrainingSet() { return training_set; }
+
+  void ResetTestEval() {
+    submitted = false;
+    submitted_val = 0;
+  }
+
+  void Submit(int val) {
+    submitted = true;
+    submitted_val = val;
+  }
+
+  static std::pair<input_t, output_t> LoadTestCaseFromLine(const emp::vector<std::string> & line) {
+    input_t input;   
+    output_t output; 
+    // Load input.
+    input = (int)std::atof(line[0].c_str());
+    // Load output.
+    output = (int)std::atof(line[1].c_str());
+    emp_assert(output == GenCorrectOut_CollatzNumbers(input));
+    return {input, output};
+  }
+
+  void GenerateTestingSetPop() {
+    for (size_t i = 0; i < testing_set.GetSize(); ++i) {
+      testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
+      testingset_pop.back()->SetCache(out_cache);
+      testingset_pop[i]->CalcOut();
+    }
+  }
+
+  std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
+    const bool pass = (sub == correct_test_output);
+    return {(double)pass, pass};
+  }
+
+};
 
 
 
@@ -1483,7 +1632,7 @@ class TestOrg_Median : public TestOrg_Base {
     out_t out;
 
   public:
-    TestOrg_Median(const genome_t & _g) : genome(_g) { ; }
+    TestOrg_Median(const genome_t & _g) : genome(_g), out() { ; }
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
