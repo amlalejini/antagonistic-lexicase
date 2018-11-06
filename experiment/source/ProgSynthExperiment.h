@@ -921,7 +921,7 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
     std::cout << "solution found? " << solution_found << "; ";
     std::cout << "smallest solution? " << smallest_prog_sol_size << std::endl;
 
-    // if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger();
+    if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger();
 
     prog_world->Update();
     prog_world->ClearCache();
@@ -2956,8 +2956,8 @@ void ProgramSynthesisExperiment::SetupProblem_CompareStringLengths() {
                           "Foreach",
                           "Close",
                           "Break",
-                          // "Call",
-                          // "Routine",
+                          "Call",
+                          "Routine",
                           "Return",
                           "ModuleDef",
                           "IsNum",

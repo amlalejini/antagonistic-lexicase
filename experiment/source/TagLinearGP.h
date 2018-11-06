@@ -68,6 +68,7 @@ namespace TagLGP {
     static constexpr size_t DEFAULT_MEM_SIZE = 16;
     static constexpr size_t DEFAULT_MAX_CALL_DEPTH = 128;
     static constexpr double DEFAULT_MIN_TAG_SPECIFICITY = 0.0;
+    static constexpr size_t DEFAULT_MAX_STR_LEN = 4096;
 
     enum MemPosType { NUM=0, STR, VEC, ANY};
     enum FlowType { BASIC=0, LOOP, ROUTINE, CALL };
@@ -204,7 +205,7 @@ namespace TagLGP {
             default_str(p.default_str),
             default_num(p.default_num)
         { 
-          CopyUnion(p); 
+          CopyUnion(p); // Copy union doesn't delete anything
         }
 
         MemoryValue & operator=(const MemoryValue & in) {
@@ -441,7 +442,7 @@ namespace TagLGP {
           memory[id].is_vector = true;
         }
 
-        void Set(size_t id, std::string str) {
+        void Set(size_t id, const std::string & str) {
           emp_assert(id < memory.size());
           memory[id].pos.resize(1);
           memory[id].pos[0] = str;
@@ -2105,7 +2106,9 @@ namespace TagLGP {
       //  mem[C] = mem[A] + mem[B]
       const std::string & A = wmem.AccessVal(posA).GetStr();
       const std::string & B = wmem.AccessVal(posB).GetStr();
-      wmem.Set(posC, A + B);
+      if ((A.size() + B.size()) <= DEFAULT_MAX_STR_LEN) { // Don't want exponential string growth...
+        wmem.Set(posC, A + B);
+      }
     } // todo - test
 
     static void Inst_StrToVec(hardware_t & hw, const inst_t & inst) {
