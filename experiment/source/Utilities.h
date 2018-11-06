@@ -88,4 +88,18 @@ size_t HammingDist(const emp::BitSet<NUM_BITS> & in1, const emp::BitSet<NUM_BITS
   return (in1^in2).CountOnes();
 }
 
+std::string StrReplace(const std::string & s, const std::string & from, const std::string & to) {
+  std::stringstream  ss{""};
+  for(size_t i = 0; i < s.size(); i++) {
+    if (i+from.size() <= s.size()) {
+      if (s.substr(i, from.size()) == from) {
+        ss << to; i+=from.size()-1;
+        continue;
+      } 
+    }
+    ss << s.at(i);
+  }
+  return ss.str();
+}
+
 #endif

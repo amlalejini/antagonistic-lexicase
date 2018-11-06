@@ -132,6 +132,7 @@ std::unordered_map<std::string, ProblemInfo> problems = {
   {"for-loop-index", {PROBLEM_ID::ForLoopIndex, "training-examples-for-loop-index.csv", "testing-examples-for-loop-index.csv"}},
   {"compare-string-lengths", {PROBLEM_ID::CompareStringLengths, "training-examples-compare-string-lengths.csv", "testing-examples-compare-string-lengths.csv"}},
   {"collatz-numbers", {PROBLEM_ID::CollatzNumbers, "training-examples-collatz-numbers.csv", "testing-examples-collatz-numbers.csv"}},
+  {"string-lengths-backwards", {PROBLEM_ID::StringLengthsBackwards, "training-examples-string-lengths-backwards.csv", "testing-examples-string-lengths-backwards.csv"}},
   {"median", {PROBLEM_ID::Median, "training-examples-median.csv", "testing-examples-median.csv"}},
   {"smallest", {PROBLEM_ID::Smallest, "training-examples-smallest.csv", "testing-examples-smallest.csv"}}
 };
@@ -321,6 +322,17 @@ protected:
   int PROB_COLLATZ_NUMBERS__MIN_NUM;
   int PROB_COLLATZ_NUMBERS__MAX_NUM;
   double PROB_COLLATZ_NUMBERS__MUTATION__PER_NUM_SUB_RATE;
+
+  size_t PROB_STRING_LENGTHS_BACKWARDS__MIN_STR_LEN;
+  size_t PROB_STRING_LENGTHS_BACKWARDS__MAX_STR_LEN;
+  size_t PROB_STRING_LENGTHS_BACKWARDS__MIN_STR_CNT;
+  size_t PROB_STRING_LENGTHS_BACKWARDS__MAX_STR_CNT;
+  double PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_CHAR_INS_RATE;
+  double PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_CHAR_DEL_RATE;
+  double PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_CHAR_SUB_RATE;
+  double PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_STR_SWAP_RATE;
+  double PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_STR_DUP_RATE;
+  double PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_STR_DEL_RATE;
 
   int PROB_MEDIAN__MIN_NUM;
   int PROB_MEDIAN__MAX_NUM;
@@ -784,6 +796,9 @@ protected:
   // -- CollatzNumbers ---
   void Inst_LoadNum_CollatzNumbers(hardware_t & hw, const inst_t & inst);
   void Inst_SubmitNum_CollatzNumbers(hardware_t & hw, const inst_t & inst);
+  // -- StringLengthsBackwards
+  void Inst_LoadStrVec_StringLengthsBackwards(hardware_t & hw, const inst_t & inst);
+  void Inst_SubmitVal_StringLengthsBackwards(hardware_t & hw, const inst_t & inst);
   // -- Median --
   void Inst_LoadNum1_Median(hardware_t & hw, const inst_t & inst);
   void Inst_LoadNum2_Median(hardware_t & hw, const inst_t & inst);
@@ -906,7 +921,7 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
     std::cout << "solution found? " << solution_found << "; ";
     std::cout << "smallest solution? " << smallest_prog_sol_size << std::endl;
 
-    if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger();
+    // if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger();
 
     prog_world->Update();
     prog_world->ClearCache();
@@ -1045,6 +1060,17 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   PROB_COLLATZ_NUMBERS__MIN_NUM = config.PROB_COLLATZ_NUMBERS__MIN_NUM();
   PROB_COLLATZ_NUMBERS__MAX_NUM = config.PROB_COLLATZ_NUMBERS__MAX_NUM();
   PROB_COLLATZ_NUMBERS__MUTATION__PER_NUM_SUB_RATE = config.PROB_COLLATZ_NUMBERS__MUTATION__PER_NUM_SUB_RATE();
+
+  PROB_STRING_LENGTHS_BACKWARDS__MIN_STR_LEN = config.PROB_STRING_LENGTHS_BACKWARDS__MIN_STR_LEN();
+  PROB_STRING_LENGTHS_BACKWARDS__MAX_STR_LEN = config.PROB_STRING_LENGTHS_BACKWARDS__MAX_STR_LEN();
+  PROB_STRING_LENGTHS_BACKWARDS__MIN_STR_CNT = config.PROB_STRING_LENGTHS_BACKWARDS__MIN_STR_CNT();
+  PROB_STRING_LENGTHS_BACKWARDS__MAX_STR_CNT = config.PROB_STRING_LENGTHS_BACKWARDS__MAX_STR_CNT();
+  PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_CHAR_INS_RATE = config.PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_CHAR_INS_RATE();
+  PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_CHAR_DEL_RATE = config.PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_CHAR_DEL_RATE();
+  PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_CHAR_SUB_RATE = config.PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_CHAR_SUB_RATE();
+  PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_STR_SWAP_RATE = config.PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_STR_SWAP_RATE();
+  PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_STR_DUP_RATE = config.PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_STR_DUP_RATE();
+  PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_STR_DEL_RATE = config.PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_STR_DEL_RATE();
 
   PROB_MEDIAN__MIN_NUM = config.PROB_MEDIAN__MIN_NUM();
   PROB_MEDIAN__MAX_NUM = config.PROB_MEDIAN__MAX_NUM();
@@ -1704,34 +1730,22 @@ void ProgramSynthesisExperiment::SnapshotPrograms() {
 
 // ================= PROGRAM-RELATED FUNCTIONS ===========
 void ProgramSynthesisExperiment::InitProgPop_Random() {
-  // std::cout << "Randomly initializing program population." << std::endl;
-  // for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
-  //   prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
-  // }
+  std::cout << "Randomly initializing program population." << std::endl;
+  for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
+    prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
+  }
   // -- solution(?) --
-  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
-  hardware_t::Program sol(inst_lib);
+  // emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  // hardware_t::Program sol(inst_lib);
 
-  sol.PushInst("Inc",           {matrix[1], matrix[8], matrix[8]});
-  sol.PushInst("Set-2",         {matrix[2], matrix[8], matrix[8]});
-  sol.PushInst("Set-3",         {matrix[3], matrix[8], matrix[8]});
-  sol.PushInst("Inc",           {matrix[4], matrix[8], matrix[8]});
-  sol.PushInst("TestNumNEqu",   {matrix[1], matrix[0], matrix[5]});
-  sol.PushInst("While",         {matrix[5], matrix[8], matrix[8]});
-  sol.PushInst(  "Inc",         {matrix[4], matrix[8], matrix[8]});
-  sol.PushInst(  "Mod",         {matrix[0], matrix[2], matrix[6]});
-  sol.PushInst(  "IfNot",       {matrix[6], matrix[8], matrix[8]});
-  sol.PushInst(    "Div",       {matrix[0], matrix[2], matrix[0]});
-  sol.PushInst(  "Close",       {matrix[8], matrix[8], matrix[8]});
-  sol.PushInst(  "If",          {matrix[6], matrix[8], matrix[8]});
-  sol.PushInst(    "Mult",      {matrix[0], matrix[3], matrix[0]});
-  sol.PushInst(    "Inc",       {matrix[0], matrix[8], matrix[8]});
-  sol.PushInst(  "Close",       {matrix[8], matrix[8], matrix[8]});
-  sol.PushInst(  "TestNumNEqu", {matrix[1], matrix[0], matrix[5]});
-  sol.PushInst("Close",         {matrix[8], matrix[8], matrix[8]});
-  sol.PushInst("SubmitNum",     {matrix[4], matrix[8], matrix[8]});
+  // sol.PushInst("LoadStrVec",  {matrix[0], matrix[4], matrix[4]});
+  // sol.PushInst("VecReverse",  {matrix[0], matrix[4], matrix[4]});
+  // sol.PushInst("Foreach",     {matrix[1], matrix[0], matrix[4]});
+  // sol.PushInst(  "StrLength", {matrix[1], matrix[2], matrix[4]});
+  // sol.PushInst(  "SubmitVal", {matrix[2], matrix[4], matrix[4]});
+  // sol.PushInst("Close",       {matrix[4], matrix[4], matrix[4]});
   
-  prog_world->Inject(sol, PROG_POP_SIZE);
+  // prog_world->Inject(sol, PROG_POP_SIZE);
 }
 
 void ProgramSynthesisExperiment::AddDefaultInstructions(const std::unordered_set<std::string> & includes={"Add","Sub","Mult","Div","Mod",
@@ -2397,7 +2411,7 @@ void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() {
     this->Inst_SubmitNone_SmallOrLarge(hw, inst);
   }, 0);
 
-};
+}
 
 void ProgramSynthesisExperiment::SetupProblem_ForLoopIndex() { 
   std::cout << "Setup problem - ForLoopIndex" << std::endl;
@@ -2942,8 +2956,8 @@ void ProgramSynthesisExperiment::SetupProblem_CompareStringLengths() {
                           "Foreach",
                           "Close",
                           "Break",
-                          "Call",
-                          "Routine",
+                          // "Call",
+                          // "Routine",
                           "Return",
                           "ModuleDef",
                           "IsNum",
@@ -3305,8 +3319,251 @@ void ProgramSynthesisExperiment::SetupProblem_WallisPi() {
 }
 
 void ProgramSynthesisExperiment::SetupProblem_StringLengthsBackwards() { 
-  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
-  exit(-1); 
+  std::cout << "Setting up problem - StringLengthsBackwards" << std::endl;
+
+  // A few useful aliases.
+  using test_org_t = TestOrg_StringLengthsBackwards;
+
+  // Load benchmark data for problem.
+  if (BENCHMARK_DATA_DIR.back() != '/') BENCHMARK_DATA_DIR += '/';
+  std::string training_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTrainingSetFilename();  
+  std::string testing_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTestingSetFilename();  
+  std::cout << "Loading training examples." << std::endl;
+  prob_utils_StringLengthsBackwards.GetTrainingSet().LoadTestCasesWithCSVReader(training_examples_fpath);
+  std::cout << "Loading testing examples." << std::endl;
+  prob_utils_StringLengthsBackwards.GetTestingSet().LoadTestCasesWithCSVReader(testing_examples_fpath);
+  std::cout << "Generating testing set population." << std::endl;
+  prob_utils_StringLengthsBackwards.GenerateTestingSetPop();
+  std::cout << "Loaded training example set size = " << prob_utils_StringLengthsBackwards.GetTrainingSet().GetSize() << std::endl;
+  std::cout << "Loaded testing example set size = " << prob_utils_StringLengthsBackwards.GetTestingSet().GetSize() << std::endl;
+  std::cout << "Testing set (non-training examples used to evaluate program accuracy) size = " << prob_utils_StringLengthsBackwards.testingset_pop.size() << std::endl;
+
+  // Setup the world
+  NewTestCaseWorld(prob_StringLengthsBackwards_world, *random, "StringLengthsBackwards world");
+
+  // Configure how the population should be initialized
+  SetupTestCasePop_Init(prob_StringLengthsBackwards_world,
+                        prob_utils_StringLengthsBackwards.training_set,
+                        [this]() { return GenRandomTestInput_StringLengthsBackwards(*random, 
+                                                                                   {PROB_STRING_LENGTHS_BACKWARDS__MIN_STR_CNT, PROB_STRING_LENGTHS_BACKWARDS__MAX_STR_CNT},
+                                                                                   {PROB_STRING_LENGTHS_BACKWARDS__MIN_STR_LEN, PROB_STRING_LENGTHS_BACKWARDS__MAX_STR_LEN}); 
+                                  }
+                        );
+  end_setup_sig.AddAction([this]() { std::cout << "TestCase world size= " << prob_StringLengthsBackwards_world->GetSize() << std::endl; });
+
+  // Tell the world to calculate the correct test output (given input) on placement.
+  prob_StringLengthsBackwards_world->OnPlacement([this](size_t pos) { prob_StringLengthsBackwards_world->GetOrg(pos).CalcOut(); });
+
+  // How are program results calculated on a test?
+  CalcProgramResultOnTest = [this](prog_org_t & prog_org, TestOrg_Base & test_org_base) {
+    test_org_t & test_org = static_cast<test_org_t&>(test_org_base);
+    TestResult result;
+    // if (!prob_utils_StringLengthsBackwards.submitted) {
+      // result.score = 0;
+      // result.pass = false;
+      // result.sub = false;
+    // } else {
+    std::pair<double, bool> r(prob_utils_StringLengthsBackwards.CalcScoreGradient(test_org.GetCorrectOut(), prob_utils_StringLengthsBackwards.submitted_vec));
+    result.score = r.first;
+    result.pass = r.second;
+    result.sub = true;
+    // }
+    return result;
+  };
+
+  // Setup how evaluation on world test should work.
+  EvaluateWorldTest = [this](prog_org_t & prog_org, size_t testID) {
+    emp::Ptr<test_org_t> test_org_ptr = prob_StringLengthsBackwards_world->GetOrgPtr(testID);
+    begin_program_test.Trigger(prog_org, test_org_ptr);
+    do_program_test.Trigger(prog_org, test_org_ptr);
+    end_program_test.Trigger(prog_org, test_org_ptr);
+    return CalcProgramResultOnTest(prog_org, *test_org_ptr);
+  };
+
+  // How should we validate programs on testing set?
+  DoTestingSetValidation = [this](prog_org_t & prog_org) { 
+    // evaluate program on full testing set; update stats utils with results
+    begin_program_eval.Trigger(prog_org);
+    stats_util.current_program__validation__test_results.resize(prob_utils_StringLengthsBackwards.testingset_pop.size());
+    stats_util.current_program__validation__total_score = 0;
+    stats_util.current_program__validation__total_passes = 0;
+    stats_util.current_program__validation__is_solution = false;
+    // For each test in validation set, evaluate program.
+    for (size_t testID = 0; testID < prob_utils_StringLengthsBackwards.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_StringLengthsBackwards.testingset_pop[testID];
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
+      stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+    }
+    stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_StringLengthsBackwards.testingset_pop.size();
+    end_program_eval.Trigger(prog_org);
+  }; 
+
+  // How should we screen for a solution?
+  ScreenForSolution = [this](prog_org_t & prog_org) {
+    begin_program_eval.Trigger(prog_org);
+    for (size_t testID = 0; testID < prob_utils_StringLengthsBackwards.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_StringLengthsBackwards.testingset_pop[testID];
+
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      
+      TestResult result = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      if (!result.pass) {
+        end_program_eval.Trigger(prog_org);
+        return false;
+      }
+    }
+    end_program_eval.Trigger(prog_org);
+    return true;
+  };
+
+  // Tell the experiment how to get test phenotypes.
+  GetTestPhenotype = [this](size_t testID) -> test_org_phen_t & {
+    emp_assert(prob_StringLengthsBackwards_world->IsOccupied(testID));
+    return prob_StringLengthsBackwards_world->GetOrg(testID).GetPhenotype();
+  };
+
+  // Setup how test world updates.
+  SetupTestCaseWorldUpdate(prob_StringLengthsBackwards_world);
+
+  // Setup how test cases mutate.
+  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::RANDOM) {
+    std::cout << "RANDOM training mode detected, configuring mutation function to RANDOMIZE organisms." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Randomize organism genome on mutate.
+      prob_StringLengthsBackwards_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        test_org.GetGenome() = GenRandomTestInput_StringLengthsBackwards(*random, {PROB_STRING_LENGTHS_BACKWARDS__MIN_STR_CNT, PROB_STRING_LENGTHS_BACKWARDS__MAX_STR_CNT},
+                                                                                  {PROB_STRING_LENGTHS_BACKWARDS__MIN_STR_LEN, PROB_STRING_LENGTHS_BACKWARDS__MAX_STR_LEN}); 
+        return 1;
+      });
+    };
+  } else {
+    std::cout << "Non-RANDOM training mode detected, configuring mutation function normally." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Configure mutator.
+      prob_utils_StringLengthsBackwards.MIN_STR_LEN = PROB_STRING_LENGTHS_BACKWARDS__MIN_STR_LEN;
+      prob_utils_StringLengthsBackwards.MAX_STR_LEN = PROB_STRING_LENGTHS_BACKWARDS__MAX_STR_LEN;
+      prob_utils_StringLengthsBackwards.MIN_STR_CNT = PROB_STRING_LENGTHS_BACKWARDS__MIN_STR_CNT;
+      prob_utils_StringLengthsBackwards.MAX_STR_CNT = PROB_STRING_LENGTHS_BACKWARDS__MAX_STR_CNT;
+      prob_utils_StringLengthsBackwards.PER_CHAR_INS_RATE = PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_CHAR_INS_RATE;
+      prob_utils_StringLengthsBackwards.PER_CHAR_DEL_RATE = PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_CHAR_DEL_RATE;
+      prob_utils_StringLengthsBackwards.PER_CHAR_SUB_RATE = PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_CHAR_SUB_RATE;
+      prob_utils_StringLengthsBackwards.PER_STR_SWAP_RATE = PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_STR_SWAP_RATE;
+      prob_utils_StringLengthsBackwards.PER_STR_DUP_RATE = PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_STR_DUP_RATE;
+      prob_utils_StringLengthsBackwards.PER_STR_DEL_RATE = PROB_STRING_LENGTHS_BACKWARDS__MUTATION__PER_STR_DEL_RATE;
+      // (2) Hook mutator up to world.
+      prob_StringLengthsBackwards_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        return prob_utils_StringLengthsBackwards.Mutate(rnd, test_org.GetGenome());
+      });
+    };
+  } // todo - test mutation function
+
+  // Setup test case fitness function.
+  SetupTestFitFun = [this]() {
+    prob_StringLengthsBackwards_world->SetFitFun([](test_org_t & test_org) {
+      return (double)test_org.GetPhenotype().num_fails;
+    });
+  };
+
+  // Tell experiment how to configure hardware inputs when running program against a test.
+  begin_program_test.AddAction([this](prog_org_t & prog_org, emp::Ptr<TestOrg_Base> test_org_base_ptr) {
+    // Reset eval stuff
+    // Set current test org.
+    prob_utils_StringLengthsBackwards.cur_eval_test_org = test_org_base_ptr.Cast<test_org_t>(); // currently only place need testID for this?
+    prob_utils_StringLengthsBackwards.ResetTestEval();
+    emp_assert(eval_hardware->GetMemSize() >= 1);
+    // Configure inputs.
+    if (eval_hardware->GetCallStackSize()) {
+      // Grab some useful references.
+      const Problem_StringLengthsBackwards_input_t & input = prob_utils_StringLengthsBackwards.cur_eval_test_org->GetGenome(); // std::pair<int, double>
+      hardware_t::CallState & state = eval_hardware->GetCurCallState();
+      hardware_t::Memory & wmem = state.GetWorkingMem();
+      // Set hardware input.
+      wmem.Set(0, input);
+    }
+  });  
+
+  // Tell experiment how to snapshot test population.
+  SnapshotTests = [this]() {
+    std::string snapshot_dir = DATA_DIRECTORY + "pop_" + emp::to_string(prog_world->GetUpdate());
+    mkdir(snapshot_dir.c_str(), ACCESSPERMS);
+    
+    emp::DataFile file(snapshot_dir + "/test_pop_" + emp::to_string((int)prog_world->GetUpdate()) + ".csv");
+    // Test file contents:
+    // - test id
+    std::function<size_t(void)> get_test_id = [this]() { return stats_util.cur_testID; };
+    file.AddFun(get_test_id, "test_id");
+
+    // - test fitness
+    std::function<double(void)> get_test_fitness = [this]() { return prob_StringLengthsBackwards_world->CalcFitnessID(stats_util.cur_testID); };
+    file.AddFun(get_test_fitness, "fitness");
+
+    // - num passes
+    std::function<size_t(void)> get_test_num_passes = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_passes; };
+    file.AddFun(get_test_num_passes, "num_passes");
+
+    // - num fails
+    std::function<size_t(void)> get_test_num_fails = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_fails; };
+    file.AddFun(get_test_num_fails, "num_fails");
+
+    std::function<size_t(void)> get_num_tested = [this]() { return GetTestPhenotype(stats_util.cur_testID).test_passes.size(); };
+    file.AddFun(get_num_tested, "num_programs_tested_against");
+
+    // - test scores by program
+    std::function<std::string(void)> get_passes_by_program = [this]() {
+      std::string scores = "\"[";
+      test_org_phen_t & phen = GetTestPhenotype(stats_util.cur_testID);
+      for (size_t i = 0; i < phen.test_passes.size(); ++i) {
+        if (i) scores += ",";
+        scores += emp::to_string(phen.test_passes[i]);
+      }
+      scores += "]\"";
+      return scores;
+    };
+    file.AddFun(get_passes_by_program, "passes_by_program");
+
+    // - test
+    std::function<std::string(void)> get_test = [this]() {
+      std::ostringstream stream;
+      stream << "\"";
+      prob_StringLengthsBackwards_world->GetOrg(stats_util.cur_testID).Print(stream);
+      stream << "\"";
+      return stream.str();
+    };
+    file.AddFun(get_test, "test", "");
+
+    file.PrintHeaderKeys();
+
+    // Loop over tests, snapshotting each.
+    for (stats_util.cur_testID = 0; stats_util.cur_testID < prob_StringLengthsBackwards_world->GetSize(); ++stats_util.cur_testID) {
+      if (!prob_StringLengthsBackwards_world->IsOccupied(stats_util.cur_testID)) continue;
+      file.Update();
+    }
+  };
+
+  // Add default instructions to instruction set.
+  AddDefaultInstructions(); // Add them all!
+
+  // -- Custom instructions --
+  inst_lib->AddInst("LoadStrVec", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadStrVec_StringLengthsBackwards(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("SubmitVal", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_SubmitVal_StringLengthsBackwards(hw, inst);
+  }, 1);
+
+  // inst_lib->AddInst("SubmitVec", [this](hardware_t & hw, const inst_t & inst) {
+  //   this->Inst_SubmitVec_StringLengthsBackwards(hw, inst);
+  // }, 1);
+
 }
 
 void ProgramSynthesisExperiment::SetupProblem_LastIndexOfZero() { 
@@ -4181,6 +4438,31 @@ void ProgramSynthesisExperiment::Inst_SubmitNum_CollatzNumbers(hardware_t & hw, 
 
   emp_assert(prob_utils_CollatzNumbers.cur_eval_test_org != nullptr);
   prob_utils_CollatzNumbers.Submit((int)wmem.AccessVal(posA).GetNum());
+}
+
+// ----- StringLengthsBackwards -----
+void ProgramSynthesisExperiment::Inst_LoadStrVec_StringLengthsBackwards(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_StringLengthsBackwards.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_StringLengthsBackwards.cur_eval_test_org->GetGenome());
+}
+
+void ProgramSynthesisExperiment::Inst_SubmitVal_StringLengthsBackwards(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), hardware_t::MemPosType::NUM);
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_StringLengthsBackwards.cur_eval_test_org != nullptr);
+  prob_utils_StringLengthsBackwards.Submit((size_t)wmem.AccessVal(posA).GetNum());
 }
 
 // ----- Median -----

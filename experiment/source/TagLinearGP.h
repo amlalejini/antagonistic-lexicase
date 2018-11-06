@@ -451,7 +451,7 @@ namespace TagLGP {
 
         void Set(size_t id, const emp::vector<std::string> & str_vec) {
           emp_assert(id < memory.size());
-          emp_assert(str_vec.size());
+          // emp_assert(str_vec.size());
           memory[id].pos.resize(str_vec.size());
           for (size_t i = 0; i < memory[id].pos.size(); ++i) memory[id].pos[i] = str_vec[i];
           memory[id].set = true;
