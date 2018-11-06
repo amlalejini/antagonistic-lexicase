@@ -7,6 +7,7 @@
 - [Problem - ForLoopIndex](#problem---forloopindex)
 - [Problem - CompareStringLengths](#problem---comparestringlengths)
 - [Problem - CollatzNumbers](#problem---collatznumbers)
+- [Problem - StringLengthsBackwards](#problem---stringlengthsbackwards)
 - [Problem - Median](#problem---median)
 - [Problem - Smallest](#problem---smallest)
 
@@ -119,6 +120,22 @@
   sol.PushInst(  "TestNumNEqu", {matrix[1], matrix[0], matrix[5]});
   sol.PushInst("Close",         {matrix[8], matrix[8], matrix[8]});
   sol.PushInst("SubmitNum",     {matrix[4], matrix[8], matrix[8]});
+  
+  prog_world->Inject(sol, PROG_POP_SIZE);
+```
+
+## Problem - StringLengthsBackwards
+
+```{C++}
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  hardware_t::Program sol(inst_lib);
+
+  sol.PushInst("LoadStrVec",  {matrix[0], matrix[4], matrix[4]});
+  sol.PushInst("VecReverse",  {matrix[0], matrix[4], matrix[4]});
+  sol.PushInst("Foreach",     {matrix[1], matrix[0], matrix[4]});
+  sol.PushInst(  "StrLength", {matrix[1], matrix[2], matrix[4]});
+  sol.PushInst(  "SubmitVal", {matrix[2], matrix[4], matrix[4]});
+  sol.PushInst("Close",       {matrix[4], matrix[4], matrix[4]});
   
   prog_world->Inject(sol, PROG_POP_SIZE);
 ```

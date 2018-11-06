@@ -11,7 +11,7 @@
 - [x] ForLoopIndex (numbers)
 - [x] CompareStringLengths (strings, numbers)
 - [x] Collatz Numbers (numbers)
-- [ ] StringLengthBackwards (vector, strings, numbers)
+- [x] StringLengthBackwards (vector, strings, numbers)
 - [ ] LastIndexOfZero (vector, numbers)
 - [ ] CountOdds (vector, numbers)
 - [ ] VectorsSummed (vector, numbers)
@@ -33,6 +33,7 @@ Things I've seen solutions evolve for:
 Things I haven't seen yet:
 
 - For Loop index
+- CollatzNumbers
 
 ## Problem - For Loop Index
 
