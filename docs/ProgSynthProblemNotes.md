@@ -12,7 +12,7 @@
 - [x] CompareStringLengths (strings, numbers)
 - [x] Collatz Numbers (numbers)
 - [x] StringLengthBackwards (vector, strings, numbers)
-- [ ] LastIndexOfZero (vector, numbers)
+- [x] LastIndexOfZero (vector, numbers)
 - [ ] CountOdds (vector, numbers)
 - [ ] VectorsSummed (vector, numbers)
 - [ ] VectorAverage
@@ -29,6 +29,7 @@ Things I've seen solutions evolve for:
 - Smallest
 - Median
 - Small Or Large (9k updates, >=64 w/128eval)
+- StringLengthBackwards
 
 Things I haven't seen yet:
 

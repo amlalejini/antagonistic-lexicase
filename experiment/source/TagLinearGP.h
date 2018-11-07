@@ -442,6 +442,15 @@ namespace TagLGP {
           memory[id].is_vector = true;
         }
 
+        void Set(size_t id, const emp::vector<int> & val_vec) {
+          emp_assert(id < memory.size());
+          // emp_assert(val_vec.size());
+          memory[id].pos.resize(val_vec.size());
+          for (size_t i = 0; i < memory[id].pos.size(); ++i) memory[id].pos[i] = (double)val_vec[i];
+          memory[id].set = true;
+          memory[id].is_vector = true;
+        }
+
         void Set(size_t id, const std::string & str) {
           emp_assert(id < memory.size());
           memory[id].pos.resize(1);
@@ -1984,6 +1993,7 @@ namespace TagLGP {
         if (vec[i] == val) {
           found = true;
           wmem.Set(posC, i);
+          break;
         }
       }
       if (!found) wmem.Set(posC, vec.size());

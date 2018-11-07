@@ -8,6 +8,7 @@
 - [Problem - CompareStringLengths](#problem---comparestringlengths)
 - [Problem - CollatzNumbers](#problem---collatznumbers)
 - [Problem - StringLengthsBackwards](#problem---stringlengthsbackwards)
+- [Problem - LastIndexOfZero](#problem---lastindexofzero)
 - [Problem - Median](#problem---median)
 - [Problem - Smallest](#problem---smallest)
 
@@ -136,6 +137,23 @@
   sol.PushInst(  "StrLength", {matrix[1], matrix[2], matrix[4]});
   sol.PushInst(  "SubmitVal", {matrix[2], matrix[4], matrix[4]});
   sol.PushInst("Close",       {matrix[4], matrix[4], matrix[4]});
+  
+  prog_world->Inject(sol, PROG_POP_SIZE);
+```
+
+## Problem - LastIndexOfZero
+
+```{C++}
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  hardware_t::Program sol(inst_lib);
+
+  sol.PushInst("LoadVec",     {matrix[0], matrix[4], matrix[4]});
+  sol.PushInst("VecReverse",  {matrix[0], matrix[4], matrix[4]});
+  sol.PushInst("VecIndexOf",  {matrix[0], matrix[1], matrix[2]});
+  sol.PushInst("VecLen",      {matrix[0], matrix[1], matrix[4]});
+  sol.PushInst("Sub",         {matrix[1], matrix[2], matrix[3]});
+  sol.PushInst("Dec",         {matrix[3], matrix[4], matrix[4]});
+  sol.PushInst("SubmitNum",   {matrix[3], matrix[4], matrix[4]});
   
   prog_world->Inject(sol, PROG_POP_SIZE);
 ```
