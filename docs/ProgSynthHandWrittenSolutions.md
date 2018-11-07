@@ -9,6 +9,7 @@
 - [Problem - CollatzNumbers](#problem---collatznumbers)
 - [Problem - StringLengthsBackwards](#problem---stringlengthsbackwards)
 - [Problem - LastIndexOfZero](#problem---lastindexofzero)
+- [Problem - CountOdds](#problem---countodds)
 - [Problem - Median](#problem---median)
 - [Problem - Smallest](#problem---smallest)
 
@@ -154,6 +155,25 @@
   sol.PushInst("Sub",         {matrix[1], matrix[2], matrix[3]});
   sol.PushInst("Dec",         {matrix[3], matrix[4], matrix[4]});
   sol.PushInst("SubmitNum",   {matrix[3], matrix[4], matrix[4]});
+  
+  prog_world->Inject(sol, PROG_POP_SIZE);
+```
+
+## Problem - CountOdds
+
+```{C++}
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  hardware_t::Program sol(inst_lib);
+
+  sol.PushInst("LoadVec",   {matrix[0], matrix[7], matrix[7]});
+  sol.PushInst("Set-2",     {matrix[2], matrix[7], matrix[7]});
+  sol.PushInst("Foreach",   {matrix[1], matrix[0], matrix[7]});
+  sol.PushInst(  "Mod",     {matrix[1], matrix[2], matrix[3]});
+  sol.PushInst(  "If",      {matrix[3], matrix[7], matrix[7]});
+  sol.PushInst(    "Inc",   {matrix[4], matrix[7], matrix[7]});
+  sol.PushInst(  "Close",   {matrix[7], matrix[7], matrix[7]});
+  sol.PushInst("Close",     {matrix[7], matrix[7], matrix[7]});
+  sol.PushInst("SubmitNum", {matrix[4], matrix[7], matrix[7]});
   
   prog_world->Inject(sol, PROG_POP_SIZE);
 ```

@@ -13,7 +13,8 @@
 - [x] Collatz Numbers (numbers)
 - [x] StringLengthBackwards (vector, strings, numbers)
 - [x] LastIndexOfZero (vector, numbers)
-- [ ] CountOdds (vector, numbers)
+- [x] CountOdds (vector, numbers)
+- [ ] MirrorImage
 - [ ] VectorsSummed (vector, numbers)
 - [ ] VectorAverage
 - [ ] SumOfSquares
@@ -33,7 +34,8 @@ Things I've seen solutions evolve for:
 
 Things I haven't seen yet:
 
-- For Loop index
+- ForLoopIndex
+- LastIndexOfZero
 - CollatzNumbers
 
 ## Problem - For Loop Index

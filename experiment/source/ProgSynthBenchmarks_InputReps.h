@@ -1790,17 +1790,48 @@ class TestOrg_VectorAverage : public TestOrg_Base {
 struct ProblemUtilities_VectorAverage { emp::vector<std::function<double(TestOrg_VectorAverage &)>> lexicase_fit_set; };
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Problem: CountOdds
+// - Input: emp::vector<int>
+// - Output: int
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// Generate random test input
+Problem_CountOdds_input_t GenRandomTestInput_CountOdds(emp::Random & rand,
+                                                       const std::pair<size_t, size_t> & vec_size_range,
+                                                       const std::pair<int, int> & vec_val_range) {
+  emp::vector<int> input;
+  const size_t vec_size = rand.GetUInt(vec_size_range.first, vec_size_range.second+1);
+  for (size_t i = 0; i < vec_size; ++i) {
+    int val = rand.GetInt(vec_val_range.first, vec_val_range.second+1);
+    input.emplace_back(val);
+  }
+  return input;
+}
 
-/// Count Odds: Vector<Integer>
+/// Generate correct test output
+Problem_CountOdds_output_t GenCorrectOut_CountOdds(const Problem_CountOdds_input_t & input) {
+  size_t odd_cnt = 0;
+  for (size_t i = 0; i < input.size(); ++i) {
+    if (input[i] & 1) ++odd_cnt;
+  }
+  return odd_cnt;
+}
+
 class TestOrg_CountOdds : public TestOrg_Base {
   public:
     using parent_t = TestOrg_Base;
     using parent_t::phenotype;
 
     using genome_t = emp::vector<int>;
+    using out_t = Problem_CountOdds_output_t;
+
   protected:
     genome_t genome;
+    out_t out;
 
   public:
     TestOrg_CountOdds(const genome_t & _g) : genome(_g) { ; }
@@ -1808,13 +1839,166 @@ class TestOrg_CountOdds : public TestOrg_Base {
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
 
-    void CalcOut() { ; }
+    void CalcOut() { out = GenCorrectOut_CountOdds(genome); }
+
+    out_t & GetCorrectOut() { return out; }
+    const out_t & GetCorrectOut() const { return out; }   
+
+    void Print(std::ostream & os=std::cout) {
+      os << "[";
+      for (size_t i = 0; i < genome.size(); ++i) {
+        if (i) os << ",";
+        os << genome[i];
+      }
+      os << "]"; 
+    }
 };
 
-struct ProblemUtilities_CountOdds { emp::vector<std::function<double(TestOrg_CountOdds &)>> lexicase_fit_set; };
+struct ProblemUtilities_CountOdds { 
+  using this_t = ProblemUtilities_CountOdds;
+  using problem_org_t = TestOrg_CountOdds;
+  using input_t = Problem_CountOdds_input_t;
+  using output_t = Problem_CountOdds_output_t;
+  
+  using testcase_set_t = TestCaseSet<input_t, output_t>;
+  
+  testcase_set_t testing_set;
+  testcase_set_t training_set;
+
+  emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
+
+  // --- Useful during a test evaluation ---
+  emp::Ptr<problem_org_t> cur_eval_test_org;
+  bool submitted;
+  int submitted_val;
+
+  // Mutation
+  size_t MIN_VEC_LEN;
+  size_t MAX_VEC_LEN;
+  int MIN_NUM;
+  int MAX_NUM;
+  double PER_NUM_SWAP_RATE;
+  double PER_NUM_DEL_RATE;
+  double PER_NUM_INS_RATE;
+  double PER_NUM_SUB_RATE;
+
+  size_t Mutate(emp::Random & rnd, input_t & mut_input) {
+    size_t muts = 0; 
+    emp::vector<int> new_input;
+    int expected_size = mut_input.size();
+    for (size_t i = 0; i < mut_input.size(); ++i) {
+      // Deletion?
+      if (rnd.P(PER_NUM_DEL_RATE) && (expected_size-1)>=(int)MIN_VEC_LEN) {
+        ++muts;
+        --expected_size;
+        continue;
+      } 
+      const size_t whead = new_input.size();
+      new_input.emplace_back(mut_input[i]);
+      // Substitution?
+      if (rnd.P(PER_NUM_SUB_RATE)) {
+        ++muts;
+        new_input[whead] = rnd.GetInt(MIN_NUM, MAX_NUM+1);
+      }
+      // Insertion?
+      if (rnd.P(PER_NUM_INS_RATE) && (expected_size+1)<=(int)MAX_VEC_LEN) {
+        ++muts;
+        ++expected_size;
+        new_input.emplace_back(rnd.GetInt(MIN_NUM, MAX_NUM+1));
+      }
+    }
+    mut_input = new_input; // update mut_input
+    // Swaps?
+    for (size_t i = 0; i < mut_input.size(); ++i) {
+      if (rnd.P(PER_NUM_SWAP_RATE) && mut_input.size() > 1) {
+        ++muts;
+        // Swap position i with a random different position
+        size_t other = rnd.GetUInt(mut_input.size());
+        while (other == i) other = rnd.GetUInt(mut_input.size());
+        std::swap(mut_input[i], mut_input[other]);
+      }
+    }
+    return muts;
+  }
+  
+  emp::vector<std::function<double(problem_org_t &)>> lexicase_fit_set; 
+
+  ProblemUtilities_CountOdds()
+    : testing_set(this_t::LoadTestCaseFromLine),
+      training_set(this_t::LoadTestCaseFromLine),
+      submitted(false), submitted_val(0)
+  { ; }
+
+  ~ProblemUtilities_CountOdds() {
+    for (size_t i = 0; i < testingset_pop.size(); ++i) testingset_pop[i].Delete();
+  }
+
+  testcase_set_t & GetTestingSet() { return testing_set; }
+  testcase_set_t & GetTrainingSet() { return training_set; }
+
+  void ResetTestEval() {
+    submitted = false;
+    submitted_val = 0;
+  }
+
+  void Submit(int val) {
+    submitted = true;
+    submitted_val = val;
+  }
+
+  static std::pair<input_t, output_t> LoadTestCaseFromLine(const emp::vector<std::string> & line) {
+    input_t input;   
+    output_t output; 
+    
+    std::string input_str = line[0];
+    if (input_str.front() == '[') { input_str.erase(0, 1); }
+    if (input_str.back() == ']') { input_str.pop_back(); }
+    emp::vector<std::string> sliced_input_str = emp::slice(input_str, ' ');
+    
+    for (size_t i = 0; i < sliced_input_str.size(); ++i) {
+      input.emplace_back(std::atoi(sliced_input_str[i].c_str()));
+    }
+    
+    // Calculate correct output given loaded input
+    int calc_out = GenCorrectOut_CountOdds(input);
+    // Get output from file
+    output = std::atoi(line[1].c_str());
+    // make sure generated output and read output match
+    if (calc_out != output) {
+      std::cout << "ERROR! Generated count odds output does not match read output! Exiting." << std::endl;
+      exit(-1);
+    }
+
+    return {input, output};
+  }
+
+  void GenerateTestingSetPop() {
+    for (size_t i = 0; i < testing_set.GetSize(); ++i) {
+      testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
+      testingset_pop[i]->CalcOut();
+    }
+  }
+
+  std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
+    const bool pass = (sub == correct_test_output);
+    return {(double)pass, pass};
+  }
+
+};
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Problem: MirrorImage
+// - Input: std::array<emp::vector<int>, 2>;
+// - Output: bool;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// Generate random input
+
+/// Generate correct output given input
 
 /// Mirror Image: Array<Vector<Integer>, 2>
 class TestOrg_MirrorImage : public TestOrg_Base {
