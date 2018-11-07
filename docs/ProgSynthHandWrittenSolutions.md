@@ -10,6 +10,7 @@
 - [Problem - StringLengthsBackwards](#problem---stringlengthsbackwards)
 - [Problem - LastIndexOfZero](#problem---lastindexofzero)
 - [Problem - CountOdds](#problem---countodds)
+- [Problem - Mirror Image](#problem---mirror-image)
 - [Problem - Median](#problem---median)
 - [Problem - Smallest](#problem---smallest)
 
@@ -174,6 +175,21 @@
   sol.PushInst(  "Close",   {matrix[7], matrix[7], matrix[7]});
   sol.PushInst("Close",     {matrix[7], matrix[7], matrix[7]});
   sol.PushInst("SubmitNum", {matrix[4], matrix[7], matrix[7]});
+  
+  prog_world->Inject(sol, PROG_POP_SIZE);
+```
+
+## Problem - Mirror Image
+
+```{C++}
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  hardware_t::Program sol(inst_lib);
+
+  sol.PushInst("LoadVec1",   {matrix[0], matrix[7], matrix[7]});
+  sol.PushInst("LoadVec2",   {matrix[1], matrix[7], matrix[7]});
+  sol.PushInst("VecReverse", {matrix[1], matrix[7], matrix[7]});
+  sol.PushInst("TestMemEqu", {matrix[0], matrix[1], matrix[2]});
+  sol.PushInst("SubmitVal",  {matrix[2], matrix[7], matrix[7]});
   
   prog_world->Inject(sol, PROG_POP_SIZE);
 ```

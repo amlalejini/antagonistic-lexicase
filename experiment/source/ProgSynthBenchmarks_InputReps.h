@@ -1997,8 +1997,65 @@ struct ProblemUtilities_CountOdds {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Generate random input
+/// Generate random test input
+Problem_MirrorImage_input_t GenRandomTestInput_MirrorImage(emp::Random & rand,
+                                                           const std::pair<size_t, size_t> & vec_size_range,
+                                                           const std::pair<int, int> & vec_val_range) {
+  std::array<emp::vector<int>, 2> input;
+  // todo - 4 random cases: equal, random, mirrored, nearly mirrored
+  const size_t vec_size = rand.GetUInt(vec_size_range.first, vec_size_range.second+1);
+  const size_t rand_case = rand.GetUInt(0, 4);
+  switch (rand_case) {
+    case 0: { // Equal
+      for (size_t k = 0; k < vec_size; ++k) {
+        input[0].emplace_back(rand.GetInt(vec_val_range.first, vec_val_range.second+1));
+      }
+      input[1] = input[0];
+      break; 
+    }
+    case 1: { // Random
+      for (size_t i = 0; i < input.size(); ++i) {
+        for (size_t k = 0; k < vec_size; ++k) {
+          input[i].emplace_back(rand.GetInt(vec_val_range.first, vec_val_range.second+1));
+        }
+      } 
+      break; 
+    }
+    case 2: { // Mirrored
+      for (size_t k = 0; k < vec_size; ++k) {
+        input[0].emplace_back(rand.GetInt(vec_val_range.first, vec_val_range.second+1));
+      }
+      input[1] = input[0];
+      std::reverse(std::begin(input[1]), std::end(input[1]));
+      break; 
+    }
+    case 3: { // Nearly mirrored
+      for (size_t k = 0; k < vec_size; ++k) {
+        input[0].emplace_back(rand.GetInt(vec_val_range.first, vec_val_range.second+1));
+      }
+      input[1] = input[0];
+      std::reverse(std::begin(input[1]), std::end(input[1]));
+      const size_t num_randos = rand.GetUInt(input[0].size());
+      for (size_t i = 0; i < num_randos; ++i) {
+        input[0][rand.GetUInt(input[0].size())] = rand.GetInt(vec_val_range.first, vec_val_range.second+1);
+      }
+      break; 
+    }
+  }
+  return input;
+}
 
 /// Generate correct output given input
+Problem_MirrorImage_output_t GenCorrectOut_MirrorImage(const Problem_MirrorImage_input_t & input) {
+  emp_assert(input[0].size() == input[1].size());
+  if (input[0].size() != input[1].size()) return false;
+  const size_t vec_size = input[0].size();
+  for (size_t i = 0; i < vec_size; ++i) {
+    const size_t ri = (vec_size - 1) - i;
+    if (input[0][i] != input[1][ri]) return false;
+  }
+  return true;
+}
 
 /// Mirror Image: Array<Vector<Integer>, 2>
 class TestOrg_MirrorImage : public TestOrg_Base {
@@ -2007,8 +2064,11 @@ class TestOrg_MirrorImage : public TestOrg_Base {
     using parent_t::phenotype;
 
     using genome_t = std::array<emp::vector<int>, 2>;
+    using out_t = Problem_MirrorImage_output_t;
+
   protected:
     genome_t genome;
+    out_t out;
 
   public:
     TestOrg_MirrorImage(const genome_t & _g) : genome(_g) { ; }
@@ -2016,10 +2076,204 @@ class TestOrg_MirrorImage : public TestOrg_Base {
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
 
-    void CalcOut() { ; }
+    void CalcOut() { out = GenCorrectOut_MirrorImage(genome); }
+
+    out_t & GetCorrectOut() { return out; }
+    const out_t & GetCorrectOut() const { return out; }   
+
+    void Print(std::ostream & os=std::cout) {
+      os << "[[";
+      for (size_t i = 0; i < genome[0].size(); ++i) {
+        if (i) os << ",";
+        os << genome[0][i];
+      }
+      os << "],["; 
+      for (size_t i = 0; i < genome[1].size(); ++i) {
+        if (i) os << ",";
+        os << genome[1][i];
+      }
+      os << "]]"; 
+    }
 };
 
-struct ProblemUtilities_MirrorImage { emp::vector<std::function<double(TestOrg_MirrorImage &)>> lexicase_fit_set; };
+struct ProblemUtilities_MirrorImage {
+  using this_t = ProblemUtilities_MirrorImage;
+  using problem_org_t = TestOrg_MirrorImage;
+  using input_t = Problem_MirrorImage_input_t;
+  using output_t = Problem_MirrorImage_output_t;
+  
+  using testcase_set_t = TestCaseSet<input_t, output_t>;
+  
+  testcase_set_t testing_set;
+  testcase_set_t training_set;
+
+  emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
+
+  // --- Useful during a test evaluation ---
+  emp::Ptr<problem_org_t> cur_eval_test_org;
+  bool submitted;
+  bool submitted_val;
+
+  // Mutation
+  size_t MIN_VEC_LEN;
+  size_t MAX_VEC_LEN;
+  int MIN_NUM;
+  int MAX_NUM;
+  double PER_VEC_RANDOMIZE_VAL_RATE;  // How often do we randomize a single value in a vector?
+  double PER_VEC_MIRROR_RATE;              // How often do we mirror a vector?
+  double COPY_RATE;                   // How often do we copy one vector over the other?
+  double INS_RATE;                    // How often do we insert a random value on the end of both vectors?
+  double DEL_RATE;                    // How often do we delete
+  double PER_VEC_SHUFFLE_RATE;
+
+  size_t Mutate(emp::Random & rnd, input_t & mut_input) {
+    size_t muts = 0; 
+    emp_assert(mut_input[0].size() == mut_input[1].size());
+    if (mut_input[0].size() != mut_input[1].size()) {
+      std::cout << "ERROR! MirrorImage vectors do not have same length! Exiting." << std::endl;
+      exit(-1);
+    }
+    size_t vec_size = mut_input[0].size();
+
+    // Should we randomize any values?
+    for (size_t i = 0; i < mut_input.size(); ++i) {
+      if (rnd.P(PER_VEC_RANDOMIZE_VAL_RATE) && mut_input[i].size() > 0) {
+        ++muts;
+        mut_input[i][rnd.GetUInt(mut_input[i].size())] = rnd.GetInt(MIN_NUM, MAX_NUM+1);
+      }
+    }
+    // Should we copy one vector over the other?
+    if (rnd.P(COPY_RATE)) {
+      ++muts;
+      // Which should we copy?
+      if (rnd.P(0.5)) {
+        mut_input[1] = mut_input[0];
+      } else {
+        mut_input[0] = mut_input[1];
+      }
+    }
+    
+    // Should we insert anything into each vector? (has weird side effects, but don't really care in this case)
+    if (rnd.P(INS_RATE) && vec_size < MAX_VEC_LEN) {
+      ++muts;
+      // Where?
+      const size_t loc = rnd.GetUInt(vec_size);
+      const int val = rnd.GetInt(MIN_NUM, MAX_NUM+1);
+      mut_input[0].emplace_back(val); std::swap(mut_input[0][loc], mut_input[0][vec_size]);
+      mut_input[1].emplace_back(val); std::swap(mut_input[1][loc], mut_input[1][vec_size]);
+      vec_size = mut_input[0].size();
+    }
+
+    // Should we delete anything in each vector? (has weird side effects, but don't really care in this case)
+    if (rnd.P(DEL_RATE) && vec_size > MIN_VEC_LEN) {
+      ++muts;
+      const size_t loc = rnd.GetUInt(vec_size);
+      --vec_size;
+      std::swap(mut_input[0][loc], mut_input[0][vec_size]); mut_input[0].resize(vec_size);
+      std::swap(mut_input[1][loc], mut_input[1][vec_size]); mut_input[1].resize(vec_size);
+    } 
+
+    // Should we mirror any of the vectors?
+    for (size_t i = 0; i < mut_input.size(); ++i) {
+      if (rnd.P(PER_VEC_MIRROR_RATE)) {
+        ++muts;
+        std::reverse(std::begin(mut_input[i]), std::end(mut_input[i]));
+      }
+    }
+
+    // Should we randomize a vector?
+    for (size_t i = 0; i < mut_input.size(); ++i) {
+      if (rnd.P(PER_VEC_SHUFFLE_RATE)) {
+        ++muts;
+        emp::Shuffle(rnd, mut_input[i]);
+      }
+    }
+
+    emp_assert(mut_input[0].size() == mut_input[1].size());
+    emp_assert(mut_input[0].size() <= MAX_VEC_LEN);
+    emp_assert(mut_input[0].size() >= MIN_VEC_LEN);
+    return muts;
+  }
+  
+  emp::vector<std::function<double(problem_org_t &)>> lexicase_fit_set; 
+
+  ProblemUtilities_MirrorImage()
+    : testing_set(this_t::LoadTestCaseFromLine),
+      training_set(this_t::LoadTestCaseFromLine),
+      submitted(false), submitted_val(0)
+  { ; }
+
+  ~ProblemUtilities_MirrorImage() {
+    for (size_t i = 0; i < testingset_pop.size(); ++i) testingset_pop[i].Delete();
+  }
+
+  testcase_set_t & GetTestingSet() { return testing_set; }
+  testcase_set_t & GetTrainingSet() { return training_set; }
+
+  void ResetTestEval() {
+    submitted = false;
+    submitted_val = false;
+  }
+
+  void Submit(bool val) {
+    submitted = true;
+    submitted_val = val;
+  }
+
+  static std::pair<input_t, output_t> LoadTestCaseFromLine(const emp::vector<std::string> & line) {
+    input_t input;   
+    output_t output; 
+    
+    // Vector 1
+    std::string input_str = line[0];
+    if (input_str.front() == '[') { input_str.erase(0, 1); }
+    if (input_str.back() == ']') { input_str.pop_back(); }
+    emp::vector<std::string> sliced_input_str = emp::slice(input_str, ' ');
+    for (size_t i = 0; i < sliced_input_str.size(); ++i) {
+      input[0].emplace_back(std::atoi(sliced_input_str[i].c_str()));
+    }
+
+    // Vector 2
+    input_str = line[1];
+    if (input_str.front() == '[') { input_str.erase(0, 1); }
+    if (input_str.back() == ']') { input_str.pop_back(); }  
+    sliced_input_str = emp::slice(input_str, ' ');
+    for (size_t i = 0; i < sliced_input_str.size(); ++i) {
+      input[1].emplace_back(std::atoi(sliced_input_str[i].c_str()));
+    }   
+
+    // Calculate correct output given loaded input
+    bool calc_out = GenCorrectOut_MirrorImage(input);
+    // Get output from file
+    if (line[2] == "false") output = false;
+    else if (line[2] == "true") output = true;
+    else {
+      std::cout << "Unrecognized output value for mirror image examples! Exiting." << std::endl;
+      exit(-1);
+    }
+
+    // make sure generated output and read output match
+    if (calc_out != output) {
+      std::cout << "ERROR! Generated count odds output does not match read output! Exiting." << std::endl;
+      exit(-1);
+    }
+
+    return {input, output};
+  }
+
+  void GenerateTestingSetPop() {
+    for (size_t i = 0; i < testing_set.GetSize(); ++i) {
+      testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
+      testingset_pop[i]->CalcOut();
+    }
+  }
+
+  std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
+    const bool pass = (sub == correct_test_output);
+    return {(double)pass, pass};
+  }
+
+};
 
 
 
