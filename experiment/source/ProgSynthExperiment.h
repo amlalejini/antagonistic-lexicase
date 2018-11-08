@@ -1860,23 +1860,10 @@ void ProgramSynthesisExperiment::SnapshotPrograms() {
 
 // ================= PROGRAM-RELATED FUNCTIONS ===========
 void ProgramSynthesisExperiment::InitProgPop_Random() {
-  // std::cout << "Randomly initializing program population." << std::endl;
-  // for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
-  //   prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
-  // }
-  // -- solution(?) --
-  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
-  hardware_t::Program sol(inst_lib);
-
-  sol.PushInst("LoadVec",   {matrix[0], matrix[5], matrix[5]});
-  sol.PushInst("Foreach",   {matrix[1], matrix[0], matrix[5]});
-  sol.PushInst(  "Add",     {matrix[1], matrix[2], matrix[2]});
-  sol.PushInst("Close",     {matrix[5], matrix[5], matrix[5]});
-  sol.PushInst("VecLen",    {matrix[0], matrix[3], matrix[5]});
-  sol.PushInst("Div",       {matrix[2], matrix[3], matrix[4]});
-  sol.PushInst("SubmitNum", {matrix[4], matrix[5], matrix[5]});
-  
-  prog_world->Inject(sol, PROG_POP_SIZE);
+  std::cout << "Randomly initializing program population." << std::endl;
+  for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
+    prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
+  }
 }
 
 void ProgramSynthesisExperiment::AddDefaultInstructions(const std::unordered_set<std::string> & includes={"Add","Sub","Mult","Div","Mod",
