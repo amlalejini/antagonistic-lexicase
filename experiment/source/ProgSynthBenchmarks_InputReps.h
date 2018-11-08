@@ -291,6 +291,18 @@ std::pair<double, bool> CalcScorePassFail_NumberIO(const Problem_NumberIO_output
   return {(double)pass, pass};
 }
 
+std::pair<double, bool> CalcScoreGradient_NumberIO(const Problem_NumberIO_output_t & correct_test_output, double sub, double MAX_ERROR) {
+  // If output is correct, return a score of 1.0 and mark that submission passes.
+  if (correct_test_output == sub) {
+    return {1.0, true}; 
+  } else { // Otherwise, return {score=[0:1], false}
+    double error = emp::Abs(correct_test_output - sub);
+    emp_assert(error != 0, "Error shouldn't equal zero here");
+    double score = (error <= MAX_ERROR) ? 1 - (error/MAX_ERROR) : 0;
+    return {score, false};
+  }  
+}
+
 /// ProblemOrg: NumberIO
 /// NumberIO: Pair<integer, float>
 class TestOrg_NumberIO : public TestOrg_Base {
@@ -1061,6 +1073,9 @@ struct ProblemUtilities_CollatzNumbers {
   emp::Ptr<problem_org_t> cur_eval_test_org;
   bool submitted;
   int submitted_val;
+  
+  // Error
+  int MAX_ERROR;
 
   // // Mutation - Handle here...
   int MIN_NUM;
@@ -1129,6 +1144,17 @@ struct ProblemUtilities_CollatzNumbers {
   std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
     const bool pass = (sub == correct_test_output);
     return {(double)pass, pass};
+  }
+
+  std::pair<double, bool> CalcScoreGradient(const output_t & correct_test_output, const output_t & sub) {
+    if (correct_test_output == sub) {
+      return {1.0, true};
+    } else {
+      double error = (double)emp::Abs(correct_test_output - sub);
+      emp_assert(error != 0, "Error shouldn't be zero here!");
+      double score = (error <= MAX_ERROR) ? 1 - (error/(double)MAX_ERROR) : 0.0;
+      return {score, false};
+    }
   }
 
 };
@@ -1647,6 +1673,8 @@ struct ProblemUtilities_LastIndexOfZero {
   bool submitted;
   int submitted_val;
 
+  int MAX_ERROR;
+
   // Mutation
   size_t MIN_VEC_LEN;
   size_t MAX_VEC_LEN;
@@ -1764,6 +1792,18 @@ struct ProblemUtilities_LastIndexOfZero {
     const bool pass = (sub == correct_test_output);
     return {(double)pass, pass};
   }
+
+  std::pair<double, bool> CalcScoreGradient(const output_t & correct_test_output, const output_t & sub) {
+    if (correct_test_output == sub) {
+      return {1.0, true};
+    } else {
+      double error = (double)emp::Abs(correct_test_output - sub);
+      emp_assert(error != 0, "Error shouldn't be zero here!");
+      double score = (error <= MAX_ERROR) ? 1 - (error/(double)MAX_ERROR) : 0.0;
+      return {score, false};
+    }
+  }
+
 };
 
 
@@ -1849,6 +1889,7 @@ struct ProblemUtilities_VectorAverage {
   emp::Ptr<problem_org_t> cur_eval_test_org;
   bool submitted;
   double submitted_val;
+  double MAX_ERROR;
 
   double EPSILON; // How much error do we allow submitted values to have to still be correct?
 
@@ -1962,6 +2003,17 @@ struct ProblemUtilities_VectorAverage {
     return {(double)pass, pass};
   }
 
+  std::pair<double, bool> CalcScoreGradient(const output_t & correct_test_output, const output_t & sub) {
+    if (EpsilonEqu(correct_test_output, sub)) {
+      return {1.0, true};
+    } else {
+      double error = (double)emp::Abs(correct_test_output - sub);
+      emp_assert(error != 0, "Error shouldn't be zero here!");
+      double score = (error <= MAX_ERROR) ? 1 - (error/(double)MAX_ERROR) : 0.0;
+      return {score, false};
+    }
+  }
+
 };
 
 
@@ -2046,6 +2098,7 @@ struct ProblemUtilities_CountOdds {
   emp::Ptr<problem_org_t> cur_eval_test_org;
   bool submitted;
   int submitted_val;
+  int MAX_ERROR;
 
   // Mutation
   size_t MIN_VEC_LEN;
@@ -2157,6 +2210,17 @@ struct ProblemUtilities_CountOdds {
   std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
     const bool pass = (sub == correct_test_output);
     return {(double)pass, pass};
+  }
+
+  std::pair<double, bool> CalcScoreGradient(const output_t & correct_test_output, const output_t & sub) {
+    if (correct_test_output == sub) {
+      return {1.0, true};
+    } else {
+      double error = (double)emp::Abs(correct_test_output - sub);
+      emp_assert(error != 0, "Error shouldn't be zero here!");
+      double score = (error <= MAX_ERROR) ? 1 - (error/(double)MAX_ERROR) : 0.0;
+      return {score, false};
+    }
   }
 
 };
@@ -2545,6 +2609,7 @@ struct ProblemUtilities_SumOfSquares {
   emp::Ptr<problem_org_t> cur_eval_test_org;
   bool submitted;
   int submitted_val;
+  int MAX_ERROR;
 
   // // Mutation - Handle here...
   int MIN_NUM;
@@ -2610,6 +2675,17 @@ struct ProblemUtilities_SumOfSquares {
   std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
     const bool pass = (sub == correct_test_output);
     return {(double)pass, pass};
+  }
+
+  std::pair<double, bool> CalcScoreGradient(const output_t & correct_test_output, const output_t & sub) {
+    if (correct_test_output == sub) {
+      return {1.0, true};
+    } else {
+      double error = (double)emp::Abs(correct_test_output - sub);
+      emp_assert(error != 0, "Error shouldn't be zero here!");
+      double score = (error <= MAX_ERROR) ? 1 - (error/(double)MAX_ERROR) : 0.0;
+      return {score, false};
+    }
   }
 
 };
@@ -2707,6 +2783,7 @@ struct ProblemUtilities_VectorsSummed {
   emp::Ptr<problem_org_t> cur_eval_test_org;
   bool submitted;
   emp::vector<int> submitted_vec;
+  int MAX_ERROR;
 
   // Mutation
   size_t MIN_VEC_LEN;
@@ -2849,7 +2926,29 @@ struct ProblemUtilities_VectorsSummed {
     return {(double)pass, pass};
   }
 
-
+  std::pair<double, bool> CalcScoreGradient(const output_t & correct_test_output, const output_t & sub) {
+    if (correct_test_output == sub) {
+      return {1.0, true};
+    } else {
+      // double error = (double)emp::Abs(correct_test_output - sub);
+      double error = 0;
+      for (size_t i = 0; i < correct_test_output.size(); ++i) {
+        if (i < sub.size()) {
+          // Add error.
+          error += emp::Abs(correct_test_output[i] - sub[i]);
+        } else {
+          // Add max error.
+          error += (2*MAX_NUM);
+        }
+      }
+      // Add error for each extra thing in sub
+      if (sub.size() > correct_test_output.size()) {
+        error += (2*MAX_NUM) * (sub.size() - correct_test_output.size());
+      }
+      double score = (error <= MAX_ERROR) ? 1 - (error/(double)MAX_ERROR) : 0.0;
+      return {score, false};
+    }
+  }
 };
 
 

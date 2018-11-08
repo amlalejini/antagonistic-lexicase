@@ -7,19 +7,33 @@
 ## Problem Implementation (round 1) priority list
 
 - [x] NumberIO (numbers)
+  - [x] Gradient? Implemented
 - [x] Small or Large (numbers)
+  - [x] Gradient? None
 - [x] ForLoopIndex (numbers)
+  - [x] Gradient? Implemented
 - [x] CompareStringLengths (strings, numbers)
+  - [x] Gradient? None
 - [x] Collatz Numbers (numbers)
+  - [x] Gradient? Implemented
 - [x] StringLengthBackwards (vector, strings, numbers)
+  - [x] Gradient? Implemented
 - [x] LastIndexOfZero (vector, numbers)
+  - [x] Gradient? Integer error, implemented
 - [x] CountOdds (vector, numbers)
+  - [x] Gradient? - Integer error, implemented
 - [x] MirrorImage (vector, bool)
+  - [x] Gradient? - No
 - [x] VectorsSummed (vector, numbers)
+  - [x] Gradient? - float error, implemented
 - [x] VectorAverage (vector, number)
+  - [x] Gradient? - Float error
 - [x] SumOfSquares (number, number)
+  - [x] Gradient? - Integer error
 - [x] Median (numbers) 
+  - [x] Gradient? No
 - [x] Smallest (numbers)
+  - [x] Gradient? No
 
 ## Solution evolution at a glance
 
@@ -41,6 +55,7 @@ Things I haven't seen yet:
 - VectorsSummed
   - I imagine the gradient is really important for this one.
 - SumOfSquares
+- VectorAverage
 - CollatzNumbers
 - VectorAverage
 

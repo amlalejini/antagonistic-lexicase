@@ -1860,10 +1860,25 @@ void ProgramSynthesisExperiment::SnapshotPrograms() {
 
 // ================= PROGRAM-RELATED FUNCTIONS ===========
 void ProgramSynthesisExperiment::InitProgPop_Random() {
-  std::cout << "Randomly initializing program population." << std::endl;
-  for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
-    prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
-  }
+  // std::cout << "Randomly initializing program population." << std::endl;
+  // for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
+  //   prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
+  // }
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  hardware_t::Program sol(inst_lib);
+
+  sol.PushInst("LoadNum",    {matrix[0], matrix[8], matrix[8]});
+  sol.PushInst("Set-2",      {matrix[1], matrix[8], matrix[8]});
+  sol.PushInst("Set-6",      {matrix[2], matrix[8], matrix[8]});
+  sol.PushInst("CopyMem",    {matrix[0], matrix[3], matrix[8]});
+  sol.PushInst("Inc",        {matrix[3], matrix[8], matrix[8]});
+  sol.PushInst("Mult",       {matrix[0], matrix[3], matrix[4]});
+  sol.PushInst("Mult",       {matrix[0], matrix[1], matrix[5]});
+  sol.PushInst("Inc",        {matrix[5], matrix[8], matrix[8]});
+  sol.PushInst("Mult",       {matrix[4], matrix[5], matrix[6]});
+  sol.PushInst("Div",        {matrix[6], matrix[2], matrix[7]});
+  sol.PushInst("SubmitNum",  {matrix[7], matrix[8], matrix[8]});
+  prog_world->Inject(sol, PROG_POP_SIZE);
 }
 
 void ProgramSynthesisExperiment::AddDefaultInstructions(const std::unordered_set<std::string> & includes={"Add","Sub","Mult","Div","Mod",
@@ -2108,7 +2123,8 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
       result.pass = false;
       result.sub = false;
     } else {
-      std::pair<double, bool> r(CalcScorePassFail_NumberIO(test_org.GetCorrectOut(), prob_utils_NumberIO.submitted_val));
+      double max_error = emp::Abs(PROB_NUMBER_IO__DOUBLE_MAX) * 2;
+      std::pair<double, bool> r(CalcScoreGradient_NumberIO(test_org.GetCorrectOut(), prob_utils_NumberIO.submitted_val, max_error));
       result.score = r.first;
       result.pass = r.second;
       result.sub = true;
@@ -3135,7 +3151,9 @@ void ProgramSynthesisExperiment::SetupProblem_CollatzNumbers() {
   std::cout << "Loaded training example set size = " << prob_utils_CollatzNumbers.GetTrainingSet().GetSize() << std::endl;
   std::cout << "Loaded testing example set size = " << prob_utils_CollatzNumbers.GetTestingSet().GetSize() << std::endl;
   std::cout << "Testing set (non-training examples used to evaluate program accuracy) size = " << prob_utils_CollatzNumbers.testingset_pop.size() << std::endl;
- 
+  
+  prob_utils_CollatzNumbers.MAX_ERROR = 256; // Lazy, lazy. Problem-specific, magic number for max error...
+
   // Setup the world
   NewTestCaseWorld(prob_CollatzNumbers_world, *random, "Median world");
 
@@ -3163,7 +3181,7 @@ void ProgramSynthesisExperiment::SetupProblem_CollatzNumbers() {
       result.pass = false;
       result.sub = false;
     } else {
-      std::pair<double, bool> r(prob_utils_CollatzNumbers.CalcScorePassFail(test_org.GetCorrectOut(), prob_utils_CollatzNumbers.submitted_val));
+      std::pair<double, bool> r(prob_utils_CollatzNumbers.CalcScoreGradient(test_org.GetCorrectOut(), prob_utils_CollatzNumbers.submitted_val));
       result.score = r.first;
       result.pass = r.second;
       result.sub = true;
@@ -3704,6 +3722,8 @@ void ProgramSynthesisExperiment::SetupProblem_LastIndexOfZero() {
   std::cout << "Loaded testing example set size = " << prob_utils_LastIndexOfZero.GetTestingSet().GetSize() << std::endl;
   std::cout << "Testing set (non-training examples used to evaluate program accuracy) size = " << prob_utils_LastIndexOfZero.testingset_pop.size() << std::endl;
 
+  prob_utils_LastIndexOfZero.MAX_ERROR = PROB_LAST_INDEX_OF_ZERO__MAX_VEC_LEN;
+
   // Setup the world
   NewTestCaseWorld(prob_LastIndexOfZero_world, *random, "LastIndexOfZero world");
 
@@ -3729,7 +3749,7 @@ void ProgramSynthesisExperiment::SetupProblem_LastIndexOfZero() {
       result.pass = false;
       result.sub = false;
     } else {
-      std::pair<double, bool> r(prob_utils_LastIndexOfZero.CalcScorePassFail(test_org.GetCorrectOut(), prob_utils_LastIndexOfZero.submitted_val));
+      std::pair<double, bool> r(prob_utils_LastIndexOfZero.CalcScoreGradient(test_org.GetCorrectOut(), prob_utils_LastIndexOfZero.submitted_val));
       result.score = r.first;
       result.pass = r.second;
       result.sub = true;
@@ -3843,11 +3863,12 @@ void ProgramSynthesisExperiment::SetupProblem_LastIndexOfZero() {
     // Set current test org.
     prob_utils_LastIndexOfZero.cur_eval_test_org = test_org_base_ptr.Cast<test_org_t>(); // currently only place need testID for this?
     prob_utils_LastIndexOfZero.ResetTestEval();
+    prob_utils_LastIndexOfZero.MAX_ERROR = prob_utils_LastIndexOfZero.cur_eval_test_org->GetGenome().size();
     emp_assert(eval_hardware->GetMemSize() >= 3);
     // Configure inputs.
     if (eval_hardware->GetCallStackSize()) {
       // Grab some useful references.
-      Problem_LastIndexOfZero_input_t & input = prob_utils_LastIndexOfZero.cur_eval_test_org->GetGenome(); // std::pair<int, double>
+      Problem_LastIndexOfZero_input_t & input = prob_utils_LastIndexOfZero.cur_eval_test_org->GetGenome();
       hardware_t::CallState & state = eval_hardware->GetCurCallState();
       hardware_t::Memory & wmem = state.GetWorkingMem();
       // Set hardware input.
@@ -4035,7 +4056,7 @@ void ProgramSynthesisExperiment::SetupProblem_VectorAverage() {
       result.pass = false;
       result.sub = false;
     } else {
-      std::pair<double, bool> r(prob_utils_VectorAverage.CalcScorePassFail(test_org.GetCorrectOut(), prob_utils_VectorAverage.submitted_val));
+      std::pair<double, bool> r(prob_utils_VectorAverage.CalcScoreGradient(test_org.GetCorrectOut(), prob_utils_VectorAverage.submitted_val));
       result.score = r.first;
       result.pass = r.second;
       result.sub = true;
@@ -4148,6 +4169,7 @@ void ProgramSynthesisExperiment::SetupProblem_VectorAverage() {
     // Set current test org.
     prob_utils_VectorAverage.cur_eval_test_org = test_org_base_ptr.Cast<test_org_t>(); // currently only place need testID for this?
     prob_utils_VectorAverage.ResetTestEval();
+    prob_utils_VectorAverage.MAX_ERROR = prob_utils_VectorAverage.cur_eval_test_org->GetGenome().size() * PROB_VECTOR_AVERAGE__MAX_NUM;
     emp_assert(eval_hardware->GetMemSize() >= 3);
     // Configure inputs.
     if (eval_hardware->GetCallStackSize()) {
@@ -4336,7 +4358,7 @@ void ProgramSynthesisExperiment::SetupProblem_CountOdds() {
       result.pass = false;
       result.sub = false;
     } else {
-      std::pair<double, bool> r(prob_utils_CountOdds.CalcScorePassFail(test_org.GetCorrectOut(), prob_utils_CountOdds.submitted_val));
+      std::pair<double, bool> r(prob_utils_CountOdds.CalcScoreGradient(test_org.GetCorrectOut(), prob_utils_CountOdds.submitted_val));
       result.score = r.first;
       result.pass = r.second;
       result.sub = true;
@@ -4450,6 +4472,7 @@ void ProgramSynthesisExperiment::SetupProblem_CountOdds() {
     // Set current test org.
     prob_utils_CountOdds.cur_eval_test_org = test_org_base_ptr.Cast<test_org_t>(); // currently only place need testID for this?
     prob_utils_CountOdds.ResetTestEval();
+    prob_utils_CountOdds.MAX_ERROR = prob_utils_CountOdds.cur_eval_test_org->GetGenome().size();
     emp_assert(eval_hardware->GetMemSize() >= 3);
     // Configure inputs.
     if (eval_hardware->GetCallStackSize()) {
@@ -4959,7 +4982,7 @@ void ProgramSynthesisExperiment::SetupProblem_SumOfSquares() {
       result.pass = false;
       result.sub = false;
     } else {
-      std::pair<double, bool> r(prob_utils_SumOfSquares.CalcScorePassFail(test_org.GetCorrectOut(), prob_utils_SumOfSquares.submitted_val));
+      std::pair<double, bool> r(prob_utils_SumOfSquares.CalcScoreGradient(test_org.GetCorrectOut(), prob_utils_SumOfSquares.submitted_val));
       result.score = r.first;
       result.pass = r.second;
       result.sub = true;
@@ -5068,6 +5091,7 @@ void ProgramSynthesisExperiment::SetupProblem_SumOfSquares() {
     // Set current test org.
     prob_utils_SumOfSquares.cur_eval_test_org = test_org_base_ptr.Cast<test_org_t>(); // currently only place need testID for this?
     prob_utils_SumOfSquares.ResetTestEval();
+    prob_utils_SumOfSquares.MAX_ERROR = (int)((double)GenCorrectOut_SumOfSquares(prob_utils_SumOfSquares.cur_eval_test_org->GetGenome()) * 0.5);
     emp_assert(eval_hardware->GetMemSize() >= 3);
     // Configure inputs.
     if (eval_hardware->GetCallStackSize()) {
@@ -5259,7 +5283,7 @@ void ProgramSynthesisExperiment::SetupProblem_VectorsSummed() {
       result.pass = false;
       result.sub = false;
     } else {
-      std::pair<double, bool> r(prob_utils_VectorsSummed.CalcScorePassFail(test_org.GetCorrectOut(), prob_utils_VectorsSummed.submitted_vec));
+      std::pair<double, bool> r(prob_utils_VectorsSummed.CalcScoreGradient(test_org.GetCorrectOut(), prob_utils_VectorsSummed.submitted_vec));
       result.score = r.first;
       result.pass = r.second;
       result.sub = true;
@@ -5373,6 +5397,7 @@ void ProgramSynthesisExperiment::SetupProblem_VectorsSummed() {
     // Set current test org.
     prob_utils_VectorsSummed.cur_eval_test_org = test_org_base_ptr.Cast<test_org_t>(); // currently only place need testID for this?
     prob_utils_VectorsSummed.ResetTestEval();
+    prob_utils_VectorsSummed.MAX_ERROR = (2*PROB_VECTORS_SUMMED__MAX_NUM) * prob_utils_VectorsSummed.cur_eval_test_org->GetGenome().size();
     emp_assert(eval_hardware->GetMemSize() >= 3);
     // Configure inputs.
     if (eval_hardware->GetCallStackSize()) {
