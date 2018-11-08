@@ -16,7 +16,7 @@
 - [x] CountOdds (vector, numbers)
 - [x] MirrorImage (vector, bool)
 - [x] VectorsSummed (vector, numbers)
-- [ ] VectorAverage (vector, number)
+- [x] VectorAverage (vector, number)
 - [x] SumOfSquares (number, number)
 - [x] Median (numbers) 
 - [x] Smallest (numbers)
@@ -40,7 +40,9 @@ Things I haven't seen yet:
 - CountOdds
 - VectorsSummed
   - I imagine the gradient is really important for this one.
+- SumOfSquares
 - CollatzNumbers
+- VectorAverage
 
 ## Problem - For Loop Index
 

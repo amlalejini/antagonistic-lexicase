@@ -1767,6 +1767,36 @@ struct ProblemUtilities_LastIndexOfZero {
 };
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Problem: VectorAverage
+// - Input: emp::vector<double>
+// - Output: double (must be within epsilon)
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Generate random test input
+Problem_VectorAverage_input_t GenRandomTestInput_VectorAverage(emp::Random & rand,
+                                                              const std::pair<size_t, size_t> & vec_size_range,
+                                                              const std::pair<double, double> & vec_val_range) {
+  emp::vector<double> input;
+  const size_t vec_size = rand.GetUInt(vec_size_range.first, vec_size_range.second);
+  for (size_t i = 0; i < vec_size; ++i) {
+    double val = rand.GetDouble(vec_val_range.first, vec_val_range.second+1);
+    if (val > vec_val_range.second) val = vec_val_range.second;
+    input.emplace_back(val);
+  }
+  return input;
+}
+
+/// Generate correct test output
+Problem_VectorAverage_output_t GenCorrectOut_VectorAverage(const Problem_VectorAverage_input_t & input) {
+  emp_assert(input.size() > 0);
+  if (input.size()) return (double)emp::Sum(input) / (double)input.size();
+  else return 0;
+}
 
 /// Vector Average: Vector<Float>
 class TestOrg_VectorAverage : public TestOrg_Base {
@@ -1775,19 +1805,164 @@ class TestOrg_VectorAverage : public TestOrg_Base {
     using parent_t::phenotype;
 
     using genome_t = emp::vector<double>;
+    using out_t = Problem_VectorAverage_output_t;
+
   protected:
     genome_t genome;
+    out_t out;
 
   public:
-    TestOrg_VectorAverage(const genome_t & _g) : genome(_g) { ; }
+    TestOrg_VectorAverage(const genome_t & _g) : genome(_g), out() { ; }
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
 
-    void CalcOut() { ; }
+    void CalcOut() { out = GenCorrectOut_VectorAverage(genome); }
+
+    out_t & GetCorrectOut() { return out; }
+    const out_t & GetCorrectOut() const { return out; }   
+
+    void Print(std::ostream & os=std::cout) {
+      os << "[";
+      for (size_t i = 0; i < genome.size(); ++i) {
+        if (i) os << ",";
+        os << genome[i];
+      }
+      os << "]"; 
+    }
 };
 
-struct ProblemUtilities_VectorAverage { emp::vector<std::function<double(TestOrg_VectorAverage &)>> lexicase_fit_set; };
+struct ProblemUtilities_VectorAverage {
+  using this_t = ProblemUtilities_VectorAverage;
+  using problem_org_t = TestOrg_VectorAverage;
+  using input_t = Problem_VectorAverage_input_t;
+  using output_t = Problem_VectorAverage_output_t;
+  
+  using testcase_set_t = TestCaseSet<input_t, output_t>;
+  
+  testcase_set_t testing_set;
+  testcase_set_t training_set;
+
+  emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
+
+  // --- Useful during a test evaluation ---
+  emp::Ptr<problem_org_t> cur_eval_test_org;
+  bool submitted;
+  double submitted_val;
+
+  double EPSILON; // How much error do we allow submitted values to have to still be correct?
+
+  // Mutation
+  size_t MIN_VEC_LEN;
+  size_t MAX_VEC_LEN;
+  double MIN_NUM;
+  double MAX_NUM;
+  double INS_RATE;
+  double DEL_RATE;
+  double SUB_RATE;
+  
+  size_t Mutate(emp::Random & rnd, input_t & mut_input) {
+    size_t muts = 0; 
+    emp::vector<double> new_input;
+    int expected_size = mut_input.size();
+    for (size_t i = 0; i < mut_input.size(); ++i) {
+      // Deletion?
+      if (rnd.P(DEL_RATE) && (expected_size-1)>=(int)MIN_VEC_LEN) {
+        ++muts;
+        --expected_size;
+        continue;
+      } 
+      const size_t whead = new_input.size();
+      new_input.emplace_back(mut_input[i]);
+      // Substitution?
+      if (rnd.P(SUB_RATE)) {
+        ++muts;
+        double val = rnd.GetDouble(MIN_NUM, MAX_NUM+1);
+        if (val > MAX_NUM) val = MAX_NUM;
+        new_input[whead] = val;
+      }
+      // Insertion?
+      if (rnd.P(INS_RATE) && (expected_size+1)<=(int)MAX_VEC_LEN) {
+        ++muts;
+        ++expected_size;
+        double val = rnd.GetDouble(MIN_NUM, MAX_NUM+1);
+        if (val > MAX_NUM) val = MAX_NUM;
+        new_input.emplace_back(val);
+      }
+    }
+    mut_input = new_input; // update mut_input
+    return muts;
+  }
+  
+  emp::vector<std::function<double(problem_org_t &)>> lexicase_fit_set; 
+
+  ProblemUtilities_VectorAverage()
+    : testing_set(this_t::LoadTestCaseFromLine),
+      training_set(this_t::LoadTestCaseFromLine),
+      submitted(false), submitted_val(0.0)
+  { ; }
+
+  ~ProblemUtilities_VectorAverage() {
+    for (size_t i = 0; i < testingset_pop.size(); ++i) testingset_pop[i].Delete();
+  }
+
+  testcase_set_t & GetTestingSet() { return testing_set; }
+  testcase_set_t & GetTrainingSet() { return training_set; }
+
+  void ResetTestEval() {
+    submitted = false;
+    submitted_val = 0.0;
+  }
+
+  void Submit(double val) {
+    submitted = true;
+    submitted_val = val;
+  }
+
+  static std::pair<input_t, output_t> LoadTestCaseFromLine(const emp::vector<std::string> & line) {
+    input_t input;   
+    output_t output; 
+    
+    std::string input_str = line[0];
+    if (input_str.front() == '[') { input_str.erase(0, 1); }
+    if (input_str.back() == ']') { input_str.pop_back(); }
+    emp::vector<std::string> sliced_input_str = emp::slice(input_str, ' ');
+    
+    for (size_t i = 0; i < sliced_input_str.size(); ++i) {
+      input.emplace_back(std::atof(sliced_input_str[i].c_str()));
+    }
+    
+    // Calculate correct output given loaded input
+    double calc_out = GenCorrectOut_VectorAverage(input);
+    // Get output from file
+    output = std::atof(line[1].c_str());
+    // make sure generated output and read output match
+    if (! ((output <= (calc_out + 0.00005)) && (output >= (calc_out - 0.00005))) ) {
+      std::cout << "ERROR! Generated output does not match read output! Exiting." << std::endl;
+      exit(-1);
+    }
+
+    return {input, output};
+  }
+
+  bool EpsilonEqu(double target, double val) {
+    if (val <= target + EPSILON && val >= target - EPSILON) return true;
+    else return false;
+  }
+
+  void GenerateTestingSetPop() {
+    for (size_t i = 0; i < testing_set.GetSize(); ++i) {
+      testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
+      testingset_pop[i]->CalcOut();
+    }
+  }
+
+  std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
+    const bool pass = EpsilonEqu(correct_test_output, sub);
+    return {(double)pass, pass};
+  }
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1834,7 +2009,7 @@ class TestOrg_CountOdds : public TestOrg_Base {
     out_t out;
 
   public:
-    TestOrg_CountOdds(const genome_t & _g) : genome(_g) { ; }
+    TestOrg_CountOdds(const genome_t & _g) : genome(_g), out() { ; }
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }

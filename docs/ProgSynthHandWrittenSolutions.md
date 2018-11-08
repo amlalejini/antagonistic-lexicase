@@ -13,6 +13,7 @@
 - [Problem - Mirror Image](#problem---mirror-image)
 - [Problem - Vectors Summed](#problem---vectors-summed)
 - [Problem - Sum of Squares](#problem---sum-of-squares)
+- [Problem - Vector Average](#problem---vector-average)
 - [Problem - Median](#problem---median)
 - [Problem - Smallest](#problem---smallest)
 
@@ -239,6 +240,23 @@ Closed form solution:
   sol.PushInst("Mult",       {matrix[4], matrix[5], matrix[6]});
   sol.PushInst("Div",        {matrix[6], matrix[2], matrix[7]});
   sol.PushInst("SubmitNum",  {matrix[7], matrix[8], matrix[8]});
+  prog_world->Inject(sol, PROG_POP_SIZE);
+```
+
+## Problem - Vector Average
+
+```{C++}
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  hardware_t::Program sol(inst_lib);
+
+  sol.PushInst("LoadVec",   {matrix[0], matrix[5], matrix[5]});
+  sol.PushInst("Foreach",   {matrix[1], matrix[0], matrix[5]});
+  sol.PushInst(  "Add",     {matrix[1], matrix[2], matrix[2]});
+  sol.PushInst("Close",     {matrix[5], matrix[5], matrix[5]});
+  sol.PushInst("VecLen",    {matrix[0], matrix[3], matrix[5]});
+  sol.PushInst("Div",       {matrix[2], matrix[3], matrix[4]});
+  sol.PushInst("SubmitNum", {matrix[4], matrix[5], matrix[5]});
+  
   prog_world->Inject(sol, PROG_POP_SIZE);
 ```
 
