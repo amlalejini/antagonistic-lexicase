@@ -11,6 +11,8 @@
 - [Problem - LastIndexOfZero](#problem---lastindexofzero)
 - [Problem - CountOdds](#problem---countodds)
 - [Problem - Mirror Image](#problem---mirror-image)
+- [Problem - Vectors Summed](#problem---vectors-summed)
+- [Problem - Sum of Squares](#problem---sum-of-squares)
 - [Problem - Median](#problem---median)
 - [Problem - Smallest](#problem---smallest)
 
@@ -191,6 +193,52 @@
   sol.PushInst("TestMemEqu", {matrix[0], matrix[1], matrix[2]});
   sol.PushInst("SubmitVal",  {matrix[2], matrix[7], matrix[7]});
   
+  prog_world->Inject(sol, PROG_POP_SIZE);
+```
+
+## Problem - Vectors Summed
+
+```{C++}
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  hardware_t::Program sol(inst_lib);
+
+  sol.PushInst("LoadVec1",      {matrix[0], matrix[8], matrix[8]});
+  sol.PushInst("LoadVec2",      {matrix[1], matrix[8], matrix[8]});
+  sol.PushInst("VecLen",        {matrix[0], matrix[2], matrix[8]});
+  sol.PushInst("Set-0",         {matrix[3], matrix[8], matrix[8]});
+  sol.PushInst("TestNumLess",   {matrix[3], matrix[2], matrix[4]});
+  sol.PushInst("While",         {matrix[4], matrix[8], matrix[8]});
+  sol.PushInst(  "VecGet",      {matrix[0], matrix[3], matrix[5]});
+  sol.PushInst(  "VecGet",      {matrix[1], matrix[3], matrix[6]});
+  sol.PushInst(  "Add",         {matrix[5], matrix[6], matrix[7]});
+  sol.PushInst(  "VecSet",      {matrix[0], matrix[3], matrix[7]});
+  sol.PushInst(  "Inc",         {matrix[3], matrix[8], matrix[8]});
+  sol.PushInst(  "TestNumLess", {matrix[3], matrix[2], matrix[4]});
+  sol.PushInst("Close",         {matrix[8], matrix[8], matrix[8]});
+  sol.PushInst("SubmitVec",     {matrix[0], matrix[8], matrix[8]});
+
+  prog_world->Inject(sol, PROG_POP_SIZE);
+```
+
+## Problem - Sum of Squares
+
+Closed form solution:
+
+```{C++}
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  hardware_t::Program sol(inst_lib);
+
+  sol.PushInst("LoadNum",    {matrix[0], matrix[8], matrix[8]});
+  sol.PushInst("Set-2",      {matrix[1], matrix[8], matrix[8]});
+  sol.PushInst("Set-6",      {matrix[2], matrix[8], matrix[8]});
+  sol.PushInst("CopyMem",    {matrix[0], matrix[3], matrix[8]});
+  sol.PushInst("Inc",        {matrix[3], matrix[8], matrix[8]});
+  sol.PushInst("Mult",       {matrix[0], matrix[3], matrix[4]});
+  sol.PushInst("Mult",       {matrix[0], matrix[1], matrix[5]});
+  sol.PushInst("Inc",        {matrix[5], matrix[8], matrix[8]});
+  sol.PushInst("Mult",       {matrix[4], matrix[5], matrix[6]});
+  sol.PushInst("Div",        {matrix[6], matrix[2], matrix[7]});
+  sol.PushInst("SubmitNum",  {matrix[7], matrix[8], matrix[8]});
   prog_world->Inject(sol, PROG_POP_SIZE);
 ```
 

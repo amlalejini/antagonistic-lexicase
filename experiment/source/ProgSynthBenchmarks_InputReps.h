@@ -1995,6 +1995,7 @@ struct ProblemUtilities_CountOdds {
 // - Output: bool;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Generate random input
 /// Generate random test input
@@ -2002,7 +2003,7 @@ Problem_MirrorImage_input_t GenRandomTestInput_MirrorImage(emp::Random & rand,
                                                            const std::pair<size_t, size_t> & vec_size_range,
                                                            const std::pair<int, int> & vec_val_range) {
   std::array<emp::vector<int>, 2> input;
-  // todo - 4 random cases: equal, random, mirrored, nearly mirrored
+  // 4 random cases: equal, random, mirrored, nearly mirrored
   const size_t vec_size = rand.GetUInt(vec_size_range.first, vec_size_range.second+1);
   const size_t rand_case = rand.GetUInt(0, 4);
   switch (rand_case) {
@@ -2254,7 +2255,7 @@ struct ProblemUtilities_MirrorImage {
 
     // make sure generated output and read output match
     if (calc_out != output) {
-      std::cout << "ERROR! Generated count odds output does not match read output! Exiting." << std::endl;
+      std::cout << "ERROR! Generated output does not match read output! Exiting." << std::endl;
       exit(-1);
     }
 
@@ -2298,7 +2299,30 @@ class TestOrg_SuperAnagrams : public TestOrg_Base {
 
 struct ProblemUtilities_SuperAnagrams { emp::vector<std::function<double(TestOrg_SuperAnagrams &)>> lexicase_fit_set; };
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Problem: SumOfSquares (NOTE: only for: 1 >= n <= 100)
+// - Input: int
+// - Output: int
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+std::array<int, 101> SumOfSquaresLookup = {0, 1, 5, 14, 30, 55, 91, 140, 204, 285, 385, 506, 650, 819, 1015, 1240, 1496, 1785, 2109, 2470, 2870, 3311, 3795, 4324, 4900, 5525, 6201, 6930, 7714, 8555, 9455, 10416, 11440, 12529, 13685, 14910, 16206, 17575, 19019, 20540, 22140, 23821, 25585, 27434, 29370, 31395, 33511, 35720, 38024, 40425, 42925, 45526, 48230, 51039, 53955, 56980, 60116, 63365, 66729, 70210, 73810, 77531, 81375, 85344, 89440, 93665, 98021, 102510, 107134, 111895, 116795, 121836, 127020, 132349, 137825, 143450, 149226, 155155, 161239, 167480, 173880, 180441, 187165, 194054, 201110, 208335, 215731, 223300, 231044, 238965, 247065, 255346, 263810, 272459, 281295, 290320, 299536, 308945, 318549, 328350, 338350};
+
+Problem_SumOfSquares_input_t GenRandomTestInput_SumOfSquares(emp::Random & rnd, const std::pair<int, int> & num_range) {
+  return rnd.GetInt(num_range.first, num_range.second+1);
+}
+
+
+Problem_SumOfSquares_output_t GenCorrectOut_SumOfSquares(const Problem_SumOfSquares_input_t & input) {
+  if (input < (int)SumOfSquaresLookup.size()) {
+    return SumOfSquaresLookup[(size_t)input];
+  } else {
+    return ((input) * (input + 1) * ((2*input)+1))/6;
+  }
+}
 
 /// Sum of Squares: Integer
 class TestOrg_SumOfSquares : public TestOrg_Base {
@@ -2307,8 +2331,11 @@ class TestOrg_SumOfSquares : public TestOrg_Base {
     using parent_t::phenotype;
 
     using genome_t = int;
+    using out_t = Problem_SumOfSquares_output_t; 
+
   protected:
     genome_t genome;
+    out_t out;
 
   public:
     TestOrg_SumOfSquares(const genome_t & _g) : genome(_g) { ; }
@@ -2316,13 +2343,138 @@ class TestOrg_SumOfSquares : public TestOrg_Base {
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
 
-    void CalcOut() { ; }
+    void CalcOut() { out = GenCorrectOut_SumOfSquares(genome); }
+
+    out_t & GetCorrectOut() { return out; }
+    const out_t & GetCorrectOut() const { return out; }  
+
+    void Print(std::ostream & os=std::cout) {
+      os << genome;
+    }
 };
 
-struct ProblemUtilities_SumOfSquares { emp::vector<std::function<double(TestOrg_SumOfSquares &)>> lexicase_fit_set; };
+struct ProblemUtilities_SumOfSquares { 
+  using this_t = ProblemUtilities_SumOfSquares;
+  using problem_org_t = TestOrg_SumOfSquares;
+  using input_t = Problem_SumOfSquares_input_t;
+  using output_t = Problem_SumOfSquares_output_t;
+  
+  using testcase_set_t = TestCaseSet<input_t, output_t>;
+  
+  testcase_set_t testing_set;
+  testcase_set_t training_set;
+
+  emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
+
+  // // --- Useful during a test evaluation ---
+  emp::Ptr<problem_org_t> cur_eval_test_org;
+  bool submitted;
+  int submitted_val;
+
+  // // Mutation - Handle here...
+  int MIN_NUM;
+  int MAX_NUM;
+  double NUM_MUT_RATE;
+  
+  size_t Mutate(emp::Random & rnd, input_t & mut_input) {
+    size_t muts = 0;
+    emp_assert(MIN_NUM >= 0);
+
+    if (rnd.P(NUM_MUT_RATE)) {
+      ++muts;
+      mut_input = rnd.GetInt(MIN_NUM, MAX_NUM+1);
+    }
+
+    return muts;
+  }
+
+  // Selection
+  emp::vector<std::function<double(problem_org_t &)>> lexicase_fit_set;
+
+  ProblemUtilities_SumOfSquares()
+    : testing_set(this_t::LoadTestCaseFromLine),
+      training_set(this_t::LoadTestCaseFromLine),
+      submitted(false), submitted_val(0)
+  { ; }
+
+  ~ProblemUtilities_SumOfSquares() {
+    for (size_t i = 0; i < testingset_pop.size(); ++i) testingset_pop[i].Delete();
+  }
+
+  testcase_set_t & GetTestingSet() { return testing_set; }
+  testcase_set_t & GetTrainingSet() { return training_set; }
+
+  void ResetTestEval() {
+    submitted = false;
+    submitted_val = 0;
+  }
+
+  void Submit(int val) {
+    submitted = true;
+    submitted_val = val;
+  }
+
+  static std::pair<input_t, output_t> LoadTestCaseFromLine(const emp::vector<std::string> & line) {
+    input_t input;   
+    output_t output; 
+    // Load input.
+    input = std::atof(line[0].c_str());
+    // Load output.
+    output = std::atof(line[1].c_str());
+    emp_assert(output == GenCorrectOut_SumOfSquares(input));
+    return {input, output};
+  }
+
+  void GenerateTestingSetPop() {
+    for (size_t i = 0; i < testing_set.GetSize(); ++i) {
+      testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
+      testingset_pop[i]->CalcOut();
+    }
+  }
+
+  std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
+    const bool pass = (sub == correct_test_output);
+    return {(double)pass, pass};
+  }
+
+};
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Problem: VectorsSummed
+// - Input: std::array<emp::vector<int>, 2>;
+// - Output: emp::vector<int>;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// Generate random test input
+Problem_VectorsSummed_input_t GenRandomTestInput_VectorsSummed(emp::Random & rand,
+                                                               const std::pair<size_t, size_t> & vec_size_range,
+                                                                const std::pair<int, int> & vec_val_range) {
+  std::array<emp::vector<int>, 2> input; // Input
+  const size_t vec_size = rand.GetUInt(vec_size_range.first, vec_size_range.second+1);
+  for (size_t i = 0; i < vec_size; ++i) {
+    input[0].emplace_back(rand.GetInt(vec_val_range.first, vec_val_range.second+1));
+    input[1].emplace_back(rand.GetInt(vec_val_range.first, vec_val_range.second+1));
+  }
+  return input;
+}
+
+/// Generate correct output given input
+Problem_VectorsSummed_output_t GenCorrectOut_VectorsSummed(const Problem_VectorsSummed_input_t & input) {
+  emp::vector<int> output;
+  emp_assert(input[0].size() == input[1].size());
+  const size_t vec_size = input[0].size();
+  for (size_t i = 0; i < vec_size; ++i) {
+    const int res = input[0][i] + input[1][i];
+    output.emplace_back(res);
+  }
+  emp_assert(output.size() == input[0].size());
+  return output;
+}
 
 /// Vectors Summed: Array<Vector<Integer>, 2>
 class TestOrg_VectorsSummed: public TestOrg_Base {
@@ -2331,8 +2483,11 @@ class TestOrg_VectorsSummed: public TestOrg_Base {
     using parent_t::phenotype;
 
     using genome_t = std::array<emp::vector<int>, 2>;
+    using out_t = Problem_VectorsSummed_output_t;
+
   protected:
     genome_t genome;
+    out_t out;
 
   public:
     TestOrg_VectorsSummed(const genome_t & _g) : genome(_g) { ; }
@@ -2340,10 +2495,187 @@ class TestOrg_VectorsSummed: public TestOrg_Base {
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
 
-    void CalcOut() { ; }
+    void CalcOut() { out = GenCorrectOut_VectorsSummed(genome); }
+
+    out_t & GetCorrectOut() { return out; }
+    const out_t & GetCorrectOut() const { return out; }   
+
+    void Print(std::ostream & os=std::cout) {
+      os << "[[";
+      for (size_t i = 0; i < genome[0].size(); ++i) {
+        if (i) os << ",";
+        os << genome[0][i];
+      }
+      os << "],["; 
+      for (size_t i = 0; i < genome[1].size(); ++i) {
+        if (i) os << ",";
+        os << genome[1][i];
+      }
+      os << "]]"; 
+    }
 };
 
-struct ProblemUtilities_VectorsSummed { emp::vector<std::function<double(TestOrg_VectorsSummed &)>> lexicase_fit_set; };
+struct ProblemUtilities_VectorsSummed { 
+  using this_t = ProblemUtilities_VectorsSummed;
+  using problem_org_t = TestOrg_VectorsSummed;
+  using input_t = Problem_VectorsSummed_input_t;
+  using output_t = Problem_VectorsSummed_output_t;
+  
+  using testcase_set_t = TestCaseSet<input_t, output_t>;
+  
+  testcase_set_t testing_set;
+  testcase_set_t training_set;
+
+  emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
+
+  // --- Useful during a test evaluation ---
+  emp::Ptr<problem_org_t> cur_eval_test_org;
+  bool submitted;
+  emp::vector<int> submitted_vec;
+
+  // Mutation
+  size_t MIN_VEC_LEN;
+  size_t MAX_VEC_LEN;
+  int MIN_NUM;
+  int MAX_NUM;
+  double PER_NUM_SUB_RATE;
+  double COPY_RATE;                   // How often do we copy one vector over the other?
+  double INS_RATE;                    // How often do we insert a random values on the end of both vectors?
+  double DEL_RATE;                    // How often do we delete things from each vector
+  
+  size_t Mutate(emp::Random & rnd, input_t & mut_input) {
+    size_t muts = 0; 
+    emp_assert(mut_input[0].size() == mut_input[1].size());
+    size_t vec_size = mut_input[0].size();
+    
+    // Should we copy one vector over the other?
+    if (rnd.P(COPY_RATE)) {
+      ++muts;
+      if (rnd.P(0.5)) {
+        mut_input[0] = mut_input[1];
+      } else {
+        mut_input[1] = mut_input[0];
+      }
+    }
+
+    // Should we do an insertion?
+    if (rnd.P(INS_RATE) && vec_size < MAX_VEC_LEN) {
+      ++muts;
+      mut_input[0].emplace_back(rnd.GetInt(MIN_NUM, MAX_NUM+1));
+      mut_input[1].emplace_back(rnd.GetInt(MIN_NUM, MAX_NUM+1));
+      ++vec_size;
+    }
+
+    // Should we do a deletion?
+    if (rnd.P(DEL_RATE) && vec_size > MIN_VEC_LEN) {
+      ++muts;
+      --vec_size;
+      mut_input[0].resize(vec_size);
+      mut_input[1].resize(vec_size);
+    }
+    
+    emp_assert(vec_size == mut_input[0].size());
+    
+    // Per-number substitutions
+    for (size_t i = 0; i < vec_size; ++i) {
+      if (rnd.P(PER_NUM_SUB_RATE)) {
+        ++muts;
+        mut_input[0][i] = rnd.GetInt(MIN_NUM, MAX_NUM+1);
+      }
+      if (rnd.P(PER_NUM_SUB_RATE)) {
+        ++muts;
+        mut_input[1][i] = rnd.GetInt(MIN_NUM, MAX_NUM+1);
+      }
+    }
+    
+    emp_assert(mut_input[0].size() == mut_input[1].size());
+    emp_assert(mut_input[0].size() <= MAX_VEC_LEN);
+    emp_assert(mut_input[0].size() >= MIN_VEC_LEN);
+    return muts;
+  }
+  
+  emp::vector<std::function<double(problem_org_t &)>> lexicase_fit_set; 
+
+  ProblemUtilities_VectorsSummed()
+    : testing_set(this_t::LoadTestCaseFromLine),
+      training_set(this_t::LoadTestCaseFromLine),
+      submitted(false), submitted_vec(0)
+  { ; }
+
+  ~ProblemUtilities_VectorsSummed() {
+    for (size_t i = 0; i < testingset_pop.size(); ++i) testingset_pop[i].Delete();
+  }
+
+  testcase_set_t & GetTestingSet() { return testing_set; }
+  testcase_set_t & GetTrainingSet() { return training_set; }
+
+  void ResetTestEval() {
+    submitted = false;
+    submitted_vec.clear();
+  }
+
+  void Submit(const emp::vector<int> & vec) {
+    submitted = true;
+    submitted_vec = vec;
+  }
+
+  static std::pair<input_t, output_t> LoadTestCaseFromLine(const emp::vector<std::string> & line) {
+    input_t input;   
+    output_t output; 
+    
+    // Vector 1
+    std::string input_str = line[0];
+    if (input_str.front() == '[') { input_str.erase(0, 1); }
+    if (input_str.back() == ']') { input_str.pop_back(); }
+    emp::vector<std::string> sliced_input_str = emp::slice(input_str, ' ');
+    for (size_t i = 0; i < sliced_input_str.size(); ++i) {
+      input[0].emplace_back(std::atoi(sliced_input_str[i].c_str()));
+    }
+
+    // Vector 2
+    input_str = line[1];
+    if (input_str.front() == '[') { input_str.erase(0, 1); }
+    if (input_str.back() == ']') { input_str.pop_back(); }  
+    sliced_input_str = emp::slice(input_str, ' ');
+    for (size_t i = 0; i < sliced_input_str.size(); ++i) {
+      input[1].emplace_back(std::atoi(sliced_input_str[i].c_str()));
+    }   
+
+    // Output vector
+    input_str = line[2];
+    if (input_str.front() == '[') { input_str.erase(0, 1); }
+    if (input_str.back() == ']') { input_str.pop_back(); }  
+    sliced_input_str = emp::slice(input_str, ' ');
+    for (size_t i = 0; i < sliced_input_str.size(); ++i) {
+      output.emplace_back(std::atoi(sliced_input_str[i].c_str()));
+    }
+
+    // Calculate correct output given loaded input
+    emp::vector<int> calc_out = GenCorrectOut_VectorsSummed(input);
+    
+    // make sure generated output and read output match
+    if (calc_out != output) {
+      std::cout << "ERROR! Generated output does not match read output! Exiting." << std::endl;
+      exit(-1);
+    }
+
+    return {input, output};
+  }
+
+  void GenerateTestingSetPop() {
+    for (size_t i = 0; i < testing_set.GetSize(); ++i) {
+      testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
+      testingset_pop[i]->CalcOut();
+    }
+  }
+
+  std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
+    const bool pass = (sub == correct_test_output);
+    return {(double)pass, pass};
+  }
+
+
+};
 
 
 

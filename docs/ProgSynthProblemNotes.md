@@ -14,10 +14,10 @@
 - [x] StringLengthBackwards (vector, strings, numbers)
 - [x] LastIndexOfZero (vector, numbers)
 - [x] CountOdds (vector, numbers)
-- [ ] MirrorImage
-- [ ] VectorsSummed (vector, numbers)
-- [ ] VectorAverage
-- [ ] SumOfSquares
+- [x] MirrorImage (vector, bool)
+- [x] VectorsSummed (vector, numbers)
+- [ ] VectorAverage (vector, number)
+- [x] SumOfSquares (number, number)
 - [x] Median (numbers) 
 - [x] Smallest (numbers)
 
@@ -31,11 +31,15 @@ Things I've seen solutions evolve for:
 - Median
 - Small Or Large (9k updates, >=64 w/128eval)
 - StringLengthBackwards
+- MirrorImage
 
 Things I haven't seen yet:
 
 - ForLoopIndex
 - LastIndexOfZero
+- CountOdds
+- VectorsSummed
+  - I imagine the gradient is really important for this one.
 - CollatzNumbers
 
 ## Problem - For Loop Index

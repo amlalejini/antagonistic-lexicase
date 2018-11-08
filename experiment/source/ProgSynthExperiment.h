@@ -136,6 +136,8 @@ std::unordered_map<std::string, ProblemInfo> problems = {
   {"last-index-of-zero", {PROBLEM_ID::LastIndexOfZero, "training-examples-last-index-of-zero.csv", "testing-examples-last-index-of-zero.csv"}},
   {"count-odds", {PROBLEM_ID::CountOdds, "training-examples-count-odds.csv", "testing-examples-count-odds.csv"}},
   {"mirror-image", {PROBLEM_ID::MirrorImage, "training-examples-mirror-image.csv", "testing-examples-mirror-image.csv"}},
+  {"vectors-summed", {PROBLEM_ID::VectorsSummed, "training-examples-vectors-summed.csv", "testing-examples-vectors-summed.csv"}},
+  {"sum-of-squares", {PROBLEM_ID::SumOfSquares, "training-examples-sum-of-squares.csv", "testing-examples-sum-of-squares.csv"}},
   {"median", {PROBLEM_ID::Median, "training-examples-median.csv", "testing-examples-median.csv"}},
   {"smallest", {PROBLEM_ID::Smallest, "training-examples-smallest.csv", "testing-examples-smallest.csv"}}
 };
@@ -365,6 +367,19 @@ protected:
   double PROB_MIRROR_IMAGE__MUTATION__INS_RATE; 
   double PROB_MIRROR_IMAGE__MUTATION__DEL_RATE; 
   double PROB_MIRROR_IMAGE__MUTATION__PER_VEC_SHUFFLE_RATE; 
+
+  size_t PROB_VECTORS_SUMMED__MIN_VEC_LEN; 
+  size_t PROB_VECTORS_SUMMED__MAX_VEC_LEN; 
+  int PROB_VECTORS_SUMMED__MIN_NUM; 
+  int PROB_VECTORS_SUMMED__MAX_NUM; 
+  double PROB_VECTORS_SUMMED__MUTATION__PER_NUM_SUB_RATE; 
+  double PROB_VECTORS_SUMMED__MUTATION__COPY_RATE; 
+  double PROB_VECTORS_SUMMED__MUTATION__INS_RATE; 
+  double PROB_VECTORS_SUMMED__MUTATION__DEL_RATE; 
+
+  int PROB_SUM_OF_SQUARES__MIN_NUM;
+  int PROB_SUM_OF_SQUARES__MAX_NUM;
+  double PROB_SUM_OF_SQUARES__MUTATION__NUM_MUT_RATE;
 
   int PROB_MEDIAN__MIN_NUM;
   int PROB_MEDIAN__MAX_NUM;
@@ -843,6 +858,13 @@ protected:
   void Inst_SubmitVal_MirrorImage(hardware_t & hw, const inst_t & inst);
   void Inst_SubmitTrue_MirrorImage(hardware_t & hw, const inst_t & inst);
   void Inst_SubmitFalse_MirrorImage(hardware_t & hw, const inst_t & inst);
+  // -- VectorsSummed --
+  void Inst_LoadVec1_VectorsSummed(hardware_t & hw, const inst_t & inst);
+  void Inst_LoadVec2_VectorsSummed(hardware_t & hw, const inst_t & inst);
+  void Inst_SubmitVec_VectorsSummed(hardware_t & hw, const inst_t & inst);
+  // -- Sum of Squares --
+  void Inst_LoadNum_SumOfSquares(hardware_t & hw, const inst_t & inst);
+  void Inst_SubmitNum_SumOfSquares(hardware_t & hw, const inst_t & inst);
   // -- Median --
   void Inst_LoadNum1_Median(hardware_t & hw, const inst_t & inst);
   void Inst_LoadNum2_Median(hardware_t & hw, const inst_t & inst);
@@ -1144,6 +1166,19 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   PROB_MIRROR_IMAGE__MUTATION__INS_RATE = config.PROB_MIRROR_IMAGE__MUTATION__INS_RATE();
   PROB_MIRROR_IMAGE__MUTATION__DEL_RATE = config.PROB_MIRROR_IMAGE__MUTATION__DEL_RATE();
   PROB_MIRROR_IMAGE__MUTATION__PER_VEC_SHUFFLE_RATE = config.PROB_MIRROR_IMAGE__MUTATION__PER_VEC_SHUFFLE_RATE();
+
+  PROB_VECTORS_SUMMED__MIN_VEC_LEN = config.PROB_VECTORS_SUMMED__MIN_VEC_LEN();
+  PROB_VECTORS_SUMMED__MAX_VEC_LEN = config.PROB_VECTORS_SUMMED__MAX_VEC_LEN();
+  PROB_VECTORS_SUMMED__MIN_NUM = config.PROB_VECTORS_SUMMED__MIN_NUM();
+  PROB_VECTORS_SUMMED__MAX_NUM = config.PROB_VECTORS_SUMMED__MAX_NUM();
+  PROB_VECTORS_SUMMED__MUTATION__PER_NUM_SUB_RATE = config.PROB_VECTORS_SUMMED__MUTATION__PER_NUM_SUB_RATE();
+  PROB_VECTORS_SUMMED__MUTATION__COPY_RATE = config.PROB_VECTORS_SUMMED__MUTATION__COPY_RATE();
+  PROB_VECTORS_SUMMED__MUTATION__INS_RATE = config.PROB_VECTORS_SUMMED__MUTATION__INS_RATE();
+  PROB_VECTORS_SUMMED__MUTATION__DEL_RATE = config.PROB_VECTORS_SUMMED__MUTATION__DEL_RATE();
+
+  PROB_SUM_OF_SQUARES__MIN_NUM = config.PROB_SUM_OF_SQUARES__MIN_NUM();
+  PROB_SUM_OF_SQUARES__MAX_NUM = config.PROB_SUM_OF_SQUARES__MAX_NUM();
+  PROB_SUM_OF_SQUARES__MUTATION__NUM_MUT_RATE = config.PROB_SUM_OF_SQUARES__MUTATION__NUM_MUT_RATE();
 
   PROB_MEDIAN__MIN_NUM = config.PROB_MEDIAN__MIN_NUM();
   PROB_MEDIAN__MAX_NUM = config.PROB_MEDIAN__MAX_NUM();
@@ -1803,21 +1838,26 @@ void ProgramSynthesisExperiment::SnapshotPrograms() {
 
 // ================= PROGRAM-RELATED FUNCTIONS ===========
 void ProgramSynthesisExperiment::InitProgPop_Random() {
-  std::cout << "Randomly initializing program population." << std::endl;
-  for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
-    prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
-  }
+  // std::cout << "Randomly initializing program population." << std::endl;
+  // for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
+  //   prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
+  // }
   // -- solution(?) --
-  // emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
-  // hardware_t::Program sol(inst_lib);
+  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  hardware_t::Program sol(inst_lib);
 
-  // sol.PushInst("LoadVec1",   {matrix[0], matrix[7], matrix[7]});
-  // sol.PushInst("LoadVec2",   {matrix[1], matrix[7], matrix[7]});
-  // sol.PushInst("VecReverse", {matrix[1], matrix[7], matrix[7]});
-  // sol.PushInst("TestMemEqu", {matrix[0], matrix[1], matrix[2]});
-  // sol.PushInst("SubmitVal",  {matrix[2], matrix[7], matrix[7]});
-  
-  // prog_world->Inject(sol, PROG_POP_SIZE);
+  sol.PushInst("LoadNum",    {matrix[0], matrix[8], matrix[8]});
+  sol.PushInst("Set-2",      {matrix[1], matrix[8], matrix[8]});
+  sol.PushInst("Set-6",      {matrix[2], matrix[8], matrix[8]});
+  sol.PushInst("CopyMem",    {matrix[0], matrix[3], matrix[8]});
+  sol.PushInst("Inc",        {matrix[3], matrix[8], matrix[8]});
+  sol.PushInst("Mult",       {matrix[0], matrix[3], matrix[4]});
+  sol.PushInst("Mult",       {matrix[0], matrix[1], matrix[5]});
+  sol.PushInst("Inc",        {matrix[5], matrix[8], matrix[8]});
+  sol.PushInst("Mult",       {matrix[4], matrix[5], matrix[6]});
+  sol.PushInst("Div",        {matrix[6], matrix[2], matrix[7]});
+  sol.PushInst("SubmitNum",  {matrix[7], matrix[8], matrix[8]});
+  prog_world->Inject(sol, PROG_POP_SIZE);
 }
 
 void ProgramSynthesisExperiment::AddDefaultInstructions(const std::unordered_set<std::string> & includes={"Add","Sub","Mult","Div","Mod",
@@ -4249,7 +4289,7 @@ void ProgramSynthesisExperiment::SetupProblem_CountOdds() {
 }
 
 void ProgramSynthesisExperiment::SetupProblem_MirrorImage() { 
-    std::cout << "Setting up problem - MirrorImage" << std::endl;
+  std::cout << "Setting up problem - MirrorImage" << std::endl;
 
   // A few useful aliases
   using test_org_t = TestOrg_MirrorImage;
@@ -4571,13 +4611,609 @@ void ProgramSynthesisExperiment::SetupProblem_SuperAnagrams() {
 }
 
 void ProgramSynthesisExperiment::SetupProblem_SumOfSquares() { 
-  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
-  exit(-1); 
+  std::cout << "Setting up problem - SumOfSquares" << std::endl;
+
+  // A few useful aliases
+  using test_org_t = TestOrg_SumOfSquares;
+
+  // Load benchmark data for problem.
+  if (BENCHMARK_DATA_DIR.back() != '/') BENCHMARK_DATA_DIR += '/';
+  std::string training_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTrainingSetFilename();  
+  std::string testing_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTestingSetFilename();  
+  std::cout << "Loading training examples." << std::endl;
+  prob_utils_SumOfSquares.GetTrainingSet().LoadTestCasesWithCSVReader(training_examples_fpath);
+  std::cout << "Loading testing examples." << std::endl;
+  prob_utils_SumOfSquares.GetTestingSet().LoadTestCasesWithCSVReader(testing_examples_fpath);
+  std::cout << "Generating testing set population." << std::endl;
+  prob_utils_SumOfSquares.GenerateTestingSetPop();
+  std::cout << "Loaded training example set size = " << prob_utils_SumOfSquares.GetTrainingSet().GetSize() << std::endl;
+  std::cout << "Loaded testing example set size = " << prob_utils_SumOfSquares.GetTestingSet().GetSize() << std::endl;
+  std::cout << "Testing set (non-training examples used to evaluate program accuracy) size = " << prob_utils_SumOfSquares.testingset_pop.size() << std::endl;
+
+  // Setup the world
+  NewTestCaseWorld(prob_SumOfSquares_world, *random, "SumOfSquares world");
+
+  // Configure how the population should be initialized
+  SetupTestCasePop_Init(prob_SumOfSquares_world,
+                        prob_utils_SumOfSquares.training_set,
+                        [this]() { return GenRandomTestInput_SumOfSquares(*random, 
+                                                                          {PROB_SUM_OF_SQUARES__MIN_NUM, PROB_SUM_OF_SQUARES__MAX_NUM}); 
+                                  }
+                        );
+  end_setup_sig.AddAction([this]() { std::cout << "TestCase world size= " << prob_SumOfSquares_world->GetSize() << std::endl; });
+
+  // Tell the world to calculate the correct test output (given input) on placement.
+  prob_SumOfSquares_world->OnPlacement([this](size_t pos) { prob_SumOfSquares_world->GetOrg(pos).CalcOut(); });
+
+  // How are program results calculated on a test?
+  CalcProgramResultOnTest = [this](prog_org_t & prog_org, TestOrg_Base & test_org_base) {
+    test_org_t & test_org = static_cast<test_org_t&>(test_org_base);
+    TestResult result;
+    if (!prob_utils_SumOfSquares.submitted) {
+      result.score = 0;
+      result.pass = false;
+      result.sub = false;
+    } else {
+      std::pair<double, bool> r(prob_utils_SumOfSquares.CalcScorePassFail(test_org.GetCorrectOut(), prob_utils_SumOfSquares.submitted_val));
+      result.score = r.first;
+      result.pass = r.second;
+      result.sub = true;
+    }
+    return result;
+  };
+
+  // Setup how evaluation on world test should work.
+  EvaluateWorldTest = [this](prog_org_t & prog_org, size_t testID) {
+    emp::Ptr<test_org_t> test_org_ptr = prob_SumOfSquares_world->GetOrgPtr(testID);
+    begin_program_test.Trigger(prog_org, test_org_ptr);
+    do_program_test.Trigger(prog_org, test_org_ptr);
+    end_program_test.Trigger(prog_org, test_org_ptr);
+    return CalcProgramResultOnTest(prog_org, *test_org_ptr);
+  };
+
+  // How should we validate programs on testing set?
+  DoTestingSetValidation = [this](prog_org_t & prog_org) { 
+    // evaluate program on full testing set; update stats utils with results
+    begin_program_eval.Trigger(prog_org);
+    stats_util.current_program__validation__test_results.resize(prob_utils_SumOfSquares.testingset_pop.size());
+    stats_util.current_program__validation__total_score = 0;
+    stats_util.current_program__validation__total_passes = 0;
+    stats_util.current_program__validation__is_solution = false;
+    // For each test in validation set, evaluate program.
+    for (size_t testID = 0; testID < prob_utils_SumOfSquares.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_SumOfSquares.testingset_pop[testID];
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
+      stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+    }
+    stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_SumOfSquares.testingset_pop.size();
+    end_program_eval.Trigger(prog_org);
+  };
+
+  // How should we screen for a solution?
+  ScreenForSolution = [this](prog_org_t & prog_org) {
+    begin_program_eval.Trigger(prog_org);
+    for (size_t testID = 0; testID < prob_utils_SumOfSquares.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_SumOfSquares.testingset_pop[testID];
+
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      
+      TestResult result = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      if (!result.pass) {
+        end_program_eval.Trigger(prog_org);
+        return false;
+      }
+    }
+    end_program_eval.Trigger(prog_org);
+    return true;
+  };
+
+  // Tell the experiment how to get test phenotypes.
+  GetTestPhenotype = [this](size_t testID) -> test_org_phen_t & {
+    emp_assert(prob_SumOfSquares_world->IsOccupied(testID));
+    return prob_SumOfSquares_world->GetOrg(testID).GetPhenotype();
+  };
+
+  // Setup how test world updates.
+  SetupTestCaseWorldUpdate(prob_SumOfSquares_world);
+
+  // todo - test that RANDOM is actually making random things every update..
+
+  // Setup how test cases mutate.
+  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::RANDOM) {
+    std::cout << "RANDOM training mode detected, configuring mutation function to RANDOMIZE organisms." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Randomize organism genome on mutate.
+      prob_SumOfSquares_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        test_org.GetGenome() = GenRandomTestInput_SumOfSquares(*random, {PROB_SUM_OF_SQUARES__MIN_NUM, PROB_SUM_OF_SQUARES__MAX_NUM}); 
+        return 1;
+      });
+    };
+  } else {
+    std::cout << "Non-RANDOM training mode detected, configuring mutation function normally." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Configure mutator.
+      prob_utils_SumOfSquares.MIN_NUM = PROB_SUM_OF_SQUARES__MIN_NUM;
+      prob_utils_SumOfSquares.MAX_NUM = PROB_SUM_OF_SQUARES__MAX_NUM;
+      prob_utils_SumOfSquares.NUM_MUT_RATE = PROB_SUM_OF_SQUARES__MUTATION__NUM_MUT_RATE;
+      // (2) Hook mutator up to world.
+      prob_SumOfSquares_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        return prob_utils_SumOfSquares.Mutate(rnd, test_org.GetGenome());
+      });
+    };
+  }
+
+  // Setup test case fitness function.
+  SetupTestFitFun = [this]() {
+    prob_SumOfSquares_world->SetFitFun([](test_org_t & test_org) {
+      return (double)test_org.GetPhenotype().num_fails;
+    });
+  };
+
+  // Tell experiment how to configure hardware inputs when running program against a test.
+  begin_program_test.AddAction([this](prog_org_t & prog_org, emp::Ptr<TestOrg_Base> test_org_base_ptr) {
+    // Reset eval stuff
+    // Set current test org.
+    prob_utils_SumOfSquares.cur_eval_test_org = test_org_base_ptr.Cast<test_org_t>(); // currently only place need testID for this?
+    prob_utils_SumOfSquares.ResetTestEval();
+    emp_assert(eval_hardware->GetMemSize() >= 3);
+    // Configure inputs.
+    if (eval_hardware->GetCallStackSize()) {
+      // Grab some useful references.
+      Problem_SumOfSquares_input_t & input = prob_utils_SumOfSquares.cur_eval_test_org->GetGenome(); // std::pair<int, double>
+      hardware_t::CallState & state = eval_hardware->GetCurCallState();
+      hardware_t::Memory & wmem = state.GetWorkingMem();
+      // Set hardware input.
+      wmem.Set(0, input);
+    }
+  });
+
+  // Tell experiment how to snapshot test population.
+  SnapshotTests = [this]() {
+    std::string snapshot_dir = DATA_DIRECTORY + "pop_" + emp::to_string(prog_world->GetUpdate());
+    mkdir(snapshot_dir.c_str(), ACCESSPERMS);
+    
+    emp::DataFile file(snapshot_dir + "/test_pop_" + emp::to_string((int)prog_world->GetUpdate()) + ".csv");
+    // Test file contents:
+    // - test id
+    std::function<size_t(void)> get_test_id = [this]() { return stats_util.cur_testID; };
+    file.AddFun(get_test_id, "test_id");
+
+    // - test fitness
+    std::function<double(void)> get_test_fitness = [this]() { return prob_SumOfSquares_world->CalcFitnessID(stats_util.cur_testID); };
+    file.AddFun(get_test_fitness, "fitness");
+
+    // - num passes
+    std::function<size_t(void)> get_test_num_passes = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_passes; };
+    file.AddFun(get_test_num_passes, "num_passes");
+
+    // - num fails
+    std::function<size_t(void)> get_test_num_fails = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_fails; };
+    file.AddFun(get_test_num_fails, "num_fails");
+
+    std::function<size_t(void)> get_num_tested = [this]() { return GetTestPhenotype(stats_util.cur_testID).test_passes.size(); };
+    file.AddFun(get_num_tested, "num_programs_tested_against");
+
+    // - test scores by program
+    std::function<std::string(void)> get_passes_by_program = [this]() {
+      std::string scores = "\"[";
+      test_org_phen_t & phen = GetTestPhenotype(stats_util.cur_testID);
+      for (size_t i = 0; i < phen.test_passes.size(); ++i) {
+        if (i) scores += ",";
+        scores += emp::to_string(phen.test_passes[i]);
+      }
+      scores += "]\"";
+      return scores;
+    };
+    file.AddFun(get_passes_by_program, "passes_by_program");
+
+    // - test
+    std::function<std::string(void)> get_test = [this]() {
+      std::ostringstream stream;
+      stream << "\"";
+      prob_SumOfSquares_world->GetOrg(stats_util.cur_testID).Print(stream);
+      stream << "\"";
+      return stream.str();
+    };
+    file.AddFun(get_test, "test");
+
+    file.PrintHeaderKeys();
+
+    // Loop over tests, snapshotting each.
+    for (stats_util.cur_testID = 0; stats_util.cur_testID < prob_SumOfSquares_world->GetSize(); ++stats_util.cur_testID) {
+      if (!prob_SumOfSquares_world->IsOccupied(stats_util.cur_testID)) continue;
+      file.Update();
+    }
+  };
+
+  // Add default instructions to instruction set.
+  AddDefaultInstructions({"Add",
+                          "Sub",
+                          "Mult",
+                          "Div",
+                          "Mod",
+                          "TestNumEqu",
+                          "TestNumNEqu",
+                          "TestNumLess",
+                          "TestNumLessTEqu",
+                          "TestNumGreater",
+                          "TestNumGreaterTEqu",
+                          "Floor",
+                          "Not",
+                          "Inc",
+                          "Dec",
+                          "CopyMem",
+                          "SwapMem",
+                          "Input",
+                          "Output",
+                          "CommitGlobal",
+                          "PullGlobal",
+                          "TestMemEqu",
+                          "TestMemNEqu",
+                          "If",
+                          "IfNot",
+                          "While",
+                          "Countdown",
+                          "Foreach",
+                          "Close",
+                          "Break",
+                          "Call",
+                          "Routine",
+                          "Return",
+                          "ModuleDef",
+                          "MakeVector",
+                          "VecGet",
+                          "VecSet",
+                          "VecLen",
+                          "VecAppend",
+                          "VecPop",
+                          "VecRemove",
+                          "VecReplaceAll",
+                          "VecIndexOf",
+                          "VecOccurrencesOf",
+                          "VecReverse",
+                          "VecSwapIfLess",
+                          "VecGetFront",
+                          "VecGetBack",
+                          "IsNum",
+                          "IsVec"
+  });
+
+  // -- Custom Instructions --
+  inst_lib->AddInst("LoadNum", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadNum_SumOfSquares(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("SubmitNum", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_SubmitNum_SumOfSquares(hw, inst);
+  }, 1);
+  
+  // Add Terminals
+  for (size_t i = 0; i <= 10; ++i) {
+    inst_lib->AddInst("Set-" + emp::to_string(i),
+      [i](hardware_t & hw, const inst_t & inst) {
+        hardware_t::CallState & state = hw.GetCurCallState();
+        hardware_t::Memory & wmem = state.GetWorkingMem();
+        size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+        if (!hw.IsValidMemPos(posA)) return; // Do nothing
+        wmem.Set(posA, (double)i);
+      });
+  }
+
 }
 
 void ProgramSynthesisExperiment::SetupProblem_VectorsSummed() { 
-  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
-  exit(-1); 
+  std::cout << "Setting up problem - VectorsSummed" << std::endl;
+
+  // A few useful aliases
+  using test_org_t = TestOrg_VectorsSummed;
+
+  // Load benchmark data for problem.
+  if (BENCHMARK_DATA_DIR.back() != '/') BENCHMARK_DATA_DIR += '/';
+  std::string training_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTrainingSetFilename();  
+  std::string testing_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTestingSetFilename();  
+  std::cout << "Loading training examples." << std::endl;
+  prob_utils_VectorsSummed.GetTrainingSet().LoadTestCasesWithCSVReader(training_examples_fpath);
+  std::cout << "Loading testing examples." << std::endl;
+  prob_utils_VectorsSummed.GetTestingSet().LoadTestCasesWithCSVReader(testing_examples_fpath);
+  std::cout << "Generating testing set population." << std::endl;
+  prob_utils_VectorsSummed.GenerateTestingSetPop();
+  std::cout << "Loaded training example set size = " << prob_utils_VectorsSummed.GetTrainingSet().GetSize() << std::endl;
+  std::cout << "Loaded testing example set size = " << prob_utils_VectorsSummed.GetTestingSet().GetSize() << std::endl;
+  std::cout << "Testing set (non-training examples used to evaluate program accuracy) size = " << prob_utils_VectorsSummed.testingset_pop.size() << std::endl;
+
+  // Setup the world
+  NewTestCaseWorld(prob_VectorsSummed_world, *random, "VectorsSummed world");
+
+  // Configure how the population should be initialized
+  SetupTestCasePop_Init(prob_VectorsSummed_world,
+                        prob_utils_VectorsSummed.training_set,
+                        [this]() { return GenRandomTestInput_VectorsSummed(*random, 
+                                                                           {PROB_VECTORS_SUMMED__MIN_VEC_LEN, PROB_VECTORS_SUMMED__MAX_VEC_LEN},
+                                                                           {PROB_VECTORS_SUMMED__MIN_NUM, PROB_VECTORS_SUMMED__MAX_NUM}); 
+                                  }
+                        );
+  end_setup_sig.AddAction([this]() { std::cout << "TestCase world size= " << prob_VectorsSummed_world->GetSize() << std::endl; });
+
+  // Tell the world to calculate the correct test output (given input) on placement.
+  prob_VectorsSummed_world->OnPlacement([this](size_t pos) { prob_VectorsSummed_world->GetOrg(pos).CalcOut(); });
+
+  // How are program results calculated on a test?
+  CalcProgramResultOnTest = [this](prog_org_t & prog_org, TestOrg_Base & test_org_base) {
+    test_org_t & test_org = static_cast<test_org_t&>(test_org_base);
+    TestResult result;
+    if (!prob_utils_VectorsSummed.submitted) {
+      result.score = 0;
+      result.pass = false;
+      result.sub = false;
+    } else {
+      std::pair<double, bool> r(prob_utils_VectorsSummed.CalcScorePassFail(test_org.GetCorrectOut(), prob_utils_VectorsSummed.submitted_vec));
+      result.score = r.first;
+      result.pass = r.second;
+      result.sub = true;
+    }
+    return result;
+  };
+
+  // Setup how evaluation on world test should work.
+  EvaluateWorldTest = [this](prog_org_t & prog_org, size_t testID) {
+    emp::Ptr<test_org_t> test_org_ptr = prob_VectorsSummed_world->GetOrgPtr(testID);
+    begin_program_test.Trigger(prog_org, test_org_ptr);
+    do_program_test.Trigger(prog_org, test_org_ptr);
+    end_program_test.Trigger(prog_org, test_org_ptr);
+    return CalcProgramResultOnTest(prog_org, *test_org_ptr);
+  };
+
+  // How should we validate programs on testing set?
+  DoTestingSetValidation = [this](prog_org_t & prog_org) { 
+    // evaluate program on full testing set; update stats utils with results
+    begin_program_eval.Trigger(prog_org);
+    stats_util.current_program__validation__test_results.resize(prob_utils_VectorsSummed.testingset_pop.size());
+    stats_util.current_program__validation__total_score = 0;
+    stats_util.current_program__validation__total_passes = 0;
+    stats_util.current_program__validation__is_solution = false;
+    // For each test in validation set, evaluate program.
+    for (size_t testID = 0; testID < prob_utils_VectorsSummed.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_VectorsSummed.testingset_pop[testID];
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
+      stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+    }
+    stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_VectorsSummed.testingset_pop.size();
+    end_program_eval.Trigger(prog_org);
+  };
+
+  // How should we screen for a solution?
+  ScreenForSolution = [this](prog_org_t & prog_org) {
+    begin_program_eval.Trigger(prog_org);
+    for (size_t testID = 0; testID < prob_utils_VectorsSummed.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_VectorsSummed.testingset_pop[testID];
+
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      
+      TestResult result = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      if (!result.pass) {
+        end_program_eval.Trigger(prog_org);
+        return false;
+      }
+    }
+    end_program_eval.Trigger(prog_org);
+    return true;
+  }; 
+
+  // Tell the experiment how to get test phenotypes.
+  GetTestPhenotype = [this](size_t testID) -> test_org_phen_t & {
+    emp_assert(prob_VectorsSummed_world->IsOccupied(testID));
+    return prob_VectorsSummed_world->GetOrg(testID).GetPhenotype();
+  };
+
+  // Setup how test world updates.
+  SetupTestCaseWorldUpdate(prob_VectorsSummed_world);
+
+  // Setup how test cases mutate.
+  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::RANDOM) {
+    std::cout << "RANDOM training mode detected, configuring mutation function to RANDOMIZE organisms." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Randomize organism genome on mutate.
+      prob_VectorsSummed_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        test_org.GetGenome() = GenRandomTestInput_VectorsSummed(*random, 
+                                                                  {PROB_VECTORS_SUMMED__MIN_VEC_LEN, PROB_VECTORS_SUMMED__MAX_VEC_LEN},
+                                                                  {PROB_VECTORS_SUMMED__MIN_NUM, PROB_VECTORS_SUMMED__MAX_NUM}); 
+        return 1;
+      });
+    };
+  } else {
+    std::cout << "Non-RANDOM training mode detected, configuring mutation function normally." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Configure mutator.
+      prob_utils_VectorsSummed.MIN_VEC_LEN = PROB_VECTORS_SUMMED__MIN_VEC_LEN;
+      prob_utils_VectorsSummed.MAX_VEC_LEN = PROB_VECTORS_SUMMED__MAX_VEC_LEN;
+      prob_utils_VectorsSummed.MIN_NUM = PROB_VECTORS_SUMMED__MIN_NUM;
+      prob_utils_VectorsSummed.MAX_NUM = PROB_VECTORS_SUMMED__MAX_NUM;
+      prob_utils_VectorsSummed.PER_NUM_SUB_RATE = PROB_VECTORS_SUMMED__MUTATION__PER_NUM_SUB_RATE;
+      prob_utils_VectorsSummed.COPY_RATE = PROB_VECTORS_SUMMED__MUTATION__COPY_RATE;
+      prob_utils_VectorsSummed.INS_RATE = PROB_VECTORS_SUMMED__MUTATION__INS_RATE;
+      prob_utils_VectorsSummed.DEL_RATE = PROB_VECTORS_SUMMED__MUTATION__DEL_RATE;
+      // (2) Hook mutator up to world.
+      prob_VectorsSummed_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        return prob_utils_VectorsSummed.Mutate(rnd, test_org.GetGenome());
+      });
+    };
+  }
+
+  // Setup test case fitness function.
+  SetupTestFitFun = [this]() {
+    prob_VectorsSummed_world->SetFitFun([](test_org_t & test_org) {
+      return (double)test_org.GetPhenotype().num_fails;
+    });
+  };
+
+  // Tell experiment how to configure hardware inputs when running program against a test.
+  begin_program_test.AddAction([this](prog_org_t & prog_org, emp::Ptr<TestOrg_Base> test_org_base_ptr) {
+    // Reset eval stuff
+    // Set current test org.
+    prob_utils_VectorsSummed.cur_eval_test_org = test_org_base_ptr.Cast<test_org_t>(); // currently only place need testID for this?
+    prob_utils_VectorsSummed.ResetTestEval();
+    emp_assert(eval_hardware->GetMemSize() >= 3);
+    // Configure inputs.
+    if (eval_hardware->GetCallStackSize()) {
+      // Grab some useful references.
+      Problem_VectorsSummed_input_t & input = prob_utils_VectorsSummed.cur_eval_test_org->GetGenome(); // std::pair<int, double>
+      hardware_t::CallState & state = eval_hardware->GetCurCallState();
+      hardware_t::Memory & wmem = state.GetWorkingMem();
+      // Set hardware input.
+      wmem.Set(0, input[0]);
+      wmem.Set(1, input[1]);
+    }
+  });
+
+  // Tell experiment how to snapshot test population.
+  SnapshotTests = [this]() {
+    std::string snapshot_dir = DATA_DIRECTORY + "pop_" + emp::to_string(prog_world->GetUpdate());
+    mkdir(snapshot_dir.c_str(), ACCESSPERMS);
+    
+    emp::DataFile file(snapshot_dir + "/test_pop_" + emp::to_string((int)prog_world->GetUpdate()) + ".csv");
+    // Test file contents:
+    // - test id
+    std::function<size_t(void)> get_test_id = [this]() { return stats_util.cur_testID; };
+    file.AddFun(get_test_id, "test_id");
+
+    // - test fitness
+    std::function<double(void)> get_test_fitness = [this]() { return prob_VectorsSummed_world->CalcFitnessID(stats_util.cur_testID); };
+    file.AddFun(get_test_fitness, "fitness");
+
+    // - num passes
+    std::function<size_t(void)> get_test_num_passes = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_passes; };
+    file.AddFun(get_test_num_passes, "num_passes");
+
+    // - num fails
+    std::function<size_t(void)> get_test_num_fails = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_fails; };
+    file.AddFun(get_test_num_fails, "num_fails");
+
+    std::function<size_t(void)> get_num_tested = [this]() { return GetTestPhenotype(stats_util.cur_testID).test_passes.size(); };
+    file.AddFun(get_num_tested, "num_programs_tested_against");
+
+    // - test scores by program
+    std::function<std::string(void)> get_passes_by_program = [this]() {
+      std::string scores = "\"[";
+      test_org_phen_t & phen = GetTestPhenotype(stats_util.cur_testID);
+      for (size_t i = 0; i < phen.test_passes.size(); ++i) {
+        if (i) scores += ",";
+        scores += emp::to_string(phen.test_passes[i]);
+      }
+      scores += "]\"";
+      return scores;
+    };
+    file.AddFun(get_passes_by_program, "passes_by_program");
+
+    // - test
+    std::function<std::string(void)> get_test = [this]() {
+      std::ostringstream stream;
+      stream << "\"";
+      prob_VectorsSummed_world->GetOrg(stats_util.cur_testID).Print(stream);
+      stream << "\"";
+      return stream.str();
+    };
+    file.AddFun(get_test, "test");
+
+    file.PrintHeaderKeys();
+
+    // Loop over tests, snapshotting each.
+    for (stats_util.cur_testID = 0; stats_util.cur_testID < prob_VectorsSummed_world->GetSize(); ++stats_util.cur_testID) {
+      if (!prob_VectorsSummed_world->IsOccupied(stats_util.cur_testID)) continue;
+      file.Update();
+    }
+  };
+
+  AddDefaultInstructions({"Add",
+                          "Sub",
+                          "Mult",
+                          "Div",
+                          "Mod",
+                          "TestNumEqu",
+                          "TestNumNEqu",
+                          "TestNumLess",
+                          "TestNumLessTEqu",
+                          "TestNumGreater",
+                          "TestNumGreaterTEqu",
+                          "Floor",
+                          "Not",
+                          "Inc",
+                          "Dec",
+                          "CopyMem",
+                          "SwapMem",
+                          "Input",
+                          "Output",
+                          "CommitGlobal",
+                          "PullGlobal",
+                          "TestMemEqu",
+                          "TestMemNEqu",
+                          "If",
+                          "IfNot",
+                          "While",
+                          "Countdown",
+                          "Foreach",
+                          "Close",
+                          "Break",
+                          "Call",
+                          "Routine",
+                          "Return",
+                          "ModuleDef",
+                          "MakeVector",
+                          "VecGet",
+                          "VecSet",
+                          "VecLen",
+                          "VecAppend",
+                          "VecPop",
+                          "VecRemove",
+                          "VecReplaceAll",
+                          "VecIndexOf",
+                          "VecOccurrencesOf",
+                          "VecReverse",
+                          "VecSwapIfLess",
+                          "VecGetFront",
+                          "VecGetBack",
+                          "IsNum",
+                          "IsVec"
+  });
+
+  inst_lib->AddInst("LoadVec1", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadVec1_VectorsSummed(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("LoadVec2", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadVec2_VectorsSummed(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("SubmitVec", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_SubmitVec_VectorsSummed(hw, inst);
+  }, 1);
+
+  // Add Terminals
+  for (size_t i = 0; i <= 10; ++i) {
+    inst_lib->AddInst("Set-" + emp::to_string(i),
+      [i](hardware_t & hw, const inst_t & inst) {
+        hardware_t::CallState & state = hw.GetCurCallState();
+        hardware_t::Memory & wmem = state.GetWorkingMem();
+        size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+        if (!hw.IsValidMemPos(posA)) return; // Do nothing
+        wmem.Set(posA, (double)i);
+      });
+  }
 }
 
 void ProgramSynthesisExperiment::SetupProblem_XWordLines() { 
@@ -5538,6 +6174,76 @@ void ProgramSynthesisExperiment::Inst_SubmitTrue_MirrorImage(hardware_t & hw, co
 void ProgramSynthesisExperiment::Inst_SubmitFalse_MirrorImage(hardware_t & hw, const inst_t & inst) {
   prob_utils_MirrorImage.Submit(false);
 }
+
+// ----- VectorsSummed -----
+void ProgramSynthesisExperiment::Inst_LoadVec1_VectorsSummed(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_VectorsSummed.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_VectorsSummed.cur_eval_test_org->GetGenome()[0]);
+}
+
+void ProgramSynthesisExperiment::Inst_LoadVec2_VectorsSummed(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_VectorsSummed.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_VectorsSummed.cur_eval_test_org->GetGenome()[1]);
+}
+
+void ProgramSynthesisExperiment::Inst_SubmitVec_VectorsSummed(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), hardware_t::MemPosType::VEC);
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_VectorsSummed.cur_eval_test_org != nullptr);
+  const emp::vector<hardware_t::MemoryValue> & vec = wmem.AccessVec(posA);
+  emp::vector<int> output;
+  for (size_t i = 0; i < vec.size(); ++i) {
+    if (vec[i].GetType() == hardware_t::MemoryValue::MemoryType::NUM) {
+      output.emplace_back((int)vec[i].GetNum());
+    }
+  }
+  prob_utils_VectorsSummed.Submit(output); 
+}
+
+// ----- Sum Of Squares -----
+void ProgramSynthesisExperiment::Inst_LoadNum_SumOfSquares(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_SumOfSquares.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_SumOfSquares.cur_eval_test_org->GetGenome());
+}
+
+void ProgramSynthesisExperiment::Inst_SubmitNum_SumOfSquares(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity(), hardware_t::MemPosType::NUM);
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_SumOfSquares.cur_eval_test_org != nullptr);
+  prob_utils_SumOfSquares.Submit((int)wmem.AccessVal(posA).GetNum());
+}
+
 
 // ----- Median -----
 void ProgramSynthesisExperiment::Inst_LoadNum1_Median(hardware_t & hw, const inst_t & inst) {
