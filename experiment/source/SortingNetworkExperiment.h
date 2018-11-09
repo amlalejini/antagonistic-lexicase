@@ -458,7 +458,7 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
     std::cout << "best-test: " << test_world->CalcFitnessID(dominant_test_id) << std::endl;
     
     if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger();
-    if (update % SOLUTION_SCREEN_INTERVAL == 0) do_sol_screen_sig.Trigger();
+    // if (update % SOLUTION_SCREEN_INTERVAL == 0) do_sol_screen_sig.Trigger();
 
     network_world->Update();
     network_world->ClearCache();

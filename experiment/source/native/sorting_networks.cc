@@ -11,7 +11,7 @@
 
 int main(int argc, char* argv[])
 {
-  std::string config_fname = "configs.cfg";
+  std::string config_fname = "sorting_network_configs.cfg";
   SortingNetworkConfig config;
   auto args = emp::cl::ArgManager(argc, argv);
   config.Read(config_fname);

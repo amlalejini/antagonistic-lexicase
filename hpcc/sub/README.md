@@ -6,3 +6,5 @@
 - expl-SN-coevocl32-lk4sm.sb
   - Using cohort lexicase (cohort size=32) to do coevolution of networks and tests,
     what parameters work well for producing small sorting networks?
+- ant-lex-SN-exp-prelim
+  - Preliminary antagonistic lexicase w/sorting networks submission script.

@@ -1,30 +1,64 @@
 # Project - Antagonistic Lexicase Selection
 
 This project explores the use of lexicase selection as a framework for
-antagonistic coevolution.
+antagonistic coevolution. Additionally, the desire to avoid full pair-wise program-test
+population evaluations sprouted cohort lexicase selection. In addition to looking
+at antagnostic coevolution, we'll be looking at cohort lexicase selection.
+
+NOTE - I need vocabulary to describe programs/sorting networks in the context
+of coevolution. They're not quite 'hosts', so the host-parasite metaphor doesn't
+work well.
 
 **Navigation**
 
 <!-- TOC -->
 
-- [Questions/Hypotheses](#questionshypotheses)
+- [Big Questions](#big-questions)
+- [Experimental design](#experimental-design)
 - [Case study problems](#case-study-problems)
   - [Minimal Sorting Networks](#minimal-sorting-networks)
     - [Implementation issues/decisions to make](#implementation-issuesdecisions-to-make)
-    - [Experimental design](#experimental-design)
+    - [Experimental design](#experimental-design-1)
 - [To dos](#to-dos)
 - [References](#references)
 
 <!-- /TOC -->
 
-## Questions/Hypotheses
+## Big Questions
+ 
+- **Question:** What about cohort lexicase selection? Does it work? Is it less,
+  equally, or more effective than vanilla lexicase selection?
+  - Given a population size of 1024, run cohort selection @ cohorts sizes:
+    1 (drift), 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024 (full lexicase)
+  - Should evaluate this on a well understood problem that lexicase has been
+    used on in the past (e.g., one of the programming synthesis problems).
+    - 1-way cohorts vs. 2-way cohorts
+      - 1-way = cohorts only applied to programs (doesn't save computation)
+      - 2-way = cohorts applied to both programs and tests (saves computation time)
+        - Best with equal number of tests and programs.
+- **Question:** Is antagonistic lexicase selection an effective framework for antagonistic
+  coevolution in Evolutionary Computation?
+  - Antagonistic lexicase selection provides a clean and intuitive framework for
+    selecting both solutions (e.g., programs, sorting networks, etc) and coevolving
+    antagonists (e.g., tests). But, is the lexicase framework an effective way
+    to facilitate antagonistic coevolution? (i.e., does it work?)
+- **Question:** Is antagonistic coevolution selection valuable in a lexicase selection
+  context?
 
-- Q1: Is lexicase selection an effective framework for (antagonistic) coevolution?
-  - Approach: demonstrate it as a technique
-    - If above goes alright: Compare with other frameworks for facilitating
-      antagonistic coevolution
-- Q2: How does coevolutionary lexicase selection compare to regular lexicase selection?
-  - Approach: compare coevolutionary lexicase performance w/regular lexicase performance
+## Experimental design
+
+- Problem: Sorting Networks
+  - Testing conditions
+    - Coevolve => Selection: lexicase, cohort-lexicase (cs=16), tournament
+    - Static   => Selection: lexicase, cohort-lexicase (cs=16), tournament
+    - Random   => Selection: lexicase, cohort-lexicase (cs=16), tournament
+    - Drift    => Selection: lexicase, cohort-lexicase (cs=16), tournament
+  - Want to keep total test representation (in the population) constant across treatments
+    - So if TestPopSize = 1024 and SortsPerTest= 16, I have a total of 16384 total 
+      tests (each *potentially* unique) floating around in the test population.
+  - Massive generation count: 1,000,0000 => Request a week(?)
+
+- Problem: Programming Synthesis
 
 ## Case study problems
 
@@ -184,7 +218,6 @@ Project implementation
 ## To dos
 
 - [ ] Sorting network visualization
-- [ ] Testing
 
 ## References
 
