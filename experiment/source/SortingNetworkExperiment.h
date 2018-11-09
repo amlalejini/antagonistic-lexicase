@@ -484,7 +484,11 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
 
   // Setup fitness function
   network_world->SetFitFun([this](network_org_t & network) {
-    return (double)network.GetPhenotype().num_passes + ((double)(MAX_NETWORK_SIZE - network.GetSize())/(double)MAX_NETWORK_SIZE);
+    if (network.GetPhenotype().num_passes == MAX_PASSES) {
+      return (double)network.GetPhenotype().num_passes + ((double)(MAX_NETWORK_SIZE - network.GetSize())/(double)MAX_NETWORK_SIZE);
+    } else {
+      return (double)network.GetPhenotype().num_passes;
+    }
   });
 
   test_world->SetFitFun([](test_org_t & test) {
