@@ -12,7 +12,7 @@ EMP_BUILD_CONFIG(ProgramSynthesisConfig,
   VALUE(EVALUATION_MODE, size_t, 0, "How are programs evaluated? \n0: cohorts \n1: full (on all tests)"),
   VALUE(PROG_COHORT_SIZE, size_t, 32, "How big should random cohorts be (only relevant when evaluating with random cohort method)?"),
   VALUE(TEST_COHORT_SIZE, size_t, 32, "How big should random cohorts be (only relevant when evaluating with random cohort method)?"),
-  VALUE(TRAINING_EXAMPLE_MODE, size_t, 0, "How do training examples change over time? \n0: co-evolution \n1: static \n2: random"),
+  VALUE(TRAINING_EXAMPLE_MODE, size_t, 0, "How do training examples change over time? \n0: co-evolution \n1: static \n2: random \n3: Static-gen"),
   VALUE(PROBLEM, std::string, "number-io", "Which problem to use?"),
   VALUE(BENCHMARK_DATA_DIR, std::string, "../data/prog-synth-examples", "Location to look for problem test case data."),
 

@@ -72,7 +72,7 @@ constexpr size_t MEM_SIZE = TAG_WIDTH;
 // - coevolution - training examples co-evolve with programs
 // - static - training examples are static
 // - random - training examples randomly change over time
-enum TRAINING_EXAMPLE_MODE_TYPE { COEVOLUTION=0, STATIC, RANDOM };
+enum TRAINING_EXAMPLE_MODE_TYPE { COEVOLUTION=0, STATIC, RANDOM, STATIC_GEN };
 enum EVALUATION_TYPE { COHORT=0, FULL=1 };
 enum SELECTION_TYPE { LEXICASE=0, COHORT_LEXICASE, TOURNAMENT, DRIFT };
 
@@ -654,6 +654,8 @@ protected:
         };
         break;
       }
+      case (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC_GEN:
+        std::cout << "STATIC-GEN training example mode detected, configuring test world to NOT update (reusing STATIC code)." << std::endl;
       case (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC: {
         std::cout << "STATIC training example mode detected, configuring test world to NOT update." << std::endl;
         UpdateTestCaseWorld = [w]() {
@@ -686,7 +688,7 @@ protected:
         break;
       }
       default: {
-        std::cout << "Uknown TRAINING_EXAMPLE_MODE (" << TRAINING_EXAMPLE_MODE << "). Exiting." << std::endl;
+        std::cout << "Unknown TRAINING_EXAMPLE_MODE (" << TRAINING_EXAMPLE_MODE << "). Exiting." << std::endl;
         exit(-1);
       }
     };
@@ -803,6 +805,11 @@ protected:
       end_setup_sig.AddAction([this, w, test_set]() {                     // TODO - test that this is actually working!
         InitTestCasePop_TrainingSet(w, test_set);
       });
+    } else if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC_GEN) {
+      std::cout << "In STATIC_GEN training example mode bolstering training examples to match TEST_POP_SIZE (" << TEST_POP_SIZE << ")" << std::endl;
+      end_setup_sig.AddAction([this, w, test_set, gen_rand_test]() {       // TODO - test that this is actually working!
+        InitTestCasePop_TrainingSetBolstered(w, test_set, gen_rand_test);
+      });
     } else {
       end_setup_sig.AddAction([this, w, test_set, gen_rand_test]() {      // TODO - test that this is actually working!
         InitTestCasePop_Random(w, gen_rand_test);
@@ -817,6 +824,49 @@ protected:
     for (size_t i = 0; i < test_set.GetSize(); ++i) {
       w->Inject(test_set.GetInput(i), 1);
     }
+  }
+
+  // Initialize given world's population with training examples in given test case set.
+  template<typename WORLD_ORG_TYPE, typename TEST_IN_TYPE, typename TEST_OUT_TYPE>
+  void InitTestCasePop_TrainingSetBolstered(emp::Ptr<emp::World<WORLD_ORG_TYPE>> w, 
+                                            const TestCaseSet<TEST_IN_TYPE, TEST_OUT_TYPE> & test_set,
+                                            const std::function<typename emp::World<WORLD_ORG_TYPE>::genome_t(void)> & gen_rand) {
+    std::cout << "Initializing test case population from a training set then bolstering to TEST_POP_SIZE." << std::endl;
+    std::cout << "  Test set size = " << test_set.GetSize() << std::endl;
+    while (w->GetSize() < TEST_POP_SIZE) {
+      if (w->GetSize() < test_set.GetSize()) {
+        // std::cout << "Injecting test id " << w->GetSize() << std::endl;
+        w->Inject(test_set.GetInput(w->GetSize()), 1);
+      } else {
+        // std::cout << "Injecting randomly generated input " << std::endl;
+        bool dup = true;  // Assume a dup, prove it's not.
+        typename emp::World<WORLD_ORG_TYPE>::genome_t rand_genome = gen_rand();
+        while (dup) {
+          dup = false; // We have no reason to believe random is actually a duplicate.
+          for (size_t i = 0; i < w->GetSize(); ++i) {
+            if (w->GetGenomeAt(i) == rand_genome) {
+              dup = true;
+              rand_genome = gen_rand();
+              break;
+            }
+          }
+        }
+        w->Inject(rand_genome, 1);
+      }
+    }
+    std::cout << "  World size = " << w->GetSize() << std::endl;
+    // ensure uniqueness
+    bool unique = true;
+    for (size_t i = 0; i < w->GetSize() && unique; ++i) {
+      for (size_t k = i+1; k < w->GetSize() && unique; ++k) {
+        // std::cout << "Comparing " << i << " " << k << std::endl;
+        if (w->GetGenomeAt(i) == w->GetGenomeAt(k)) {
+          unique = false;
+        }
+      }
+    }
+    emp_assert(unique);
+    std::cout << "  Unique pop? " << unique << std::endl;
   }
 
   // Initialize given world's population randomly.
@@ -1860,25 +1910,25 @@ void ProgramSynthesisExperiment::SnapshotPrograms() {
 
 // ================= PROGRAM-RELATED FUNCTIONS ===========
 void ProgramSynthesisExperiment::InitProgPop_Random() {
-  // std::cout << "Randomly initializing program population." << std::endl;
-  // for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
-  //   prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
-  // }
-  emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
-  hardware_t::Program sol(inst_lib);
+  std::cout << "Randomly initializing program population." << std::endl;
+  for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
+    prog_world->Inject(TagLGP::GenRandTagGPProgram(*random, inst_lib, MIN_PROG_SIZE, MAX_PROG_SIZE), 1);
+  }
+  // emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
+  // hardware_t::Program sol(inst_lib);
 
-  sol.PushInst("LoadNum",    {matrix[0], matrix[8], matrix[8]});
-  sol.PushInst("Set-2",      {matrix[1], matrix[8], matrix[8]});
-  sol.PushInst("Set-6",      {matrix[2], matrix[8], matrix[8]});
-  sol.PushInst("CopyMem",    {matrix[0], matrix[3], matrix[8]});
-  sol.PushInst("Inc",        {matrix[3], matrix[8], matrix[8]});
-  sol.PushInst("Mult",       {matrix[0], matrix[3], matrix[4]});
-  sol.PushInst("Mult",       {matrix[0], matrix[1], matrix[5]});
-  sol.PushInst("Inc",        {matrix[5], matrix[8], matrix[8]});
-  sol.PushInst("Mult",       {matrix[4], matrix[5], matrix[6]});
-  sol.PushInst("Div",        {matrix[6], matrix[2], matrix[7]});
-  sol.PushInst("SubmitNum",  {matrix[7], matrix[8], matrix[8]});
-  prog_world->Inject(sol, PROG_POP_SIZE);
+  // sol.PushInst("LoadNum",    {matrix[0], matrix[8], matrix[8]});
+  // sol.PushInst("Set-2",      {matrix[1], matrix[8], matrix[8]});
+  // sol.PushInst("Set-6",      {matrix[2], matrix[8], matrix[8]});
+  // sol.PushInst("CopyMem",    {matrix[0], matrix[3], matrix[8]});
+  // sol.PushInst("Inc",        {matrix[3], matrix[8], matrix[8]});
+  // sol.PushInst("Mult",       {matrix[0], matrix[3], matrix[4]});
+  // sol.PushInst("Mult",       {matrix[0], matrix[1], matrix[5]});
+  // sol.PushInst("Inc",        {matrix[5], matrix[8], matrix[8]});
+  // sol.PushInst("Mult",       {matrix[4], matrix[5], matrix[6]});
+  // sol.PushInst("Div",        {matrix[6], matrix[2], matrix[7]});
+  // sol.PushInst("SubmitNum",  {matrix[7], matrix[8], matrix[8]});
+  // prog_world->Inject(sol, PROG_POP_SIZE);
 }
 
 void ProgramSynthesisExperiment::AddDefaultInstructions(const std::unordered_set<std::string> & includes={"Add","Sub","Mult","Div","Mod",
@@ -1986,9 +2036,8 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
   
   // Configure how population should be initialized
   SetupTestCasePop_Init(prob_NumberIO_world, 
-                        prob_utils_NumberIO.training_set,
-                        [this]() { return GenRandomTestInput_NumberIO(*random, {PROB_NUMBER_IO__INT_MIN, PROB_NUMBER_IO__INT_MAX}, {PROB_NUMBER_IO__DOUBLE_MIN, PROB_NUMBER_IO__DOUBLE_MAX}); } );
-
+                          prob_utils_NumberIO.training_set,
+                          [this]() { return GenRandomTestInput_NumberIO(*random, {PROB_NUMBER_IO__INT_MIN, PROB_NUMBER_IO__INT_MAX}, {PROB_NUMBER_IO__DOUBLE_MIN, PROB_NUMBER_IO__DOUBLE_MAX}); } );
   end_setup_sig.AddAction([this]() { std::cout << "TestCase world size = " << prob_NumberIO_world->GetSize() << std::endl; });
   
   // Tell world to calculate correct test output (given input) on placement.
