@@ -8,3 +8,5 @@
     what parameters work well for producing small sorting networks?
 - ant-lex-SN-exp-prelim
   - Preliminary antagonistic lexicase w/sorting networks submission script.
+- ant-lex-SN-exp-prelim-spt16
+  - Up sorts per test from 4 to 16
