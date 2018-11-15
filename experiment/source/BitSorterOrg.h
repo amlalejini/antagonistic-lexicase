@@ -61,15 +61,15 @@ public:
 };
 
 void BitSorterOrg::RandomizeGenome(emp::Random & rnd, size_t input_size, size_t network_size) {
-  BitSorter rand_sorter;
+  emp::BitSorter rand_sorter;
   for (size_t i = 0; i < network_size; ++i) {
     rand_sorter.AddCompare(rnd.GetUInt(0, input_size), rnd.GetUInt(0, input_size));
   }
   genome = rand_sorter;
 }
 
-void BitSorterOrg::Print(std::ostream & out=std::cout) const {
-  os << genome.AsString();
+void BitSorterOrg::Print(std::ostream & out) const {
+  out << genome.AsString();
 }
 
 #endif

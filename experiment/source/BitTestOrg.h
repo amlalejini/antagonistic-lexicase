@@ -41,7 +41,7 @@ protected:
 
 public:
 
-  BitTestOrg() : genome(0),  { ; }
+  BitTestOrg() : genome(0), phenotype()  { ; }
   BitTestOrg(const genome_t & _g) : genome(_g), phenotype() { ; }
 
   genome_t & GetGenome() { return genome; }
@@ -50,12 +50,12 @@ public:
   phenotype_t & GetPhenotype() { return phenotype; }
   const phenotype_t & GetPhenotype() const { return phenotype; }
 
-  void Print(std::ostream & out=std::cout) const;
+  void Print(size_t num_bits, std::ostream & out=std::cout) const;
 };
 
-void BitTestOrg::Print(size_t num_bits, std::ostream & out=std::cout) const {
+void BitTestOrg::Print(size_t num_bits, std::ostream & out) const {
   for (size_t id = num_bits; id > 0; id--) {
-    if (values & 1 << (id-1)) out << "1";
+    if (genome & 1 << (id-1)) out << "1";
     else out << "0";
   }
 }
