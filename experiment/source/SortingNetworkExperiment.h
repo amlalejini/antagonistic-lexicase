@@ -960,7 +960,7 @@ void SortingNetworkExperiment::SetupTestSelection() {
         });
       }
       do_selection_sig.AddAction([this]() {
-        emp::LexicaseSelect(*test_world, lexicase_test_fit_set, TEST_POP_SIZE, LEX_MAX_FUNS);
+        emp::LexicaseSelect_NAIVE(*test_world, lexicase_test_fit_set, TEST_POP_SIZE, LEX_MAX_FUNS);
       });
       break;
     }
