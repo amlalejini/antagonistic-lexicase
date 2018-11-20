@@ -1,5 +1,5 @@
 # Project-specific settings
-EXP_NAMES := sorting_networks prog_synth
+EXP_NAMES := sorting_networks prog_synth bit_sorter
 EMP_DIR := ../../Empirical/source
 CSV_READER_DIR := ../../csv-parser
 
