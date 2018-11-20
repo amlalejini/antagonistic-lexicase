@@ -808,7 +808,11 @@ protected:
     } else if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC_GEN) {
       std::cout << "In STATIC_GEN training example mode bolstering training examples to match TEST_POP_SIZE (" << TEST_POP_SIZE << ")" << std::endl;
       end_setup_sig.AddAction([this, w, test_set, gen_rand_test]() {       // TODO - test that this is actually working!
-        InitTestCasePop_TrainingSetBolstered(w, test_set, gen_rand_test);
+        if (PROBLEM == "sum-of-squares") {
+          InitTestCasePop_TrainingSetBolstered(w, test_set, gen_rand_test, false);
+        } else {
+          InitTestCasePop_TrainingSetBolstered(w, test_set, gen_rand_test, true);
+        }
       });
     } else {
       end_setup_sig.AddAction([this, w, test_set, gen_rand_test]() {      // TODO - test that this is actually working!
@@ -830,7 +834,8 @@ protected:
   template<typename WORLD_ORG_TYPE, typename TEST_IN_TYPE, typename TEST_OUT_TYPE>
   void InitTestCasePop_TrainingSetBolstered(emp::Ptr<emp::World<WORLD_ORG_TYPE>> w, 
                                             const TestCaseSet<TEST_IN_TYPE, TEST_OUT_TYPE> & test_set,
-                                            const std::function<typename emp::World<WORLD_ORG_TYPE>::genome_t(void)> & gen_rand) {
+                                            const std::function<typename emp::World<WORLD_ORG_TYPE>::genome_t(void)> & gen_rand,
+                                            bool guarantee_unique=true) {
     std::cout << "Initializing test case population from a training set then bolstering to TEST_POP_SIZE." << std::endl;
     std::cout << "  Test set size = " << test_set.GetSize() << std::endl;
     while (w->GetSize() < TEST_POP_SIZE) {
@@ -841,7 +846,7 @@ protected:
         // std::cout << "Injecting randomly generated input " << std::endl;
         bool dup = true;  // Assume a dup, prove it's not.
         typename emp::World<WORLD_ORG_TYPE>::genome_t rand_genome = gen_rand();
-        while (dup) {
+        while (dup && guarantee_unique) {
           dup = false; // We have no reason to believe random is actually a duplicate.
           for (size_t i = 0; i < w->GetSize(); ++i) {
             if (w->GetGenomeAt(i) == rand_genome) {
@@ -855,6 +860,7 @@ protected:
       }
     }
     std::cout << "  World size = " << w->GetSize() << std::endl;
+    
     // ensure uniqueness
     bool unique = true;
     for (size_t i = 0; i < w->GetSize() && unique; ++i) {
@@ -865,7 +871,8 @@ protected:
         }
       }
     }
-    emp_assert(unique);
+
+    if (guarantee_unique) { emp_assert(unique); }
     std::cout << "  Unique pop? " << unique << std::endl;
   }
 
