@@ -27,6 +27,6 @@ int main(int argc, char* argv[])
 
   BitSorterExperiment e;
   e.Setup(config);
-  // e.Run();
+  e.Run();
 
 }

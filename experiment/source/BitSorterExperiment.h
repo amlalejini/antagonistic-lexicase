@@ -293,12 +293,13 @@ void BitSorterExperiment::Setup(const BitSorterConfig & config) {
   test_world->SetPopStruct_Mixed(true);
 
   smallest_known_sol_size = MAX_NETWORK_SIZE + 1;
+  solution_found = false;
 
   // How does the sorter world update?
   do_update_sig.AddAction([this]() {
     std::cout << "Update: " << update << ", ";
     std::cout << "best sorter (size=" << sorter_world->GetOrg(dominant_sorter_id).GetSize() << "): " << sorter_world->CalcFitnessID(dominant_sorter_id) << ", ";
-    std::cout << "solution? " << solution_found << ", smallest solution size: " << smallest_known_sol_size << std::endl;
+    std::cout << "solution? " << (size_t)solution_found << ", smallest solution size: " << smallest_known_sol_size << std::endl;
 
     if (update % SNAPSHOT_INTERVAL) do_snapshot_sig.Trigger();
 
@@ -377,11 +378,32 @@ void BitSorterExperiment::Setup(const BitSorterConfig & config) {
 
   // todo - setup sorter snapshots
   // todo - setup test snapshots
-  // todo - setup test updates
 
   end_setup_sig.Trigger();
   setup = true;
   std::cout << "Finished experiment setup." << std::endl;
+}
+
+/// Run the experiment start->finish
+/// (1) Initialize population(s)
+/// (2) For each generation, RunStep()
+void BitSorterExperiment::Run() {
+  for (update = 0; update <= GENERATIONS; ++update) {
+    RunStep();
+  }
+}
+
+/// Progress experiment by a single time step (generation):
+/// - (1) Evaluate populations
+/// - (2) Select who gets to reproduce
+/// - (3) Update the worlds
+void BitSorterExperiment::RunStep() {
+  // std::cout << "-- Doing Evaluation --" << std::endl;
+  do_evaluation_sig.Trigger();
+  // std::cout << "-- Doing Selection --" << std::endl;
+  do_selection_sig.Trigger();
+  // std::cout << "-- Doing Update --" << std::endl;
+  do_update_sig.Trigger();
 }
 
 void BitSorterExperiment::InitConfigs(const BitSorterConfig & config) {
@@ -524,7 +546,7 @@ void BitSorterExperiment::SetupEvaluation() {
           solution_found = true;
           smallest_known_sol_size = sorter_org.GetGenome().GetSize();
           // Add to solutions file.
-          solution_file->Update(); // TODO - setup solution file
+          // solution_file->Update(); // TODO - setup solution file
         }
       }
     }
@@ -533,7 +555,7 @@ void BitSorterExperiment::SetupEvaluation() {
 
 void BitSorterExperiment::SetupSelection() {
   SetupSorterSelection();
-  SetupTestSelection();
+  if (TEST_MODE == TEST_MODES::COEVOLVE) { SetupTestSelection(); }
 }
 
 void BitSorterExperiment::SetupSorterSelection() {
@@ -555,10 +577,12 @@ void BitSorterExperiment::SetupSorterSelection() {
       });
       // Setup selection signal action.
       do_selection_sig.AddAction([this]() {
+        std::cout << "=>Enter: Sorter Lexicase selection" << std::endl;
         emp::LexicaseSelect_NAIVE(*sorter_world, 
                                   lexicase_sorter_fit_set, 
                                   SORTER_POP_SIZE,
                                   LEX_MAX_FUNS);
+        std::cout << "=>Exit: Sorter Lexicase selection" << std::endl;
       });
       break;
     }
@@ -622,7 +646,9 @@ void BitSorterExperiment::SetupTestSelection() {
         });
       }
       do_selection_sig.AddAction([this]() {
+        std::cout << "=>Enter: Test Lexicase selection" << std::endl;
         emp::LexicaseSelect_NAIVE(*test_world, lexicase_test_fit_set, TEST_POP_SIZE, LEX_MAX_FUNS);
+        std::cout << "=>Exit: Test Lexicase selection" << std::endl;
       });
       break;
     }
@@ -692,6 +718,7 @@ void BitSorterExperiment::SetupSorterMutation() {
 
   if (PER_SORTER_MUTATION) {
     sorter_world->SetMutFun([this](sorter_org_t & sorter_org, emp::Random & rnd) {
+      // return 1.0;
       return sorter_mutator.Mutate(rnd, sorter_org.GetGenome());
     });
   } else {
