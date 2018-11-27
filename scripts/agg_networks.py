@@ -102,7 +102,7 @@ def main():
             sorts_per_antagonist = "NONE"
         
         #"treatment,run_id,uses_cohorts,solution_found,solution_size,update_found,fitness,num_antagonists,sorts_per_antagonist,network\n"
-        solutions_content += ",".join(map(str,[treatment, run_id, uses_cohorts, sol_found, update_found, fitness, num_antagonists, sorts_per_antagonist, '"{}"'.format(network)])) + "\n"
+        solutions_content += ",".join(map(str,[treatment, run_id, uses_cohorts, sol_found, network_size, update_found, fitness, num_antagonists, sorts_per_antagonist, '"{}"'.format(network)])) + "\n"
     with open(os.path.join(dump, "min_networks_{}.csv".format(update)), "w") as fp:
         fp.write(solutions_content)
 
