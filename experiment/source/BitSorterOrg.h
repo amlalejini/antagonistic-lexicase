@@ -30,6 +30,17 @@ public:
       num_passes = 0;
       num_fails = 0;
     }
+
+    void RecordPassFail(size_t testID, bool pass) {
+      test_passes[testID] = (size_t)pass;
+      if (pass) ++num_passes;
+      else ++num_fails;
+    }
+
+    void RecordScore(size_t testID, double score) {
+      test_scores[testID] = score;
+      total_score += score;
+    }
   };
 
   using phenotype_t = Phenotype;

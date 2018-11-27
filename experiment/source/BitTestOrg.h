@@ -28,6 +28,18 @@ public:
       num_passes = 0;
       num_fails = 0;
     }
+
+    void RecordPassFail(size_t testID, bool pass) {
+      test_passes[testID] = (size_t)pass;
+      if (pass) ++num_passes;
+      else ++num_fails;
+    }
+
+    void RecordScore(size_t testID, double score) {
+      test_scores[testID] = score;
+      total_score += score;
+    }
+  
   };
   
   using test_t = uint32_t;
@@ -46,6 +58,8 @@ public:
 
   genome_t & GetGenome() { return genome; }
   const genome_t & GetGenome() const { return genome; }  
+
+  void SetGenome(uint32_t in) { genome = in; } 
 
   phenotype_t & GetPhenotype() { return phenotype; }
   const phenotype_t & GetPhenotype() const { return phenotype; }
