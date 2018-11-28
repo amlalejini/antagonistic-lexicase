@@ -2935,7 +2935,7 @@ struct ProblemUtilities_VectorsSummed {
       for (size_t i = 0; i < correct_test_output.size(); ++i) {
         if (i < sub.size()) {
           // Add error.
-          error += emp::Abs(correct_test_output[i] - sub[i]);
+          error += emp::Abs((double)((double)correct_test_output[i] - (double)sub[i]));
         } else {
           // Add max error.
           error += (2*MAX_NUM);
@@ -2945,7 +2945,27 @@ struct ProblemUtilities_VectorsSummed {
       if (sub.size() > correct_test_output.size()) {
         error += (2*MAX_NUM) * (sub.size() - correct_test_output.size());
       }
-      double score = (error <= MAX_ERROR) ? 1 - (error/(double)MAX_ERROR) : 0.0;
+      // Make sure programs that overflow error to be negative (WTF?) don't get really high scores.
+      double score = (error <= MAX_ERROR && error >= 0) ? 1 - (error/(double)MAX_ERROR) : 0.0;
+
+      // if (score > 1000) {
+      //   std::cout << "Score is greater than 1000!" << std::endl;
+      //   std::cout << "  Score = " << score << std::endl;
+      //   std::cout << "  Max number = " << MAX_NUM << std::endl;
+      //   std::cout << "  Max error = " << MAX_ERROR << std::endl;
+      //   std::cout << "  Calculated error = " << error << std::endl;
+      //   std::cout << "  Correct output: [";
+      //   for (size_t i = 0; i < correct_test_output.size(); ++i) {
+      //     if (i) std::cout << ",";
+      //     std::cout << correct_test_output[i];
+      //   } std::cout << "]" << std::endl;
+      //   std::cout << "  Sub output: [";
+      //   for (size_t i = 0; i < sub.size(); ++i) {
+      //     if (i) std::cout << ",";
+      //     std::cout << sub[i];
+      //   } std::cout << "]" << std::endl;
+      // }
+
       return {score, false};
     }
   }
