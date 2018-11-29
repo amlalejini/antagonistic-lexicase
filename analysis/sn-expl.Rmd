@@ -1,0 +1,129 @@
+---
+title: "Sorting network data exploration"
+output: 
+  html_document: 
+    keep_md: yes
+    toc: true
+    toc_float: true
+    collapsed: false
+    theme: default
+  pdf_document: default
+---
+
+## Setup
+
+### Dependencies
+
+```{r}
+
+library(readr)
+library(tidyr)
+library(ggplot2)
+library(plyr)
+library(reshape2)
+library(cowplot)
+
+source("https://gist.githubusercontent.com/benmarwick/2a1bb0133ff568cbe28d/raw/fb53bd97121f7f9ce947837ef1a4c65a73bffb3f/geom_flat_violin.R")
+```
+
+### Load Data
+
+```{r}
+min_networks_31250_data_loc <- "../data/sn-exp-data/min_networks_31250.csv"
+min_networks_32K_data_loc <- "../data/sn-exp-data/min_networks_32000.csv"
+min_networks_60K_data_loc <- "../data/sn-exp-data/min_networks_60000.csv"
+min_networks_1000K_data_loc <- "../data/sn-exp-data/min_networks_1000000.csv"
+
+min_networks_31250_sol_summary_loc <- "../data/sn-exp-data/min_networks_31250__solutions_summary.csv"
+min_networks_1000K_sol_summary_loc <- "../data/sn-exp-data/min_networks_1000000__solutions_summary.csv"
+
+```
+
+```{r}
+min_networks_31250 <- read.csv(min_networks_31250_data_loc, na.strings = "NONE")
+min_networks_32K <- read.csv(min_networks_32K_data_loc, na.strings = "NONE")
+min_networks_60K <- read.csv(min_networks_60K_data_loc, na.strings="NONE")
+min_networks_1000K <- read.csv(min_networks_1000K_data_loc, na.strings="NONE")
+
+min_networks_31250_sol_summary <- read.csv(min_networks_31250_sol_summary_loc, na.strings = "NONE")
+min_networks_1000K_sol_summary <- read.csv(min_networks_1000K_sol_summary_loc, na.strings="NONE")
+
+```
+
+## Analysis
+
+```{r}
+
+# ggplot(data = filter(min_networks_60K, uses_cohorts == "0"), mapping=aes(x=treatment, y=solution_size)) +
+#     geom_boxplot() +
+#     geom_jitter(position=position_jitter(width=.1, height=0)) +
+#     coord_flip()
+
+# ggplot(data = filter(min_networks_60K, uses_cohorts == "0" & solution_found == "True"), mapping=aes(treatment)) +
+#     geom_bar()
+
+ggplot(data = filter(min_networks_60K, uses_cohorts == "0"), mapping=aes(x=treatment, y=solution_size, fill=treatment, colour=treatment)) +
+    geom_flat_violin(position=position_nudge(x=.2, y=0), adjust=2) +
+    geom_point(position = position_jitter(width = .15), size = .25) +
+    geom_boxplot(aes(x = treatment, y = solution_size),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
+    ylab("Solution Size") + xlab("Condition") + coord_flip() + guides(fill=FALSE, colour=FALSE) +
+    ggtitle("Lexicase selection")
+
+ggsave(file="min_networks_60K.pdf")
+```
+
+```{r}
+# 
+# ggplot(data = filter(min_networks_1000K, uses_cohorts == "1"), mapping=aes(x=treatment, y=solution_size)) +
+#     geom_boxplot() +
+#     geom_jitter(position=position_jitter(width=.1, height=0)) +
+#     coord_flip()
+
+# ggplot(data = filter(min_networks_1000K, uses_cohorts == "1" & solution_found == "True"), mapping=aes(x=treatment, fill=treatment)) +
+#     geom_bar() + xlab("Condition") + ylab("Solutions Found") + guides(fill=FALSE) +
+#     geom_text(stat='count', aes(label=..count..), nudge_y=-1) +
+#     coord_flip()
+
+ggplot(data = filter(min_networks_1000K_sol_summary, uses_cohorts == "1"), mapping=aes(x=treatment, y=solutions_found, fill=treatment)) +
+    geom_bar(stat="identity") + xlab("Condition") + ylab("Solutions Found") + guides(fill=FALSE) +
+    geom_text(aes(label=solutions_found), nudge_y=1) +
+    coord_flip()
+
+ggplot(data = filter(min_networks_1000K, uses_cohorts == "1"), mapping=aes(x=treatment, y=solution_size, fill=treatment, colour=treatment)) +
+    geom_flat_violin(position=position_nudge(x=.2, y=0), adjust=2) +
+    geom_point(position = position_jitter(width = .15), size = .25) +
+    geom_boxplot(aes(x = treatment, y = solution_size),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
+    ylab("Solution Size") + ylim(60, 130) + xlab("Condition") + coord_flip() + guides(fill=FALSE, colour=FALSE) +
+    ggtitle("Cohort lexicase selection") + ggsave("cohorts_min_networks_1000K.pdf")
+    
+```
+
+
+```{r}
+
+
+ggplot(data = min_networks_31250_sol_summary, mapping=aes(x=treatment, y=solutions_found, fill=treatment)) +
+    geom_bar(stat="identity") + xlab("Condition") + ylab("Solutions Found") + guides(fill=FALSE) +
+    geom_text(aes(label=solutions_found), nudge_y=1) +
+    coord_flip()
+
+ggplot(data = min_networks_31250, mapping=aes(x=treatment, y=solution_size, fill=treatment, colour=treatment)) +
+    geom_flat_violin(position=position_nudge(x=.2, y=0), adjust=2) +
+    geom_point(position = position_jitter(width = .15), size = .25) +
+    geom_boxplot(aes(x = treatment, y = solution_size),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
+    ylab("Solution Size") + ylim(60, 130) + xlab("Condition") + coord_flip() + guides(fill=FALSE, colour=FALSE) +
+    ggtitle("lexicase selection @ gen 31,250") + ggsave("min_networks_31250.pdf")
+
+ggplot(data = filter(min_networks_31250_sol_summary, uses_cohorts == "0"), mapping=aes(x=treatment, y=solutions_found, fill=treatment)) +
+    geom_bar(stat="identity") + xlab("Condition") + ylab("Solutions Found") + guides(fill=FALSE) +
+    geom_text(aes(label=solutions_found), nudge_y=1) +
+    coord_flip()
+
+ggplot(data = filter(min_networks_31250, uses_cohorts=="0"), mapping=aes(x=treatment, y=solution_size, fill=treatment, colour=treatment)) +
+    geom_flat_violin(position=position_nudge(x=.2, y=0), adjust=2) +
+    geom_point(position = position_jitter(width = .15), size = .25) +
+    geom_boxplot(aes(x = treatment, y = solution_size),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
+    ylab("Solution Size") + ylim(60, 130) + xlab("Condition") + coord_flip() + guides(fill=FALSE, colour=FALSE) +
+    ggtitle("lexicase selection @ gen 31,250") + ggsave("min_networks_31250_nocohorts.pdf")
+```
+    
