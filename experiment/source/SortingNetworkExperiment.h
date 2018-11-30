@@ -455,7 +455,8 @@ void SortingNetworkExperiment::Setup(const SortingNetworkConfig & config) {
   do_update_sig.AddAction([this]() {
     std::cout << "Update: " << update << ", ";
     std::cout << "best-network (size=" << network_world->GetOrg(dominant_network_id).GetSize() << "): " << network_world->CalcFitnessID(dominant_network_id) << ", ";
-    std::cout << "best-test: " << test_world->CalcFitnessID(dominant_test_id) << std::endl;
+    // std::cout << "best-test: " << test_world->CalcFitnessID(dominant_test_id) << std::endl;
+    std::cout << "solution found? " << (smallest_known_sol_size < (MAX_NETWORK_SIZE + 1)) << "; Solution size: " << smallest_known_sol_size << std::endl;
     
     if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger();
     // if (update % SOLUTION_SCREEN_INTERVAL == 0) do_sol_screen_sig.Trigger();
@@ -1156,7 +1157,20 @@ void SortingNetworkExperiment::SetupSolutionsFile() {
   });
   
   std::function<size_t(void)> get_update = [this]() { return network_world->GetUpdate(); };
+  
+  std::function<double(void)> get_evaluations = [this]() { // --bookmark--
+    if (SELECTION_MODE == SELECTION_METHODS::COHORT_LEXICASE) {
+      // evals = update * (test cohort size * program cohort size * num cohorts)
+      return network_world->GetUpdate() * COHORT_SIZE * COHORT_SIZE * network_cohorts.GetNumCohorts();
+    } else {
+      return network_world->GetUpdate() * network_world->GetSize() * test_world->GetSize();
+    }
+  };
+
+
   sol_file->AddFun(get_update, "update");
+  sol_file->AddFun(get_evaluations, "evaluations");
+
   sol_file->AddFun(get_networkID, "network_id", "Network ID");
   
   sol_file->AddFun(get_network_fitness, "fitness");
@@ -1184,6 +1198,7 @@ void SortingNetworkExperiment::SetupSolutionsFile() {
   });
 
   small_sol_file->AddFun(get_update, "update");
+  small_sol_file->AddFun(get_evaluations, "evaluations");
   small_sol_file->AddFun(get_networkID, "network_id", "Network ID");
   small_sol_file->AddFun(get_network_fitness, "fitness");
   small_sol_file->AddFun(get_network_pass_total, "pass_total");
