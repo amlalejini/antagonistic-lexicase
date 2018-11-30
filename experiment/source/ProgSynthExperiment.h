@@ -1766,7 +1766,17 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
   // Setup solution file.
   solution_file = emp::NewPtr<emp::DataFile>(DATA_DIRECTORY + "/solutions.csv");
   std::function<size_t(void)> get_update = [this]() { return prog_world->GetUpdate(); };
+  std::function<double(void)> get_evaluations = [this]() {
+    if (EVALUATION_MODE == (size_t)EVALUATION_TYPE::COHORT) {
+      // update * cohort size * cohort size * num cohorts
+      return prog_world->GetUpdate() * PROG_COHORT_SIZE * TEST_COHORT_SIZE * NUM_COHORTS;
+    } else {
+      return prog_world->GetUpdate() * PROG_POP_SIZE * TEST_POP_SIZE;
+    }
+  };
+
   solution_file->AddFun(get_update, "update");
+  solution_file->AddFun(get_evaluations, "evaluations");
   solution_file->AddFun(program_stats.get_id, "program_id");
   solution_file->AddFun(program_stats.get_program_len, "program_len");
   solution_file->AddFun(program_stats.get_program, "program");
