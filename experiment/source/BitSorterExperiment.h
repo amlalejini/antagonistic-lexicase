@@ -25,6 +25,7 @@
 #include "BitTestOrg.h"
 #include "Selection.h"
 #include "Mutators.h"
+#include "BitSorterMutators.h"
 
 #include "BitSorterConfig.h"
 
