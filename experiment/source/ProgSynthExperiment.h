@@ -152,6 +152,7 @@ public:
 
   using prog_org_t = ProgOrg<TAG_WIDTH>;
   using prog_org_phen_t = typename prog_org_t::Phenotype;
+  using prog_org_gen_t = typename prog_org_t::genome_t;
 
   using prog_world_t = emp::World<prog_org_t>;
 
@@ -434,6 +435,7 @@ protected:
   emp::BitSet<TAG_WIDTH> call_tag;
   
   emp::Ptr<prog_world_t> prog_world;
+  emp::Ptr<emp::Systematics<prog_org_t, prog_org_gen_t>> prog_genotypic_systematics;
   
   emp::vector<std::function<double(prog_org_t &)>> lexicase_prog_fit_set;
 
@@ -1013,6 +1015,7 @@ public:
       eval_hardware.Delete();
       inst_lib.Delete();
       prog_world.Delete();
+      prog_genotypic_systematics.Delete();
 
       if (prob_NumberIO_world != nullptr) prob_NumberIO_world.Delete();
       if (prob_SmallOrLarge_world != nullptr) prob_SmallOrLarge_world.Delete();
@@ -1843,6 +1846,38 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
   // Setup snapshot program stats.
   SetupProgramStats();
 
+  // Setup program systematics
+  prog_genotypic_systematics = emp::NewPtr<emp::Systematics<prog_org_t, prog_org_gen_t>>([](const prog_org_t & o) { return o.GetGenome(); });
+  prog_genotypic_systematics->AddEvolutionaryDistinctivenessDataNode();
+  prog_genotypic_systematics->AddPairwiseDistanceDataNode();
+  prog_genotypic_systematics->AddPhylogeneticDiversityDataNode();
+  prog_world->AddSystematics(prog_genotypic_systematics, "prog_genotype");
+  auto & prog_gen_sys_file = prog_world->SetupSystematicsFile("prog_genotype", DATA_DIRECTORY + "/prog_gen_sys.csv", false);
+  prog_gen_sys_file.SetTimingRepeat(SUMMARY_STATS_INTERVAL);
+  // Default systematics functions:
+  // - GetNumActive (taxa)
+  // - GetTotalOrgs (total orgs tracked)
+  // - GetAveDepth (average phylo depth of organisms)
+  // - GetNumRoots
+  // - GetMRCADepth
+  // - CalcDiversity (entropy of taxa in population)
+  // Functions to add:
+  prog_gen_sys_file.AddStats(*prog_genotypic_systematics->GetDataNode("evolutionary_distinctiveness") , "evolutionary_distinctiveness", "evolutionary distinctiveness for a single update", true, true);
+  prog_gen_sys_file.AddStats(*prog_genotypic_systematics->GetDataNode("pairwise_distances"), "pairwise_distance", "pairwise distance for a single update", true, true);
+  // - GetPhylogeneticDiversity
+  prog_gen_sys_file.AddCurrent(*prog_genotypic_systematics->GetDataNode("phylogenetic_diversity"), "current_phylogenetic_diversity", "current phylogenetic_diversity", true, true);
+  // - GetTreeSize
+  prog_gen_sys_file.template AddFun<size_t>([this]() { return prog_genotypic_systematics->GetTreeSize(); }, "tree_size", "Phylogenetic tree size");
+  prog_gen_sys_file.PrintHeaderKeys();
+
+  // Add function(s) to program systematics snapshot
+  using pg_taxon_t = typename emp::Systematics<prog_org_t, prog_org_gen_t>::taxon_t;
+  prog_genotypic_systematics->AddSnapshotFun([](const pg_taxon_t & t) {
+    std::ostringstream stream;
+    t.GetInfo().PrintCSVEntry(stream);
+    return stream.str();
+  }, "program", "Program");
+
   // Setup solution file.
   solution_file = emp::NewPtr<emp::DataFile>(DATA_DIRECTORY + "/solutions.csv");
   std::function<size_t(void)> get_update = [this]() { return prog_world->GetUpdate(); };
@@ -2003,6 +2038,9 @@ void ProgramSynthesisExperiment::SnapshotPrograms() {
     DoTestingSetValidation(prog_world->GetOrg(stats_util.cur_progID)); // Do validation for program.
     file.Update();
   }
+
+  // Snapshot phylogeny
+  prog_genotypic_systematics->Snapshot(snapshot_dir + "/program_phylogeny_" + emp::to_string((int)prog_world->GetUpdate()) + ".csv");
 }
 
 // ================= PROGRAM-RELATED FUNCTIONS ===========
