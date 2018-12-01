@@ -920,8 +920,6 @@ void SortingNetworkExperiment::SetupNetworkMutation() {
     });
   }
 
-
-
   end_setup_sig.AddAction([this]() {
     network_world->SetAutoMutate(); // After we've initialized populations, turn auto-mutate on.
   });

@@ -72,7 +72,8 @@ constexpr size_t MEM_SIZE = TAG_WIDTH;
 // - coevolution - training examples co-evolve with programs
 // - static - training examples are static
 // - random - training examples randomly change over time
-enum TRAINING_EXAMPLE_MODE_TYPE { COEVOLUTION=0, STATIC, RANDOM, STATIC_GEN };
+// - static gen - use loaded training examples, but generate more random examples
+enum TRAINING_EXAMPLE_MODE_TYPE { COEVOLUTION=0, STATIC, RANDOM, STATIC_GEN, STATIC_COEVO };
 enum EVALUATION_TYPE { COHORT=0, FULL=1 };
 enum SELECTION_TYPE { LEXICASE=0, COHORT_LEXICASE, TOURNAMENT, DRIFT };
 
@@ -419,6 +420,8 @@ protected:
   size_t PROGRAM_EVALUATION_TESTCASE_CNT; ///< How many test cases are organisms evaluated on during evaluation?
   size_t NUM_COHORTS;
 
+  size_t STATIC_COEVO__NUM_STATIC_TESTCASES;
+
   emp::Ptr<emp::Random> random;
 
   emp::Ptr<inst_lib_t> inst_lib;
@@ -670,6 +673,14 @@ protected:
         };
         break;
       }
+      case (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC_COEVO: {
+        std::cout << "STATIC_COEVO training example mode detected, configuring test world to update." << std::endl;
+        UpdateTestCaseWorld = [w]() {
+          w->Update();
+          w->ClearCache();
+        };
+        break;
+      }
       case (size_t)TRAINING_EXAMPLE_MODE_TYPE::RANDOM: {
         std::cout << "RANDOM training example mode detected, configuring test world to NOT update. Instead, RANDOMIZE population." << std::endl;
         UpdateTestCaseWorld = [w]() {
@@ -696,7 +707,18 @@ protected:
 
   template<typename WORLD_ORG_TYPE>
   void SetupTestSelection(emp::Ptr<emp::World<WORLD_ORG_TYPE>> w, emp::vector<std::function<double(WORLD_ORG_TYPE &)>> & lexicase_fit_set) {
-    std::cout << "Setting up test selection." << std::endl;
+    std::cout << "Setting up test selection." << std::endl; 
+
+    if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC_COEVO) {
+      std::cout << "STATIC_COEVO mode, need to copy first STATIC_NUM (" << STATIC_COEVO__NUM_STATIC_TESTCASES << ") organisms." << std::endl;
+      do_selection_sig.AddAction([this, w]() mutable {
+        for (size_t i = 0; i < STATIC_COEVO__NUM_STATIC_TESTCASES; ++i) {
+          w->DoBirth(w->GetGenomeAt(i), i);
+          // note - may need to reset phenotype
+        }
+      });
+    }
+
     switch (TEST_SELECTION_MODE) {
       case (size_t)SELECTION_TYPE::LEXICASE: {
         emp_assert(EVALUATION_MODE == (size_t)EVALUATION_TYPE::FULL);
@@ -759,6 +781,20 @@ protected:
         exit(-1);
       }
     }
+
+    if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC_COEVO) {
+      std::cout << "STATIC_COEVO mode, need to fix population size post-selection." << std::endl;
+      do_selection_sig.AddAction([this, w]() mutable {
+        // std::cout << "Population size pre-resize? " << w->GetSize() << std::endl;
+        // Shuffle the non-static test cases to be fair to late cohorts
+        for (size_t i = STATIC_COEVO__NUM_STATIC_TESTCASES; i < w->GetSize(); ++i) {
+          w->Swap(i, w->GetRandom().GetUInt(STATIC_COEVO__NUM_STATIC_TESTCASES, w->GetSize()));
+        }
+        w->Resize(TEST_POP_SIZE);
+        // std::cout << "Population size? " << w->GetSize() << std::endl;
+      });
+    }
+
   }
 
   void OnPlacement_ActiveTestCaseWorld(const std::function<void(size_t)> & fun) {
@@ -799,6 +835,7 @@ protected:
   void SetupTestCasePop_Init(emp::Ptr<emp::World<WORLD_ORG_TYPE>> w, TestCaseSet<TEST_IN_TYPE, TEST_OUT_TYPE> & test_set,
                              const std::function<typename emp::World<WORLD_ORG_TYPE>::genome_t(void)> & gen_rand_test) {
     // Configure how population should be initialized -- TODO - maybe move this into functor(?)
+    
     if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC) {
       TEST_POP_SIZE = test_set.GetSize();
       std::cout << "In STATIC training example mode, adjusting TEST_POP_SIZE to: " << TEST_POP_SIZE << std::endl;
@@ -814,7 +851,18 @@ protected:
           InitTestCasePop_TrainingSetBolstered(w, test_set, gen_rand_test, true);
         }
       });
+    } else if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC_COEVO) {
+      std::cout << "In STATIC_COEVO training example mode, bolstering training examples to match pop size." << std::endl;
+      STATIC_COEVO__NUM_STATIC_TESTCASES = test_set.GetSize(); // Number of test cases to never mutate
+      end_setup_sig.AddAction([this, w, test_set, gen_rand_test]() {       // TODO - test that this is actually working!
+        if (PROBLEM == "sum-of-squares") {
+          InitTestCasePop_TrainingSetBolstered(w, test_set, gen_rand_test, false);
+        } else {
+          InitTestCasePop_TrainingSetBolstered(w, test_set, gen_rand_test, true);
+        }
+      });
     } else {
+      std::cout << "Generating training example population randomly." << std::endl;
       end_setup_sig.AddAction([this, w, test_set, gen_rand_test]() {      // TODO - test that this is actually working!
         InitTestCasePop_Random(w, gen_rand_test);
       });
@@ -1431,7 +1479,7 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
               // - double score;
               // - bool pass;
               // - bool sub;
-
+        
               // Update program phenotype.
               prog_phen.RecordScore(tID, result.score);
               prog_phen.RecordPass(tID, result.pass);
@@ -1550,7 +1598,7 @@ void ProgramSynthesisExperiment::SetupSelection() {
   // (1) Setup program selection.
   SetupProgramSelection();
   // (2) Setup test selection.
-  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::COEVOLUTION) {
+  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::COEVOLUTION || TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC_COEVO) {
     std::cout << "COEVOLUTION training example mode detected, setting up test case selection." << std::endl;
     if (prob_NumberIO_world != nullptr) { SetupTestSelection(prob_NumberIO_world, prob_utils_NumberIO.lexicase_fit_set); }
     else if (prob_SmallOrLarge_world != nullptr) { SetupTestSelection(prob_SmallOrLarge_world, prob_utils_SmallOrLarge.lexicase_fit_set); }
@@ -1711,6 +1759,38 @@ void ProgramSynthesisExperiment::SetupMutation() {
     else if (prob_Median_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Median_world->SetAutoMutate(); }); }
     else if (prob_Smallest_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Smallest_world->SetAutoMutate(); }); }
     else if (prob_Syllables_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Syllables_world->SetAutoMutate(); }); }
+    else { std::cout << "AHH! None of the worlds have been initialized. Exiting." << std::endl; exit(-1); }
+  } else if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC_COEVO) {
+    std::cout << "STATIC_COEVO training mode detected. Setting test world to AUTO-MUTATE (only if mut pos >= " << STATIC_COEVO__NUM_STATIC_TESTCASES << ")." << std::endl;
+    // std::function<bool(size_t pos)> test_fun = [this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; };
+    if (prob_NumberIO_world != nullptr) { end_setup_sig.AddAction([this]() { prob_NumberIO_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_SmallOrLarge_world != nullptr) { end_setup_sig.AddAction([this]() { prob_SmallOrLarge_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_ForLoopIndex_world != nullptr) { end_setup_sig.AddAction([this]() { prob_ForLoopIndex_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_CompareStringLengths_world != nullptr) { end_setup_sig.AddAction([this]() { prob_CompareStringLengths_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_DoubleLetters_world != nullptr) { end_setup_sig.AddAction([this]() { prob_DoubleLetters_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_CollatzNumbers_world != nullptr) { end_setup_sig.AddAction([this]() { prob_CollatzNumbers_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_ReplaceSpaceWithNewline_world != nullptr) { end_setup_sig.AddAction([this]() { prob_ReplaceSpaceWithNewline_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_StringDifferences_world != nullptr) { end_setup_sig.AddAction([this]() { prob_StringDifferences_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_EvenSquares_world != nullptr) { end_setup_sig.AddAction([this]() { prob_EvenSquares_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_WallisPi_world != nullptr) { end_setup_sig.AddAction([this]() { prob_WallisPi_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_StringLengthsBackwards_world != nullptr) { end_setup_sig.AddAction([this]() { prob_StringLengthsBackwards_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_LastIndexOfZero_world != nullptr) { end_setup_sig.AddAction([this]() { prob_LastIndexOfZero_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_VectorAverage_world != nullptr) { end_setup_sig.AddAction([this]() { prob_VectorAverage_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_CountOdds_world != nullptr) { end_setup_sig.AddAction([this]() { prob_CountOdds_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_MirrorImage_world != nullptr) { end_setup_sig.AddAction([this]() { prob_MirrorImage_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_SuperAnagrams_world != nullptr) { end_setup_sig.AddAction([this]() { prob_SuperAnagrams_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_SumOfSquares_world != nullptr) { end_setup_sig.AddAction([this]() { prob_SumOfSquares_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_VectorsSummed_world != nullptr) { end_setup_sig.AddAction([this]() { prob_VectorsSummed_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_XWordLines_world != nullptr) { end_setup_sig.AddAction([this]() { prob_XWordLines_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_PigLatin_world != nullptr) { end_setup_sig.AddAction([this]() { prob_PigLatin_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_NegativeToZero_world != nullptr) { end_setup_sig.AddAction([this]() { prob_NegativeToZero_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_ScrabbleScore_world != nullptr) { end_setup_sig.AddAction([this]() { prob_ScrabbleScore_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_Checksum_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Checksum_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_Digits_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Digits_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_Grade_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Grade_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_Median_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Median_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_Smallest_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Smallest_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
+    else if (prob_Syllables_world != nullptr) { end_setup_sig.AddAction([this]() { prob_Syllables_world->SetAutoMutate([this](size_t p) { return p >= STATIC_COEVO__NUM_STATIC_TESTCASES; }); }); }
     else { std::cout << "AHH! None of the worlds have been initialized. Exiting." << std::endl; exit(-1); }
   }
 }
