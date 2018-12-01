@@ -399,6 +399,12 @@ struct ProblemUtilities_NumberIO {
     }
   }
 
+  void PrintTestCSV(std::ostream & os, const input_t & in) const {
+    os << "\"";
+    os << in.first << "," << in.second;
+    os << "\"";
+  }
+
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -526,6 +532,12 @@ struct ProblemUtilities_SmallOrLarge {
   std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
     const bool pass = (sub == correct_test_output);
     return {(double)pass, pass};
+  }
+
+  void PrintTestCSV(std::ostream & os, const input_t & in) const {
+    os << "\"";
+    os << in;
+    os << "\"";
   }
 };
 
@@ -727,6 +739,12 @@ struct ProblemUtilities_ForLoopIndex {
       return {(max_dist - dist)/max_dist, false};
     }
   } // todo - test this
+
+  void PrintTestCSV(std::ostream & os, const input_t & in) const {
+    os << "\"";
+    os << in[0] << "," << in[1] << "," << in[2];
+    os << "\"";
+  }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -935,6 +953,12 @@ struct ProblemUtilities_CompareStringLengths {
   std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
     const bool pass = (sub == correct_test_output);
     return {(double)pass, pass};
+  }
+
+  void PrintTestCSV(std::ostream & os, const input_t & in) const {
+    os << "\"[";
+    os << "\"" << in[0] << "\"," << "\"" << in[1] << "\"," << "\"" << in[2] << "\"";
+    os << "\"]";
   }
 };
 
@@ -1155,6 +1179,12 @@ struct ProblemUtilities_CollatzNumbers {
       double score = (error <= MAX_ERROR) ? 1 - (error/(double)MAX_ERROR) : 0.0;
       return {score, false};
     }
+  }
+
+  void PrintTestCSV(std::ostream & os, const input_t & in) const {
+    os << "\"";
+    os << in;
+    os << "\"";
   }
 
 };
@@ -1579,6 +1609,17 @@ struct ProblemUtilities_StringLengthsBackwards {
       return {(max_dist - dist)/max_dist, false};
     }
   } // todo - test this
+
+  void PrintTestCSV(std::ostream & os, const input_t & in) const {
+    os << "\"";
+    os << "[";
+    for (size_t i = 0; i < in.size(); ++i) {
+      if (i) os << ",";
+      os << "\"\"" << in[i] << "\"\"";
+    }
+    os << "]"; 
+    os << "\"";
+  }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1804,6 +1845,17 @@ struct ProblemUtilities_LastIndexOfZero {
     }
   }
 
+  void PrintTestCSV(std::ostream & os, const input_t & in) const {
+    os << "\"";
+    os << "[";
+    for (size_t i = 0; i < in.size(); ++i) {
+      if (i) os << ",";
+      os << in[i];
+    }
+    os << "]"; 
+    os << "\"";
+  }
+
 };
 
 
@@ -2014,6 +2066,17 @@ struct ProblemUtilities_VectorAverage {
     }
   }
 
+  void PrintTestCSV(std::ostream & os, const input_t & in) const {
+    os << "\"";
+    os << "[";
+    for (size_t i = 0; i < in.size(); ++i) {
+      if (i) os << ",";
+      os << in[i];
+    }
+    os << "]"; 
+    os << "\"";
+  }
+
 };
 
 
@@ -2221,6 +2284,17 @@ struct ProblemUtilities_CountOdds {
       double score = (error <= MAX_ERROR) ? 1 - (error/(double)MAX_ERROR) : 0.0;
       return {score, false};
     }
+  }
+
+  void PrintTestCSV(std::ostream & os, const input_t & in) const {
+    os << "\"";
+    os << "[";
+    for (size_t i = 0; i < in.size(); ++i) {
+      if (i) os << ",";
+      os << in[i];
+    }
+    os << "]"; 
+    os << "\"";
   }
 
 };
@@ -2513,6 +2587,22 @@ struct ProblemUtilities_MirrorImage {
     return {(double)pass, pass};
   }
 
+  void PrintTestCSV(std::ostream & os, const input_t & in) const {
+    os << "\"";
+    os << "[[";
+    for (size_t i = 0; i < in[0].size(); ++i) {
+      if (i) os << ",";
+      os << in[0][i];
+    }
+    os << "],["; 
+    for (size_t i = 0; i < in[1].size(); ++i) {
+      if (i) os << ",";
+      os << in[1][i];
+    }
+    os << "]]"; 
+    os << "\"";
+  }
+
 };
 
 
@@ -2686,6 +2776,12 @@ struct ProblemUtilities_SumOfSquares {
       double score = (error <= MAX_ERROR) ? 1 - (error/(double)MAX_ERROR) : 0.0;
       return {score, false};
     }
+  }
+
+  void PrintTestCSV(std::ostream & os, const input_t & in) const {
+    os << "\"";
+    os << in;
+    os << "\"";
   }
 
 };
@@ -2968,6 +3064,22 @@ struct ProblemUtilities_VectorsSummed {
 
       return {score, false};
     }
+  }
+
+  void PrintTestCSV(std::ostream & os, const input_t & in) const {
+    os << "\"";
+    os << "[[";
+    for (size_t i = 0; i < in[0].size(); ++i) {
+      if (i) os << ",";
+      os << in[0][i];
+    }
+    os << "],["; 
+    for (size_t i = 0; i < in[1].size(); ++i) {
+      if (i) os << ",";
+      os << in[1][i];
+    }
+    os << "]]"; 
+    os << "\"";
   }
 };
 
@@ -3318,6 +3430,15 @@ struct ProblemUtilities_Median {
     const bool pass = (sub == correct_test_output);
     return {(double)pass, pass};
   }
+
+  void PrintTestCSV(std::ostream & os, const input_t & in) const {
+    os << "\"";
+    for (size_t i = 0; i < in.size(); ++i) {
+      if (i) os << ",";
+      os << in[i];
+    }
+    os << "\"";
+  }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3477,6 +3598,15 @@ struct ProblemUtilities_Smallest {
   std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
     const bool pass = (sub == correct_test_output);
     return {(double)pass, pass};
+  }
+
+  void PrintTestCSV(std::ostream & os, const input_t & in) const {
+    os << "\"";
+    for (size_t i = 0; i < in.size(); ++i) {
+      if (i) os << ",";
+      os << in[i];
+    }
+    os << "\"";
   }
 
 };

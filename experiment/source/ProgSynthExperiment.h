@@ -799,6 +799,32 @@ protected:
 
   }
 
+  template<typename WORLD_ORG_TYPE>
+  void SetupTestSystematics(emp::Ptr<emp::World<WORLD_ORG_TYPE>> w, const std::function<void(std::ostream &, const typename emp::World<WORLD_ORG_TYPE>::genome_t &)> & print_test) {
+    using w_t = emp::World<WORLD_ORG_TYPE>;
+    std::function<typename w_t::genome_t(const WORLD_ORG_TYPE & org)> sys_get_genome = [](const WORLD_ORG_TYPE & org) { return org.GetGenome(); };
+    auto sys = w->AddSystematics(sys_get_genome, true, true, false, true, "test_genotype");
+    sys->AddEvolutionaryDistinctivenessDataNode();
+    sys->AddPairwiseDistanceDataNode();
+    sys->AddPhylogeneticDiversityDataNode();
+    auto & sys_file = w->SetupSystematicsFile("test_genotype", DATA_DIRECTORY + "/test_gen_sys.csv", false);
+    sys_file.SetTimingRepeat(SUMMARY_STATS_INTERVAL); 
+    sys_file.AddStats(*sys->GetDataNode("evolutionary_distinctiveness") , "evolutionary_distinctiveness", "evolutionary distinctiveness for a single update", true, true);
+    sys_file.AddStats(*sys->GetDataNode("pairwise_distances"), "pairwise_distance", "pairwise distance for a single update", true, true);
+    sys_file.AddCurrent(*sys->GetDataNode("phylogenetic_diversity"), "current_phylogenetic_diversity", "current phylogenetic_diversity", true, true);
+    sys_file.template AddFun<size_t>([sys]() { return sys->GetTreeSize(); }, "tree_size", "Phylogenetic tree size");
+    sys_file.PrintHeaderKeys();
+    using to_taxon_t = typename emp::Systematics<WORLD_ORG_TYPE, typename w_t::genome_t>::taxon_t;
+    sys->AddSnapshotFun([print_test](const to_taxon_t & t) {
+      std::ostringstream stream;
+      print_test(stream, t.GetInfo());
+      return stream.str();
+    }, "test", "Test (input)");
+    do_pop_snapshot_sig.AddAction([this, sys]() mutable {
+      sys->Snapshot(DATA_DIRECTORY + "pop_" + emp::to_string(prog_world->GetUpdate()) + "/test_phylogeny_" + emp::to_string(prog_world->GetUpdate()) + ".csv");
+    });
+  }
+
   void OnPlacement_ActiveTestCaseWorld(const std::function<void(size_t)> & fun) {
       if (prob_NumberIO_world != nullptr) prob_NumberIO_world->OnPlacement(fun);
       else if (prob_SmallOrLarge_world != nullptr) prob_SmallOrLarge_world->OnPlacement(fun);
@@ -1015,7 +1041,7 @@ public:
       eval_hardware.Delete();
       inst_lib.Delete();
       prog_world.Delete();
-      prog_genotypic_systematics.Delete();
+      // prog_genotypic_systematics.Delete();
 
       if (prob_NumberIO_world != nullptr) prob_NumberIO_world.Delete();
       if (prob_SmallOrLarge_world != nullptr) prob_SmallOrLarge_world.Delete();
@@ -1897,6 +1923,11 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
   solution_file->AddFun(program_stats.get_program, "program");
   solution_file->PrintHeaderKeys();
 
+  do_pop_snapshot_sig.AddAction([this]() {
+    SnapshotPrograms();
+    SnapshotTests();
+  });
+
   // Setup program/problem[X] fitness file.
   prog_world->SetupFitnessFile(DATA_DIRECTORY + "program_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL);
   // Setup test world fitness file (just don't look...)
@@ -1930,11 +1961,39 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
   else if (prob_Syllables_world != nullptr) { prob_Syllables_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(SUMMARY_STATS_INTERVAL); }
   else { std::cout << "AHH! None of the worlds have been initialized. Exiting." << std::endl; exit(-1); }
 
-  // todo - how are we snapshotting tests?
-  do_pop_snapshot_sig.AddAction([this]() {
-    SnapshotPrograms();
-    SnapshotTests();
-  });
+  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::COEVOLUTION || TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC_COEVO) {
+    // Setup test world systematics
+    if (prob_NumberIO_world != nullptr) { SetupTestSystematics(prob_NumberIO_world, [this](std::ostream & out, const prob_NumberIO_world_t::genome_t & genome) { prob_utils_NumberIO.PrintTestCSV(out, genome); } ); }
+    else if (prob_SmallOrLarge_world != nullptr) { SetupTestSystematics(prob_SmallOrLarge_world, [this](std::ostream & out, const prob_SmallOrLarge_world_t::genome_t & genome) { prob_utils_SmallOrLarge.PrintTestCSV(out, genome); } ); }
+    else if (prob_ForLoopIndex_world != nullptr) { SetupTestSystematics(prob_ForLoopIndex_world, [this](std::ostream & out, const prob_ForLoopIndex_world_t::genome_t & genome) { prob_utils_ForLoopIndex.PrintTestCSV(out, genome); } ); }
+    else if (prob_CompareStringLengths_world != nullptr) { SetupTestSystematics(prob_CompareStringLengths_world, [this](std::ostream & out, const prob_CompareStringLengths_world_t::genome_t & genome) { prob_utils_CompareStringLengths.PrintTestCSV(out, genome); } ); }
+    // else if (prob_DoubleLetters_world != nullptr) { SetupTestSystematics(prob_DoubleLetters_world); }
+    else if (prob_CollatzNumbers_world != nullptr) { SetupTestSystematics(prob_CollatzNumbers_world, [this](std::ostream & out, const prob_CollatzNumbers_world_t::genome_t & genome) { prob_utils_CollatzNumbers.PrintTestCSV(out, genome); } ); }
+    // else if (prob_ReplaceSpaceWithNewline_world != nullptr) { SetupTestSystematics(prob_ReplaceSpaceWithNewline_world); }
+    // else if (prob_StringDifferences_world != nullptr) { SetupTestSystematics(prob_StringDifferences_world); }
+    // else if (prob_EvenSquares_world != nullptr) { SetupTestSystematics(prob_EvenSquares_world); }
+    // else if (prob_WallisPi_world != nullptr) { SetupTestSystematics(prob_WallisPi_world); }
+    else if (prob_StringLengthsBackwards_world != nullptr) { SetupTestSystematics(prob_StringLengthsBackwards_world, [this](std::ostream & out, const prob_StringLengthsBackwards_world_t::genome_t & genome) { prob_utils_StringLengthsBackwards.PrintTestCSV(out, genome); } ); }
+    else if (prob_LastIndexOfZero_world != nullptr) { SetupTestSystematics(prob_LastIndexOfZero_world, [this](std::ostream & out, const prob_LastIndexOfZero_world_t::genome_t & genome) { prob_utils_LastIndexOfZero.PrintTestCSV(out, genome); } ); }
+    else if (prob_VectorAverage_world != nullptr) { SetupTestSystematics(prob_VectorAverage_world, [this](std::ostream & out, const prob_VectorAverage_world_t::genome_t & genome) { prob_utils_VectorAverage.PrintTestCSV(out, genome); } ); }
+    else if (prob_CountOdds_world != nullptr) { SetupTestSystematics(prob_CountOdds_world, [this](std::ostream & out, const prob_CountOdds_world_t::genome_t & genome) { prob_utils_CountOdds.PrintTestCSV(out, genome); } ); }
+    else if (prob_MirrorImage_world != nullptr) { SetupTestSystematics(prob_MirrorImage_world, [this](std::ostream & out, const prob_MirrorImage_world_t::genome_t & genome) { prob_utils_MirrorImage.PrintTestCSV(out, genome); } ); }
+    // else if (prob_SuperAnagrams_world != nullptr) { SetupTestSystematics(prob_SuperAnagrams_world); }
+    else if (prob_SumOfSquares_world != nullptr) { SetupTestSystematics(prob_SumOfSquares_world, [this](std::ostream & out, const prob_SumOfSquares_world_t::genome_t & genome) { prob_utils_SumOfSquares.PrintTestCSV(out, genome); } ); }
+    else if (prob_VectorsSummed_world != nullptr) { SetupTestSystematics(prob_VectorsSummed_world, [this](std::ostream & out, const prob_VectorsSummed_world_t::genome_t & genome) { prob_utils_VectorsSummed.PrintTestCSV(out, genome); } ); }
+    // else if (prob_XWordLines_world != nullptr) { SetupTestSystematics(prob_XWordLines_world); }
+    // else if (prob_PigLatin_world != nullptr) { SetupTestSystematics(prob_PigLatin_world); }
+    // else if (prob_NegativeToZero_world != nullptr) { SetupTestSystematics(prob_NegativeToZero_world); }
+    // else if (prob_ScrabbleScore_world != nullptr) { SetupTestSystematics(prob_ScrabbleScore_world); }
+    // else if (prob_Checksum_world != nullptr) { SetupTestSystematics(prob_Checksum_world); }
+    // else if (prob_Digits_world != nullptr) { SetupTestSystematics(prob_Digits_world); }
+    // else if (prob_Grade_world != nullptr) { SetupTestSystematics(prob_Grade_world); }
+    else if (prob_Median_world != nullptr) { SetupTestSystematics(prob_Median_world, [this](std::ostream & out, const prob_Median_world_t::genome_t & genome) { prob_utils_Median.PrintTestCSV(out, genome); } ); }
+    else if (prob_Smallest_world != nullptr) { SetupTestSystematics(prob_Smallest_world, [this](std::ostream & out, const prob_Smallest_world_t::genome_t & genome) { prob_utils_Smallest.PrintTestCSV(out, genome); } ); }
+    // else if (prob_Syllables_world != nullptr) { SetupTestSystematics(prob_Syllables_world); }
+    else { std::cout << "AHH! None of the worlds have been initialized. Exiting." << std::endl; exit(-1); }
+
+  }
 
 }
 
@@ -2372,8 +2431,10 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
       file.Update();
     }
 
-  };
+    //->Snapshot(snapshot_dir + "/test_phylogeny_" + emp::to_string((int)prog_world->GetUpdate()) + ".csv");
 
+  };
+  
   AddDefaultInstructions({"Add",
                           "Sub",
                           "Mult",
