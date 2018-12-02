@@ -816,7 +816,7 @@ class TestOrg_CompareStringLengths: public TestOrg_Base {
     const out_t & GetCorrectOut() const { return out; }   
 
     void Print(std::ostream & os=std::cout) {
-      os << "\"" << genome[0] << "\"," << "\"" << genome[1] << "\"," << "\"" << genome[2] << "\"";
+      os << "[{BEGIN-STR}" << genome[0] << "{END-STR},{BEGIN-STR}" << genome[1] << "{END-STR},{BEGIN-STR}" << genome[2] << "{END-STR}]";
     }
 
 };
@@ -956,9 +956,8 @@ struct ProblemUtilities_CompareStringLengths {
   }
 
   void PrintTestCSV(std::ostream & os, const input_t & in) const {
-    os << "\"[";
-    os << "\"" << in[0] << "\"," << "\"" << in[1] << "\"," << "\"" << in[2] << "\"";
-    os << "\"]";
+    os << "\"[{BEGIN-STR}" << in[0] << "{END-STR},{BEGIN-STR}" << in[1] << "{END-STR},{BEGIN-STR}" << in[2] << "{END-STR}]\"";
+    // os << "\"" << in[0] << "\"," << "\"" << in[1] << "\"," << "\"" << in[2] << "\"";
   }
 };
 
@@ -1350,7 +1349,7 @@ class TestOrg_StringLengthsBackwards : public TestOrg_Base {
       os << "[";
       for (size_t i = 0; i < genome.size(); ++i) {
         if (i) os << ",";
-        os << "\"\"" << genome[i] << "\"\"";
+        os << "{BEGIN-STR}" << genome[i] << "{END-STR}";
       }
       os << "]"; 
     }
@@ -1615,7 +1614,7 @@ struct ProblemUtilities_StringLengthsBackwards {
     os << "[";
     for (size_t i = 0; i < in.size(); ++i) {
       if (i) os << ",";
-      os << "\"\"" << in[i] << "\"\"";
+      os << "{BEGIN-STR}" << in[i] << "{END-STR}";
     }
     os << "]"; 
     os << "\"";
