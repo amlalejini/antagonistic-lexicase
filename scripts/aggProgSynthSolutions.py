@@ -9,7 +9,7 @@ import argparse, os, copy, errno, csv
 
 default_update = 10000
 
-problem_whitelist = ["number-io", "for-loop-index", "median", "smallest", "small-or-large"]
+problem_whitelist = ["number-io", "for-loop-index", "median", "smallest", "small-or-large", "compare-string-lengths", "sum-of-squares"]
 
 def mkdir_p(path):
     """
