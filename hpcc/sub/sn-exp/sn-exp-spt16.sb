@@ -5,7 +5,8 @@
 #SBATCH --array=1-900
 #SBATCH --mem=8G                    # memory required per node - amount of memory (in bytes)
 #SBATCH --job-name sn-s16           # you can give your job a name for easier identification (same as -J)
- 
+#SBATCH --account=devolab
+
 ########## Command Lines to Run ##########
 DATA_DIR=/mnt/home/lalejini/data/ant-lex/sn-exp/data
 CONFIG_DIR=/mnt/home/lalejini/data/ant-lex/sn-exp/config
