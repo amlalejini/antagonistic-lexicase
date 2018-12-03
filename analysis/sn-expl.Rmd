@@ -28,102 +28,209 @@ source("https://gist.githubusercontent.com/benmarwick/2a1bb0133ff568cbe28d/raw/f
 
 ### Load Data
 
+List out paths to relevant data files.
 ```{r}
-min_networks_31250_data_loc <- "../data/sn-exp-data/min_networks_31250.csv"
-min_networks_32K_data_loc <- "../data/sn-exp-data/min_networks_32000.csv"
-min_networks_60K_data_loc <- "../data/sn-exp-data/min_networks_60000.csv"
-min_networks_1000K_data_loc <- "../data/sn-exp-data/min_networks_1000000.csv"
+min_networks_31250_SPT16_data_loc <- "../data/sn-exp-data/spt16/min_networks_31250.csv"
+min_networks_1000K_SPT16_data_loc <- "../data/sn-exp-data/spt16/min_networks_1000000.csv"
 
-min_networks_31250_sol_summary_loc <- "../data/sn-exp-data/min_networks_31250__solutions_summary.csv"
-min_networks_1000K_sol_summary_loc <- "../data/sn-exp-data/min_networks_1000000__solutions_summary.csv"
+min_networks_15625_SPT16_data_loc <- "../data/sn-exp-data/spt16/min_networks_15625.csv"
+min_networks_500K_SPT16_data_loc <- "../data/sn-exp-data/spt16/min_networks_500000.csv"
+
+min_networks_3125_SPT16_data_loc <- "../data/sn-exp-data/spt16/min_networks_3125.csv"
+min_networks_100K_SPT16_data_loc <- "../data/sn-exp-data/spt16/min_networks_100000.csv"
+
+min_networks_31250_SPT16_sol_summary_loc <- "../data/sn-exp-data/spt16/min_networks_31250__solutions_summary.csv"
+min_networks_1000K_SPT16_sol_summary_loc <- "../data/sn-exp-data/spt16/min_networks_1000000__solutions_summary.csv"
+
+min_networks_31250_SPT4_data_loc <- "../data/sn-exp-data/spt4/min_networks_31250.csv"
+min_networks_1000K_SPT4_data_loc <- "../data/sn-exp-data/spt4/min_networks_1000000.csv"
+
+min_networks_31250_SPT4_sol_summary_loc <- "../data/sn-exp-data/spt4/min_networks_31250__solutions_summary.csv"
+min_networks_1000K_SPT4_sol_summary_loc <- "../data/sn-exp-data/spt4/min_networks_1000000__solutions_summary.csv"
+
+
 
 ```
 
+Read in relevant data files.
 ```{r}
-min_networks_31250 <- read.csv(min_networks_31250_data_loc, na.strings = "NONE")
-min_networks_32K <- read.csv(min_networks_32K_data_loc, na.strings = "NONE")
-min_networks_60K <- read.csv(min_networks_60K_data_loc, na.strings="NONE")
-min_networks_1000K <- read.csv(min_networks_1000K_data_loc, na.strings="NONE")
+min_networks_31250 <- read.csv(min_networks_31250_SPT16_data_loc, na.strings = "NONE")
+min_networks_1000K <- read.csv(min_networks_1000K_SPT16_data_loc, na.strings="NONE")
 
-min_networks_31250_sol_summary <- read.csv(min_networks_31250_sol_summary_loc, na.strings = "NONE")
-min_networks_1000K_sol_summary <- read.csv(min_networks_1000K_sol_summary_loc, na.strings="NONE")
+min_networks_15625 <- read.csv(min_networks_15625_SPT16_data_loc, na.strings = "NONE")
+min_networks_500K <- read.csv(min_networks_500K_SPT16_data_loc, na.strings="NONE")
 
+min_networks_3125 <- read.csv(min_networks_3125_SPT16_data_loc, na.strings = "NONE")
+min_networks_100K <- read.csv(min_networks_100K_SPT16_data_loc, na.strings="NONE")
+
+min_networks_31250_sol_summary <- read.csv(min_networks_31250_SPT16_sol_summary_loc, na.strings = "NONE")
+min_networks_1000K_sol_summary <- read.csv(min_networks_1000K_SPT16_sol_summary_loc, na.strings="NONE")
+
+# Load spt4 versions
+min_networks_31250_SPT4 <- read.csv(min_networks_31250_SPT4_data_loc, na.strings = "NONE")
+min_networks_1000K_SPT4 <- read.csv(min_networks_1000K_SPT4_data_loc, na.strings="NONE")
+
+min_networks_31250_sol_summary_SPT4 <- read.csv(min_networks_31250_SPT4_sol_summary_loc, na.strings = "NONE")
+min_networks_1000K_sol_summary_SPT4 <- read.csv(min_networks_1000K_SPT4_sol_summary_loc, na.strings="NONE")
 ```
 
 ## Analysis
 
-```{r}
+### Generation 1,000,000
 
-# ggplot(data = filter(min_networks_60K, uses_cohorts == "0"), mapping=aes(x=treatment, y=solution_size)) +
-#     geom_boxplot() +
-#     geom_jitter(position=position_jitter(width=.1, height=0)) +
-#     coord_flip()
-
-# ggplot(data = filter(min_networks_60K, uses_cohorts == "0" & solution_found == "True"), mapping=aes(treatment)) +
-#     geom_bar()
-
-ggplot(data = filter(min_networks_60K, uses_cohorts == "0"), mapping=aes(x=treatment, y=solution_size, fill=treatment, colour=treatment)) +
-    geom_flat_violin(position=position_nudge(x=.2, y=0), adjust=2) +
-    geom_point(position = position_jitter(width = .15), size = .25) +
-    geom_boxplot(aes(x = treatment, y = solution_size),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
-    ylab("Solution Size") + xlab("Condition") + coord_flip() + guides(fill=FALSE, colour=FALSE) +
-    ggtitle("Lexicase selection")
-
-ggsave(file="min_networks_60K.pdf")
-```
+Once a solution is found, evolution is able to optimize. Less likely to find a solution in non-coevolution treatments here (cohorts).
 
 ```{r}
-# 
-# ggplot(data = filter(min_networks_1000K, uses_cohorts == "1"), mapping=aes(x=treatment, y=solution_size)) +
-#     geom_boxplot() +
-#     geom_jitter(position=position_jitter(width=.1, height=0)) +
-#     coord_flip()
-
-# ggplot(data = filter(min_networks_1000K, uses_cohorts == "1" & solution_found == "True"), mapping=aes(x=treatment, fill=treatment)) +
-#     geom_bar() + xlab("Condition") + ylab("Solutions Found") + guides(fill=FALSE) +
-#     geom_text(stat='count', aes(label=..count..), nudge_y=-1) +
-#     coord_flip()
-
 ggplot(data = filter(min_networks_1000K_sol_summary, uses_cohorts == "1"), mapping=aes(x=treatment, y=solutions_found, fill=treatment)) +
     geom_bar(stat="identity") + xlab("Condition") + ylab("Solutions Found") + guides(fill=FALSE) +
     geom_text(aes(label=solutions_found), nudge_y=1) +
-    coord_flip()
+    coord_flip() + ggtitle("Cohort lexicase selection - 1000K generations") + ggsave("cohorts_solution_cnt_1000K.png")
 
 ggplot(data = filter(min_networks_1000K, uses_cohorts == "1"), mapping=aes(x=treatment, y=solution_size, fill=treatment, colour=treatment)) +
     geom_flat_violin(position=position_nudge(x=.2, y=0), adjust=2) +
     geom_point(position = position_jitter(width = .15), size = .25) +
     geom_boxplot(aes(x = treatment, y = solution_size),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
     ylab("Solution Size") + ylim(60, 130) + xlab("Condition") + coord_flip() + guides(fill=FALSE, colour=FALSE) +
-    ggtitle("Cohort lexicase selection") + ggsave("cohorts_min_networks_1000K.pdf")
+    ggtitle("Cohort lexicase selection - 1000K generations")
+
+# + ggsave("cohorts_min_networks_1000K.png")
     
 ```
 
-
 ```{r}
 
-
-ggplot(data = min_networks_31250_sol_summary, mapping=aes(x=treatment, y=solutions_found, fill=treatment)) +
-    geom_bar(stat="identity") + xlab("Condition") + ylab("Solutions Found") + guides(fill=FALSE) +
-    geom_text(aes(label=solutions_found), nudge_y=1) +
-    coord_flip()
-
-ggplot(data = min_networks_31250, mapping=aes(x=treatment, y=solution_size, fill=treatment, colour=treatment)) +
+ggplot(data = filter(min_networks_500K, uses_cohorts == "1"), mapping=aes(x=treatment, y=solution_size, fill=treatment, colour=treatment)) +
     geom_flat_violin(position=position_nudge(x=.2, y=0), adjust=2) +
     geom_point(position = position_jitter(width = .15), size = .25) +
     geom_boxplot(aes(x = treatment, y = solution_size),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
     ylab("Solution Size") + ylim(60, 130) + xlab("Condition") + coord_flip() + guides(fill=FALSE, colour=FALSE) +
-    ggtitle("lexicase selection @ gen 31,250") + ggsave("min_networks_31250.pdf")
+    ggtitle("Cohort lexicase selection - 500K generations")
+
+ggplot(data = filter(min_networks_15625, uses_cohorts == "0"), mapping=aes(x=treatment, y=solution_size, fill=treatment, colour=treatment)) +
+    geom_flat_violin(position=position_nudge(x=.2, y=0), adjust=2) +
+    geom_point(position = position_jitter(width = .15), size = .25) +
+    geom_boxplot(aes(x = treatment, y = solution_size),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
+    ylab("Solution Size") + ylim(60, 130) + xlab("Condition") + coord_flip() + guides(fill=FALSE, colour=FALSE) +
+    ggtitle("full lexicase selection - 15625 generations")
+
+# + ggsave("cohorts_min_networks_1000K.png")
+    
+```
+
+
+
+```{r}
+
+ggplot(data = filter(min_networks_100K, uses_cohorts == "1"), mapping=aes(x=treatment, y=solution_size, fill=treatment, colour=treatment)) +
+    geom_flat_violin(position=position_nudge(x=.2, y=0), adjust=2) +
+    geom_point(position = position_jitter(width = .15), size = .25) +
+    geom_boxplot(aes(x = treatment, y = solution_size),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
+    ylab("Solution Size") + ylim(60, 130) + xlab("Condition") + coord_flip() + guides(fill=FALSE, colour=FALSE) +
+    ggtitle("Cohort lexicase selection - 100K generations")
+
+ggplot(data = filter(min_networks_3125, uses_cohorts == "0"), mapping=aes(x=treatment, y=solution_size, fill=treatment, colour=treatment)) +
+    geom_flat_violin(position=position_nudge(x=.2, y=0), adjust=2) +
+    geom_point(position = position_jitter(width = .15), size = .25) +
+    geom_boxplot(aes(x = treatment, y = solution_size),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
+    ylab("Solution Size") + ylim(60, 130) + xlab("Condition") + coord_flip() + guides(fill=FALSE, colour=FALSE) +
+    ggtitle("full lexicase selection - 3125 generations")
+
+# + ggsave("cohorts_min_networks_1000K.png")
+    
+```
+
+
+Use Fisher's exact
+
+```{r}
+
+# ctable <- min_networks_1000K %>% group_by(treatment, solution_found) %>% summarize(n=n()) %>% spread(solution_found, n)
+# ctable[is.na(ctable)] <- 0
+# m <- matrix(c(ctable$False, ctable$True), nrow=10, ncol=2, dimnames=list(ctable$treatment, c("True", "False")))
+# fisher.test(m, alternative = "two.sided", workspace=1e6)
+# 
+# pairwise.fisher.test(min_networks_1000K_sol_summary$solutions_found, min_networks_1000K_sol_summary$total_runs, p.adjust.method = "bonferroni")
+```
+
+Use Kruskal-Wallis test to compare solution quality across cohort lexicase treatments (static tests, randomly changing tests, drifting tests, and coevolving tests).
+
+```{r}
+# df <- filter(min_networks_1000K, uses_cohorts == "1" & solution_found=="True")
+# kruskal.test(solution_size ~ treatment, df)
+# pairwise.wilcox.test(x=df$solution_size, g=df$treatment, paired=FALSE, p.adjust.method = "bonferroni")
+```
+
+### Generation 31,250
+
+At generation 31,250 (where non-cohort treatments have had the same number of evaluations):
+
+```{r}
+
+
+# sol_cnts <- ggplot(data = min_networks_31250_sol_summary, mapping=aes(x=treatment, y=solutions_found, fill=treatment)) +
+#           geom_bar(stat="identity") + xlab("Condition") + ylab("Solutions Found") + guides(fill=FALSE) +
+#           geom_text(aes(label=solutions_found), nudge_y=1) +
+#           coord_flip()
+# sol_sizes <- ggplot(data = min_networks_31250, mapping=aes(x=treatment, y=solution_size, fill=treatment, colour=treatment)) +
+#             geom_flat_violin(position=position_nudge(x=.2, y=0), adjust=2) +
+#             geom_point(position = position_jitter(width = .15), size = .25) +
+#             geom_boxplot(aes(x = treatment, y = solution_size),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
+#             + theme(axis.ticks.x=element_blank()) +
+#             ylab("Solution Size") + ylim(60, 130) + xlab("Condition") + coord_flip() + guides(fill=FALSE, colour=FALSE)
+# plot_grid(sol_sizes, sol_cnts)
+
 
 ggplot(data = filter(min_networks_31250_sol_summary, uses_cohorts == "0"), mapping=aes(x=treatment, y=solutions_found, fill=treatment)) +
     geom_bar(stat="identity") + xlab("Condition") + ylab("Solutions Found") + guides(fill=FALSE) +
     geom_text(aes(label=solutions_found), nudge_y=1) +
-    coord_flip()
+    coord_flip() + ggtitle("Full Lexicase selection - 31,250 generations") + ggsave("full-lex_solution_cnt_31250.png")
 
 ggplot(data = filter(min_networks_31250, uses_cohorts=="0"), mapping=aes(x=treatment, y=solution_size, fill=treatment, colour=treatment)) +
     geom_flat_violin(position=position_nudge(x=.2, y=0), adjust=2) +
     geom_point(position = position_jitter(width = .15), size = .25) +
     geom_boxplot(aes(x = treatment, y = solution_size),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
     ylab("Solution Size") + ylim(60, 130) + xlab("Condition") + coord_flip() + guides(fill=FALSE, colour=FALSE) +
-    ggtitle("lexicase selection @ gen 31,250") + ggsave("min_networks_31250_nocohorts.pdf")
+    ggtitle("Full lexicase selection - 31,250 generations") + ggsave("min_networks_31250_full-lex.png")
 ```
+
+```{r}
+# df <- filter(min_networks_31250, uses_cohorts == "0" & solution_found=="True")
+# kruskal.test(solution_size ~ treatment, df)
+# pwt<- pairwise.wilcox.test(x=df$solution_size, g=df$treatment, paired=FALSE, p.adjust.method = "bonferroni", exact=FALSE)
+```
+
+
+
+### Sorts per test = 4 (instead of 16)
+
+Reduced number of test cases per test population.
+
+
+```{r}
+ggplot(data = filter(min_networks_1000K_sol_summary_SPT4, uses_cohorts == "1"), mapping=aes(x=treatment, y=solutions_found, fill=treatment)) +
+    geom_bar(stat="identity") + xlab("Condition") + ylab("Solutions Found") + guides(fill=FALSE) +
+    geom_text(aes(label=solutions_found), nudge_y=1) +
+    coord_flip() + ggtitle("Cohort lexicase selection - 1000K generations \n SMALL TEST ORGS") + ggsave("cohorts_solution_cnt_1000K_small_tests.png")
+
+ggplot(data = filter(min_networks_1000K_SPT4, uses_cohorts == "1"), mapping=aes(x=treatment, y=solution_size, fill=treatment, colour=treatment)) +
+    geom_flat_violin(position=position_nudge(x=.2, y=0), adjust=2) +
+    geom_point(position = position_jitter(width = .15), size = .25) +
+    geom_boxplot(aes(x = treatment, y = solution_size),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
+    ylab("Solution Size") + ylim(60, 130) + xlab("Condition") + coord_flip() + guides(fill=FALSE, colour=FALSE) +
+    ggtitle("Cohort lexicase selection - 1000K generations \n SMALL TEST ORGS") + ggsave("cohorts_min_networks_1000K_small_tests.png")
     
+```
+
+```{r}
+ggplot(data = filter(min_networks_31250_sol_summary_SPT4, uses_cohorts == "0"), mapping=aes(x=treatment, y=solutions_found, fill=treatment)) +
+    geom_bar(stat="identity") + xlab("Condition") + ylab("Solutions Found") + guides(fill=FALSE) +
+    geom_text(aes(label=solutions_found), nudge_y=1) + 
+    coord_flip() +  ggtitle("Full lexicase selection - 31250 generations \n SMALL TEST ORGS") + ggsave("full-lex_solution_cnt_1000K_small_tests.png")
+
+ggplot(data = filter(min_networks_31250_SPT4, uses_cohorts=="0"), mapping=aes(x=treatment, y=solution_size, fill=treatment, colour=treatment)) +
+    geom_flat_violin(position=position_nudge(x=.2, y=0), adjust=2) +
+    geom_point(position = position_jitter(width = .15), size = .25) +
+    geom_boxplot(aes(x = treatment, y = solution_size),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
+    ylab("Solution Size") + ylim(60, 130) + xlab("Condition") + coord_flip() + guides(fill=FALSE, colour=FALSE) +
+    ggtitle("Full lexicase selection - 31250 generations \n SMALL TEST ORGS") + ggsave("min_networks_31250_full-lex_small_tests.png")
+```

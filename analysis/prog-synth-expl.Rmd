@@ -1,0 +1,58 @@
+---
+title: "Sorting network data exploration"
+output: 
+  html_document: 
+    keep_md: yes
+    toc: true
+    toc_float: true
+    collapsed: false
+    theme: default
+  pdf_document: default
+---
+
+## Setup
+
+### Dependencies
+
+```{r}
+
+library(readr)
+library(tidyr)
+library(ggplot2)
+library(plyr)
+library(reshape2)
+library(cowplot)
+
+source("https://gist.githubusercontent.com/benmarwick/2a1bb0133ff568cbe28d/raw/fb53bd97121f7f9ce947837ef1a4c65a73bffb3f/geom_flat_violin.R")
+```
+
+### Load Data
+
+```{r}
+# solutions_10K_data_loc <- "../data/ps-exp-data/min_programs_10000.csv"
+# solutions_10K_summary_data_loc <- "../data/ps-exp-data/min_programs_163KEval__solutions_summary.csv"
+
+solutions_10K_data_loc <- "../data/ps-exp-data/min_programs_10000.csv"
+solutions_10K_summary_data_loc <- "../data/ps-exp-data/min_programs_eval__solutions_summary.csv"
+
+```
+
+```{r}
+prog_solutions_10K <- read.csv(solutions_10K_data_loc, na.strings = "NONE")
+prog_solutions_10K_summary <- read.csv(solutions_10K_summary_data_loc, na.strings = "NONE")
+
+```
+
+## Analysis
+
+Count of solutions found per problem (30 replicates each)
+
+```{r}
+
+
+ggplot(data = prog_solutions_10K_summary, mapping=aes(x=test_mode, y=solutions_found, fill=test_mode)) +
+    geom_bar(stat="identity") + xlab("Condition") + ylab("Solutions Found") + guides(fill=FALSE) +
+    geom_text(aes(label=solutions_found), nudge_y=2) +
+    coord_flip() + facet_wrap( ~ problem) + ggsave("prog-synth-solutions-found.png")
+```
+    
