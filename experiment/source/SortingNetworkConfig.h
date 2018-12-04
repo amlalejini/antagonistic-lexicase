@@ -48,6 +48,7 @@ EMP_BUILD_CONFIG(SortingNetworkConfig,
   VALUE(AGGREGATE_STATS_INTERVAL, size_t, 100, "Interval to output aggregate stats"),
   VALUE(CORRECTNESS_SAMPLE_SIZE, size_t, 4096, "How many tests do we use to 'test' accuracy of a sorting network (in data collection)?"),
   VALUE(SOLUTION_SCREEN_INTERVAL, size_t, 100, "Interval to screen networks for correct solutions"),
+  VALUE(COLLECT_TEST_PHYLOGENIES, bool, false, "Collect test phylogenies?")
 
 )
 

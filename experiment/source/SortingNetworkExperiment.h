@@ -118,6 +118,7 @@ protected:
   size_t AGGREGATE_STATS_INTERVAL;
   size_t CORRECTNESS_SAMPLE_SIZE;
   size_t SOLUTION_SCREEN_INTERVAL;
+  bool COLLECT_TEST_PHYLOGENIES;
 
   // Experiment variables
   bool setup;                 ///< Has setup been run?
@@ -132,7 +133,7 @@ protected:
   emp::Ptr<network_world_t> network_world;
   emp::Ptr<test_world_t> test_world;
 
-  emp::Ptr<emp::Systematics<network_org_t, network_genome_t>> network_genotypic_systematics;
+  // emp::Ptr<emp::Systematics<network_org_t, network_genome_t>> network_genotypic_systematics;
   emp::Ptr<emp::Systematics<test_org_t, test_genome_t>> test_genotypic_systematics;
 
 
@@ -520,73 +521,94 @@ void SortingNetworkExperiment::SetupDataCollection() {
 
   // Setup fitness files
   // SetupFitnessFile
-  network_world->SetupFitnessFile(DATA_DIRECTORY + "network_fitness.csv").SetTimingRepeat(AGGREGATE_STATS_INTERVAL);
-  test_world->SetupFitnessFile(DATA_DIRECTORY + "test_fitness.csv").SetTimingRepeat(AGGREGATE_STATS_INTERVAL);
+  auto & network_fit_file = network_world->SetupFitnessFile(DATA_DIRECTORY + "network_stats.csv", false);
+  network_fit_file.SetTimingRepeat(AGGREGATE_STATS_INTERVAL);
+  // Add shannon entropy to fitness 
+  network_fit_file.template AddFun<double>([this]() -> double {
+    std::function<network_genome_t(emp::Ptr<network_org_t>)> get_network_org_genome = [](emp::Ptr<network_org_t> org) -> network_genome_t { return org->GetGenome(); };
+    auto vec = emp::ApplyFunction(get_network_org_genome, network_world->GetFullPop());
+    return emp::ShannonEntropy(vec);
+  }, "diversity", "Shannon diversity of genotypes in population.");
+  network_fit_file.PrintHeaderKeys();
+
+  auto & test_fit_file = test_world->SetupFitnessFile(DATA_DIRECTORY + "test_stats.csv");
+  test_fit_file.SetTimingRepeat(AGGREGATE_STATS_INTERVAL);
+  test_fit_file.template AddFun<double>([this]() -> double {
+    std::function<test_genome_t(emp::Ptr<test_org_t>)> get_test_org_genome = [](emp::Ptr<test_org_t> org) -> test_genome_t { return org->GetGenome(); };
+    auto vec = emp::ApplyFunction(get_test_org_genome, test_world->GetFullPop());
+    return emp::ShannonEntropy(vec);
+  }, "diversity", "Shannon diversity of genotypes in population.");
+  test_fit_file.PrintHeaderKeys();
 
   // Setup systematics managers
   // - Network systematics manager
-  network_genotypic_systematics = emp::NewPtr<emp::Systematics<network_org_t, network_genome_t>>([](const network_org_t & org) { return org.GetGenome(); });
-  network_genotypic_systematics->AddEvolutionaryDistinctivenessDataNode();
-  network_genotypic_systematics->AddPairwiseDistanceDataNode();
-  network_genotypic_systematics->AddPhylogeneticDiversityDataNode();
-  network_world->AddSystematics(network_genotypic_systematics, "network_genotype");
-  auto & network_gen_sys_file = network_world->SetupSystematicsFile("network_genotype", DATA_DIRECTORY + "/network_gen_sys.csv", false);
-  network_gen_sys_file.SetTimingRepeat(AGGREGATE_STATS_INTERVAL);
+  // network_genotypic_systematics = emp::NewPtr<emp::Systematics<network_org_t, network_genome_t>>([](const network_org_t & org) { return org.GetGenome(); });
+  // network_genotypic_systematics->AddEvolutionaryDistinctivenessDataNode();
+  // network_genotypic_systematics->AddPairwiseDistanceDataNode();
+  // network_genotypic_systematics->AddPhylogeneticDiversityDataNode();
+  // network_world->AddSystematics(network_genotypic_systematics, "network_genotype");
+  // auto & network_gen_sys_file = network_world->SetupSystematicsFile("network_genotype", DATA_DIRECTORY + "/network_gen_sys.csv", false);
+  // network_gen_sys_file.SetTimingRepeat(AGGREGATE_STATS_INTERVAL);
   // Functions to add:
-  network_gen_sys_file.AddStats(*network_genotypic_systematics->GetDataNode("evolutionary_distinctiveness") , "evolutionary_distinctiveness", "evolutionary distinctiveness for a single update", true, true);
-  network_gen_sys_file.AddStats(*network_genotypic_systematics->GetDataNode("pairwise_distances"), "pairwise_distance", "pairwise distance for a single update", true, true);
+  // network_gen_sys_file.AddStats(*network_genotypic_systematics->GetDataNode("evolutionary_distinctiveness") , "evolutionary_distinctiveness", "evolutionary distinctiveness for a single update", true, true);
+  // network_gen_sys_file.AddStats(*network_genotypic_systematics->GetDataNode("pairwise_distances"), "pairwise_distance", "pairwise distance for a single update", true, true);
   // - GetPhylogeneticDiversity
-  network_gen_sys_file.AddCurrent(*network_genotypic_systematics->GetDataNode("phylogenetic_diversity"), "current_phylogenetic_diversity", "current phylogenetic_diversity", true, true);
+  // network_gen_sys_file.AddCurrent(*network_genotypic_systematics->GetDataNode("phylogenetic_diversity"), "current_phylogenetic_diversity", "current phylogenetic_diversity", true, true);
   // - GetTreeSize
-  network_gen_sys_file.template AddFun<size_t>([this]() { return network_genotypic_systematics->GetTreeSize(); }, "tree_size", "Phylogenetic tree size");
-  network_gen_sys_file.PrintHeaderKeys();
+  // network_gen_sys_file.template AddFun<size_t>([this]() { return network_genotypic_systematics->GetTreeSize(); }, "tree_size", "Phylogenetic tree size");
+  // network_gen_sys_file.PrintHeaderKeys();
   // Add function(s) to program systematics snapshot
-  using network_taxon_t = typename emp::Systematics<network_org_t, network_genome_t>::taxon_t;
-  network_genotypic_systematics->AddSnapshotFun([](const network_taxon_t & t) {
-    std::ostringstream stream;
-    stream << "\"";
-    t.GetInfo().Print(stream, ",");
-    stream << "\"";
-    return stream.str();
-  }, "network", "sorting network");
+  // using network_taxon_t = typename emp::Systematics<network_org_t, network_genome_t>::taxon_t;
+  // network_genotypic_systematics->AddSnapshotFun([](const network_taxon_t & t) {
+  //   std::ostringstream stream;
+  //   stream << "\"";
+  //   t.GetInfo().Print(stream, ",");
+  //   stream << "\"";
+  //   return stream.str();
+  // }, "network", "sorting network");
 
-  test_genotypic_systematics = emp::NewPtr<emp::Systematics<test_org_t, test_genome_t>>([](const test_org_t & org) { return org.GetGenome(); });
-  test_genotypic_systematics->AddEvolutionaryDistinctivenessDataNode();
-  test_genotypic_systematics->AddPairwiseDistanceDataNode();
-  test_genotypic_systematics->AddPhylogeneticDiversityDataNode();
-  test_world->AddSystematics(test_genotypic_systematics, "test_genotype");
-  auto & test_gen_sys_file = test_world->SetupSystematicsFile("test_genotype", DATA_DIRECTORY + "/test_gen_sys.csv", false);
-  test_gen_sys_file.SetTimingRepeat(AGGREGATE_STATS_INTERVAL);
-  // Functions to add:
-  test_gen_sys_file.AddStats(*test_genotypic_systematics->GetDataNode("evolutionary_distinctiveness") , "evolutionary_distinctiveness", "evolutionary distinctiveness for a single update", true, true);
-  test_gen_sys_file.AddStats(*test_genotypic_systematics->GetDataNode("pairwise_distances"), "pairwise_distance", "pairwise distance for a single update", true, true);
-  // - GetPhylogeneticDiversity
-  test_gen_sys_file.AddCurrent(*test_genotypic_systematics->GetDataNode("phylogenetic_diversity"), "current_phylogenetic_diversity", "current phylogenetic_diversity", true, true);
-  // - GetTreeSize
-  test_gen_sys_file.template AddFun<size_t>([this]() { return test_genotypic_systematics->GetTreeSize(); }, "tree_size", "Phylogenetic tree size");
-  test_gen_sys_file.PrintHeaderKeys();
-  // Add function(s) to program systematics snapshot
-  using test_taxon_t = typename emp::Systematics<test_org_t, test_genome_t>::taxon_t;
-  test_genotypic_systematics->AddSnapshotFun([](const test_taxon_t & t) {
-    std::ostringstream stream;
-    // t.GetInfo().PrintCSVEntry(stream);
-    const test_genome_t & test_genome = t.GetInfo();
-    stream << "\"[";
-    for (size_t i = 0; i < test_genome.test_set.size(); ++i) {
-      if (i) stream << ",";
-      test_genome.test_set[i].Print(stream);
-    }
-    stream << "]\"";
+  if (COLLECT_TEST_PHYLOGENIES) {
+    std::cout << "Collecting test phylogenies!" << std::endl;
+    test_genotypic_systematics = emp::NewPtr<emp::Systematics<test_org_t, test_genome_t>>([](const test_org_t & org) { return org.GetGenome(); });
+    test_genotypic_systematics->AddEvolutionaryDistinctivenessDataNode();
+    test_genotypic_systematics->AddPairwiseDistanceDataNode();
+    test_genotypic_systematics->AddPhylogeneticDiversityDataNode();
+    test_world->AddSystematics(test_genotypic_systematics, "test_genotype");
+    auto & test_gen_sys_file = test_world->SetupSystematicsFile("test_genotype", DATA_DIRECTORY + "/test_gen_sys.csv", false);
+    test_gen_sys_file.SetTimingRepeat(AGGREGATE_STATS_INTERVAL);
+    // Functions to add:
+    test_gen_sys_file.AddStats(*test_genotypic_systematics->GetDataNode("evolutionary_distinctiveness") , "evolutionary_distinctiveness", "evolutionary distinctiveness for a single update", true, true);
+    test_gen_sys_file.AddStats(*test_genotypic_systematics->GetDataNode("pairwise_distances"), "pairwise_distance", "pairwise distance for a single update", true, true);
+    // - GetPhylogeneticDiversity
+    test_gen_sys_file.AddCurrent(*test_genotypic_systematics->GetDataNode("phylogenetic_diversity"), "current_phylogenetic_diversity", "current phylogenetic_diversity", true, true);
+    // - GetTreeSize
+    test_gen_sys_file.template AddFun<size_t>([this]() { return test_genotypic_systematics->GetTreeSize(); }, "tree_size", "Phylogenetic tree size");
+    test_gen_sys_file.PrintHeaderKeys();
+    // Add function(s) to program systematics snapshot
+    using test_taxon_t = typename emp::Systematics<test_org_t, test_genome_t>::taxon_t;
+    test_genotypic_systematics->AddSnapshotFun([](const test_taxon_t & t) {
+      std::ostringstream stream;
+      // t.GetInfo().PrintCSVEntry(stream);
+      const test_genome_t & test_genome = t.GetInfo();
+      stream << "\"[";
+      for (size_t i = 0; i < test_genome.test_set.size(); ++i) {
+        if (i) stream << ",";
+        test_genome.test_set[i].Print(stream);
+      }
+      stream << "]\"";
 
-    return stream.str();
-  }, "test", "Test org");
+      return stream.str();
+    }, "test", "Test org");
+  }
+
+
   
   // Setup network/test snapshots
   do_pop_snapshot_sig.AddAction([this]() { 
     SnapshotNetworks(); 
     SnapshotTests();
-    network_genotypic_systematics->Snapshot(DATA_DIRECTORY + "pop_" + emp::to_string(network_world->GetUpdate()) + "/network_phylogeny_" + emp::to_string((int)network_world->GetUpdate()) + ".csv");
-    if (TEST_MODE == (size_t)TEST_MODES::COEVOLVE) {
+    // network_genotypic_systematics->Snapshot(DATA_DIRECTORY + "pop_" + emp::to_string(network_world->GetUpdate()) + "/network_phylogeny_" + emp::to_string((int)network_world->GetUpdate()) + ".csv");
+    if (TEST_MODE == (size_t)TEST_MODES::COEVOLVE && COLLECT_TEST_PHYLOGENIES) {
       test_genotypic_systematics->Snapshot(DATA_DIRECTORY + "pop_" + emp::to_string(network_world->GetUpdate()) + "/test_phylogeny_" + emp::to_string((int)network_world->GetUpdate()) + ".csv");
     }
   });
@@ -1109,6 +1131,7 @@ void SortingNetworkExperiment::InitConfigs(const SortingNetworkConfig & config) 
   AGGREGATE_STATS_INTERVAL = config.AGGREGATE_STATS_INTERVAL();
   CORRECTNESS_SAMPLE_SIZE = config.CORRECTNESS_SAMPLE_SIZE();
   SOLUTION_SCREEN_INTERVAL = config.SOLUTION_SCREEN_INTERVAL();
+  COLLECT_TEST_PHYLOGENIES = config.COLLECT_TEST_PHYLOGENIES();
 
 }
 
