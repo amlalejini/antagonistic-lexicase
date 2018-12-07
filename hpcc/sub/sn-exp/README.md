@@ -11,3 +11,6 @@ Submission Scripts:
 - [sn-exp-spt16.sb](sn-exp-spt16.sb)
   - Sorts per test = 16, 16384 total test vectors represented in population
   - RUN STATUS: NONE
+
+NOTE: Currently, none of these runs will collect phylogeny information. Will want
+to run fewer replicates for shorter amount of time for phylogeny information.
