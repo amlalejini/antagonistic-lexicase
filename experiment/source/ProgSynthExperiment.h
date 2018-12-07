@@ -1987,6 +1987,16 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
   prog_gen_sys_file.AddCurrent(*prog_genotypic_systematics->GetDataNode("phylogenetic_diversity"), "current_phylogenetic_diversity", "current phylogenetic_diversity", true, true);
   // - GetTreeSize
   prog_gen_sys_file.template AddFun<size_t>([this]() { return prog_genotypic_systematics->GetTreeSize(); }, "tree_size", "Phylogenetic tree size");
+  // - NumSparseTaxa
+  prog_gen_sys_file.template AddFun<size_t>([this]() { return prog_genotypic_systematics->GetNumSparseTaxa(); }, "num_sparse_taxa", "Number sparse taxa");
+  // - mean_sparse_pairwise_distances
+  prog_gen_sys_file.template AddFun<size_t>([this]() { return prog_genotypic_systematics->GetMeanPairwiseDistance(true); }, "mean_sparse_pairwise_distances", "Number sparse taxa");
+  // - sum_sparse_pairwise_distances
+  prog_gen_sys_file.template AddFun<size_t>([this]() { return prog_genotypic_systematics->GetSumPairwiseDistance(true); }, "sum_sparse_pairwise_distances", "Number sparse taxa");
+  // - variance_sparse_pairwise_distances
+  prog_gen_sys_file.template AddFun<size_t>([this]() { return prog_genotypic_systematics->GetVariancePairwiseDistance(true); }, "variance_sparse_pairwise_distances", "Number sparse taxa");
+
+
   prog_gen_sys_file.PrintHeaderKeys();
 
   // Add function(s) to program systematics snapshot
