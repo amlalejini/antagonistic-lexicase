@@ -350,6 +350,8 @@ struct ProblemUtilities_NumberIO {
 
   emp::vector<emp::Ptr<TestOrg_NumberIO>> testingset_pop;
 
+  emp::vector<emp::vector<output_t>> population_validation_outputs;
+
   // A few useful things for use within a test evaluation
   emp::Ptr<TestOrg_NumberIO> cur_eval_test_org;
   bool submitted;
@@ -393,6 +395,7 @@ struct ProblemUtilities_NumberIO {
   }
 
   void GenerateTestingSetPop() {
+    population_validation_outputs.resize(testing_set.GetSize());
     for (size_t i = 0; i < testing_set.GetSize(); ++i) {
       testingset_pop.emplace_back(emp::NewPtr<TestOrg_NumberIO>(testing_set.GetInput(i)));
       testingset_pop[i]->CalcOut();
@@ -471,6 +474,8 @@ struct ProblemUtilities_SmallOrLarge {
 
   emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
 
+  emp::vector<emp::vector<output_t>> population_validation_outputs;
+
   // --- Useful during a test evaluation ---
   emp::Ptr<problem_org_t> cur_eval_test_org;
   bool submitted;
@@ -523,6 +528,7 @@ struct ProblemUtilities_SmallOrLarge {
   }
 
   void GenerateTestingSetPop() {
+    population_validation_outputs.resize(testing_set.GetSize());
     for (size_t i = 0; i < testing_set.GetSize(); ++i) {
       testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
       testingset_pop[i]->CalcOut();
@@ -628,6 +634,8 @@ struct ProblemUtilities_ForLoopIndex {
 
   emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
 
+  emp::vector<emp::vector<output_t>> population_validation_outputs;
+
   // --- Useful during a test evaluation ---
   emp::Ptr<problem_org_t> cur_eval_test_org;
   bool submitted;
@@ -719,6 +727,7 @@ struct ProblemUtilities_ForLoopIndex {
   }
 
   void GenerateTestingSetPop() {
+    population_validation_outputs.resize(testing_set.GetSize());
     for (size_t i = 0; i < testing_set.GetSize(); ++i) {
       testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
       testingset_pop[i]->CalcOut();
@@ -833,6 +842,7 @@ struct ProblemUtilities_CompareStringLengths {
   testcase_set_t training_set;
 
   emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
+  emp::vector<emp::vector<output_t>> population_validation_outputs;
 
   // --- Useful during a test evaluation ---
   emp::Ptr<problem_org_t> cur_eval_test_org;
@@ -944,6 +954,7 @@ struct ProblemUtilities_CompareStringLengths {
   }
 
   void GenerateTestingSetPop() {
+    population_validation_outputs.resize(testing_set.GetSize());
     for (size_t i = 0; i < testing_set.GetSize(); ++i) {
       testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
       testingset_pop[i]->CalcOut();
@@ -1092,6 +1103,8 @@ struct ProblemUtilities_CollatzNumbers {
 
   emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
 
+  emp::vector<emp::vector<output_t>> population_validation_outputs;
+
   // // --- Useful during a test evaluation ---
   emp::Ptr<problem_org_t> cur_eval_test_org;
   bool submitted;
@@ -1157,6 +1170,7 @@ struct ProblemUtilities_CollatzNumbers {
   }
 
   void GenerateTestingSetPop() {
+    population_validation_outputs.resize(testing_set.GetSize());
     for (size_t i = 0; i < testing_set.GetSize(); ++i) {
       testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
       testingset_pop.back()->SetCache(out_cache);
@@ -1367,6 +1381,8 @@ struct ProblemUtilities_StringLengthsBackwards {
   testcase_set_t training_set;
 
   emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
+
+  emp::vector<emp::vector<output_t>> population_validation_outputs;
 
   // --- Useful during a test evaluation ---
   emp::Ptr<problem_org_t> cur_eval_test_org;
@@ -1588,6 +1604,7 @@ struct ProblemUtilities_StringLengthsBackwards {
   }
 
   void GenerateTestingSetPop() {
+    population_validation_outputs.resize(testing_set.GetSize());
     for (size_t i = 0; i < testing_set.GetSize(); ++i) {
       testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
       testingset_pop[i]->CalcOut();
@@ -1708,6 +1725,8 @@ struct ProblemUtilities_LastIndexOfZero {
 
   emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
 
+  emp::vector<emp::vector<output_t>> population_validation_outputs;
+
   // --- Useful during a test evaluation ---
   emp::Ptr<problem_org_t> cur_eval_test_org;
   bool submitted;
@@ -1822,6 +1841,7 @@ struct ProblemUtilities_LastIndexOfZero {
   }
 
   void GenerateTestingSetPop() {
+    population_validation_outputs.resize(testing_set.GetSize());
     for (size_t i = 0; i < testing_set.GetSize(); ++i) {
       testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
       testingset_pop[i]->CalcOut();
@@ -1936,6 +1956,8 @@ struct ProblemUtilities_VectorAverage {
 
   emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
 
+  emp::vector<emp::vector<output_t>> population_validation_outputs;
+
   // --- Useful during a test evaluation ---
   emp::Ptr<problem_org_t> cur_eval_test_org;
   bool submitted;
@@ -2043,6 +2065,7 @@ struct ProblemUtilities_VectorAverage {
   }
 
   void GenerateTestingSetPop() {
+    population_validation_outputs.resize(testing_set.GetSize());
     for (size_t i = 0; i < testing_set.GetSize(); ++i) {
       testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
       testingset_pop[i]->CalcOut();
@@ -2156,6 +2179,8 @@ struct ProblemUtilities_CountOdds {
 
   emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
 
+  emp::vector<emp::vector<output_t>> population_validation_outputs;
+
   // --- Useful during a test evaluation ---
   emp::Ptr<problem_org_t> cur_eval_test_org;
   bool submitted;
@@ -2263,6 +2288,7 @@ struct ProblemUtilities_CountOdds {
   }
 
   void GenerateTestingSetPop() {
+    population_validation_outputs.resize(testing_set.GetSize());
     for (size_t i = 0; i < testing_set.GetSize(); ++i) {
       testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
       testingset_pop[i]->CalcOut();
@@ -2422,6 +2448,8 @@ struct ProblemUtilities_MirrorImage {
 
   emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
 
+  emp::vector<emp::vector<output_t>> population_validation_outputs;
+
   // --- Useful during a test evaluation ---
   emp::Ptr<problem_org_t> cur_eval_test_org;
   bool submitted;
@@ -2575,6 +2603,7 @@ struct ProblemUtilities_MirrorImage {
   }
 
   void GenerateTestingSetPop() {
+    population_validation_outputs.resize(testing_set.GetSize());
     for (size_t i = 0; i < testing_set.GetSize(); ++i) {
       testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
       testingset_pop[i]->CalcOut();
@@ -2693,6 +2722,7 @@ struct ProblemUtilities_SumOfSquares {
   testcase_set_t training_set;
 
   emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
+  emp::vector<emp::vector<output_t>> population_validation_outputs;
 
   // // --- Useful during a test evaluation ---
   emp::Ptr<problem_org_t> cur_eval_test_org;
@@ -2755,6 +2785,7 @@ struct ProblemUtilities_SumOfSquares {
   }
 
   void GenerateTestingSetPop() {
+    population_validation_outputs.resize(testing_set.GetSize());
     for (size_t i = 0; i < testing_set.GetSize(); ++i) {
       testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
       testingset_pop[i]->CalcOut();
@@ -2873,6 +2904,7 @@ struct ProblemUtilities_VectorsSummed {
   testcase_set_t training_set;
 
   emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
+  emp::vector<emp::vector<output_t>> population_validation_outputs;
 
   // --- Useful during a test evaluation ---
   emp::Ptr<problem_org_t> cur_eval_test_org;
@@ -3010,6 +3042,7 @@ struct ProblemUtilities_VectorsSummed {
   }
 
   void GenerateTestingSetPop() {
+    population_validation_outputs.resize(testing_set.GetSize());
     for (size_t i = 0; i < testing_set.GetSize(); ++i) {
       testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
       testingset_pop[i]->CalcOut();
@@ -3335,6 +3368,7 @@ struct ProblemUtilities_Median {
   testcase_set_t training_set;
 
   emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
+  emp::vector<emp::vector<output_t>> population_validation_outputs;
 
   // // --- Useful during a test evaluation ---
   emp::Ptr<problem_org_t> cur_eval_test_org;
@@ -3419,6 +3453,7 @@ struct ProblemUtilities_Median {
   }
 
   void GenerateTestingSetPop() {
+    population_validation_outputs.resize(testing_set.GetSize());
     for (size_t i = 0; i < testing_set.GetSize(); ++i) {
       testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
       testingset_pop[i]->CalcOut();
@@ -3513,6 +3548,7 @@ struct ProblemUtilities_Smallest {
   testcase_set_t training_set;
 
   emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
+  emp::vector<emp::vector<output_t>> population_validation_outputs;
 
   // // --- Useful during a test evaluation ---
   emp::Ptr<problem_org_t> cur_eval_test_org;
@@ -3588,6 +3624,7 @@ struct ProblemUtilities_Smallest {
   }
 
   void GenerateTestingSetPop() {
+    population_validation_outputs.resize(testing_set.GetSize());
     for (size_t i = 0; i < testing_set.GetSize(); ++i) {
       testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
       testingset_pop[i]->CalcOut();

@@ -431,6 +431,7 @@ protected:
 
   size_t smallest_prog_sol_size;
   bool solution_found;
+  size_t update_first_solution_found;
 
   emp::BitSet<TAG_WIDTH> call_tag;
   
@@ -505,6 +506,7 @@ protected:
   Cohorts test_cohorts;
 
   emp::Ptr<emp::DataFile> solution_file;
+  emp::Ptr<emp::DataFile> prog_phen_diversity_file;
 
   struct TestResult {
     double score;
@@ -543,6 +545,8 @@ protected:
     std::function<size_t(void)> get_validation_eval__num_passes;          // - get_validation_eval__num_passes;
     std::function<size_t(void)> get_validation_eval__num_tests;           // - get_validation_eval__num_tests
     std::function<std::string(void)> get_validation_eval__passes_by_test; // - get_validation_eval__passes_by_test
+    std::function<double(void)> get_prog_behavioral_diversity;
+    std::function<double(void)> get_prog_unique_behavioral_phenotypes;
     
     // program 'morphology' stats
     std::function<size_t(void)> get_program_len;
@@ -1038,6 +1042,7 @@ public:
   ~ProgramSynthesisExperiment() {
     if (setup) {
       solution_file.Delete();
+      prog_phen_diversity_file.Delete();
       eval_hardware.Delete();
       inst_lib.Delete();
       prog_world.Delete();
@@ -1116,6 +1121,7 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
 
   smallest_prog_sol_size = MAX_PROG_SIZE + 1;
   solution_found = false;
+  update_first_solution_found = GENERATIONS + 1;
 
   // Configure the program world.
   prog_world->SetPopStruct_Mixed(true);
@@ -1134,7 +1140,11 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
     std::cout << "solution found? " << solution_found << "; ";
     std::cout << "smallest solution? " << smallest_prog_sol_size << std::endl;
 
-    if (update % SNAPSHOT_INTERVAL == 0) do_pop_snapshot_sig.Trigger();
+    if (update % SNAPSHOT_INTERVAL == 0 || update_first_solution_found == update) do_pop_snapshot_sig.Trigger();
+
+    if (update_first_solution_found == update && update % SUMMARY_STATS_INTERVAL != 0) {
+      prog_world->GetFile(DATA_DIRECTORY + "/prog_gen_sys.csv").Update(); // Update the program systematics files
+    } 
 
     prog_world->Update();
     prog_world->ClearCache();
@@ -1662,6 +1672,7 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
       if (pass_total == PROGRAM_MAX_PASSES && prog_org.GetGenome().GetSize() < smallest_prog_sol_size) {
         stats_util.cur_progID = pID;
         if (ScreenForSolution(prog_org)) {
+          if (!solution_found) { update_first_solution_found = prog_world->GetUpdate(); }
           solution_found = true;
           smallest_prog_sol_size = prog_org.GetGenome().GetSize();
           // Add to solutions file.
@@ -1965,6 +1976,16 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
   // Setup snapshot program stats.
   SetupProgramStats();
 
+  std::function<size_t(void)> get_update = [this]() { return prog_world->GetUpdate(); };
+  std::function<double(void)> get_evaluations = [this]() {
+    if (EVALUATION_MODE == (size_t)EVALUATION_TYPE::COHORT) {
+      // update * cohort size * cohort size * num cohorts
+      return prog_world->GetUpdate() * PROG_COHORT_SIZE * TEST_COHORT_SIZE * NUM_COHORTS;
+    } else {
+      return prog_world->GetUpdate() * PROG_POP_SIZE * TEST_POP_SIZE;
+    }
+  };
+
   // Setup program systematics
   prog_genotypic_systematics = emp::NewPtr<emp::Systematics<prog_org_t, prog_org_gen_t>>([](const prog_org_t & o) { return o.GetGenome(); });
   prog_genotypic_systematics->AddEvolutionaryDistinctivenessDataNode();
@@ -1996,6 +2017,7 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
   // - variance_sparse_pairwise_distances
   prog_gen_sys_file.template AddFun<size_t>([this]() { return prog_genotypic_systematics->GetVariancePairwiseDistance(true); }, "variance_sparse_pairwise_distances", "Number sparse taxa");
 
+  prog_gen_sys_file.AddFun(get_evaluations, "evaluations");
 
   prog_gen_sys_file.PrintHeaderKeys();
 
@@ -2007,17 +2029,18 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
     return stream.str();
   }, "program", "Program");
 
+  // Setup prog_phen_diversity_file --> Gets updated during a snapshot, so we can assume that 
+  prog_phen_diversity_file = emp::NewPtr<emp::DataFile>(DATA_DIRECTORY + "/prog_phenotype_diversity.csv");
+  prog_phen_diversity_file->AddFun(get_update, "update");
+  prog_phen_diversity_file->AddFun(get_evaluations, "evaluations");
+  // - behavioral diversity
+  prog_phen_diversity_file->AddFun(program_stats.get_prog_behavioral_diversity, "behavioral_diversity", "Shannon entropy of program behaviors");
+  // - unique behavioral phenotypes
+  prog_phen_diversity_file->AddFun(program_stats.get_prog_unique_behavioral_phenotypes, "unique_behavioral_phenotypes", "Unique behavioral profiles in program population");
+  prog_phen_diversity_file->PrintHeaderKeys();
+
   // Setup solution file.
   solution_file = emp::NewPtr<emp::DataFile>(DATA_DIRECTORY + "/solutions.csv");
-  std::function<size_t(void)> get_update = [this]() { return prog_world->GetUpdate(); };
-  std::function<double(void)> get_evaluations = [this]() {
-    if (EVALUATION_MODE == (size_t)EVALUATION_TYPE::COHORT) {
-      // update * cohort size * cohort size * num cohorts
-      return prog_world->GetUpdate() * PROG_COHORT_SIZE * TEST_COHORT_SIZE * NUM_COHORTS;
-    } else {
-      return prog_world->GetUpdate() * PROG_POP_SIZE * TEST_POP_SIZE;
-    }
-  };
 
   solution_file->AddFun(get_update, "update");
   solution_file->AddFun(get_evaluations, "evaluations");
@@ -2198,9 +2221,11 @@ void ProgramSynthesisExperiment::SnapshotPrograms() {
   for (stats_util.cur_progID = 0; stats_util.cur_progID < prog_world->GetSize(); ++stats_util.cur_progID) {
     if (!prog_world->IsOccupied(stats_util.cur_progID)) continue;
     DoTestingSetValidation(prog_world->GetOrg(stats_util.cur_progID)); // Do validation for program.
+    // Update snapshot file
     file.Update();
   }
-
+  // Take diversity snapshot
+  prog_phen_diversity_file->Update();
   // Snapshot phylogeny
   prog_genotypic_systematics->Snapshot(snapshot_dir + "/program_phylogeny_" + emp::to_string((int)prog_world->GetUpdate()) + ".csv");
 }
@@ -2355,6 +2380,7 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
     stats_util.current_program__validation__total_score = 0;
     stats_util.current_program__validation__total_passes = 0;
     stats_util.current_program__validation__is_solution = false;
+    prob_utils_NumberIO.population_validation_outputs[stats_util.cur_progID].resize(prob_utils_NumberIO.testingset_pop.size());
     // For each test in validation set, evaluate program.
     for (size_t testID = 0; testID < prob_utils_NumberIO.testingset_pop.size(); ++testID) {
       stats_util.cur_testID = testID;
@@ -2365,10 +2391,13 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
       stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
       stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
       stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+      prob_utils_NumberIO.population_validation_outputs[stats_util.cur_progID][testID] = prob_utils_NumberIO.submitted_val;
     }
     stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_NumberIO.testingset_pop.size();
     end_program_eval.Trigger(prog_org);
   }; // todo - test this out
+  program_stats.get_prog_behavioral_diversity = [this]() { return emp::ShannonEntropy(prob_utils_NumberIO.population_validation_outputs); };
+  program_stats.get_prog_unique_behavioral_phenotypes = [this]() { return emp::UniqueCount(prob_utils_NumberIO.population_validation_outputs); };
 
   ScreenForSolution = [this](prog_org_t & prog_org) {
     begin_program_eval.Trigger(prog_org);
@@ -2671,6 +2700,7 @@ void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() {
     stats_util.current_program__validation__total_score = 0;
     stats_util.current_program__validation__total_passes = 0;
     stats_util.current_program__validation__is_solution = false;
+    prob_utils_SmallOrLarge.population_validation_outputs[stats_util.cur_progID].resize(prob_utils_SmallOrLarge.testingset_pop.size());
     // For each test in validation set, evaluate program.
     for (size_t testID = 0; testID < prob_utils_SmallOrLarge.testingset_pop.size(); ++testID) {
       stats_util.cur_testID = testID;
@@ -2681,10 +2711,14 @@ void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() {
       stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
       stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
       stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+      prob_utils_SmallOrLarge.population_validation_outputs[stats_util.cur_progID][testID] = prob_utils_SmallOrLarge.submitted_str;
     }
     stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_SmallOrLarge.testingset_pop.size();
     end_program_eval.Trigger(prog_org);
   };
+
+  program_stats.get_prog_behavioral_diversity = [this]() { return emp::ShannonEntropy(prob_utils_SmallOrLarge.population_validation_outputs); };
+  program_stats.get_prog_unique_behavioral_phenotypes = [this]() { return emp::UniqueCount(prob_utils_SmallOrLarge.population_validation_outputs); };
 
   // How should we screen for a solution?
   ScreenForSolution = [this](prog_org_t & prog_org) {
@@ -2965,6 +2999,7 @@ void ProgramSynthesisExperiment::SetupProblem_ForLoopIndex() {
     stats_util.current_program__validation__total_score = 0;
     stats_util.current_program__validation__total_passes = 0;
     stats_util.current_program__validation__is_solution = false;
+    prob_utils_ForLoopIndex.population_validation_outputs[stats_util.cur_progID].resize(prob_utils_ForLoopIndex.testingset_pop.size());
     // For each test in validation set, evaluate program.
     for (size_t testID = 0; testID < prob_utils_ForLoopIndex.testingset_pop.size(); ++testID) {
       stats_util.cur_testID = testID;
@@ -2975,10 +3010,13 @@ void ProgramSynthesisExperiment::SetupProblem_ForLoopIndex() {
       stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
       stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
       stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+      prob_utils_ForLoopIndex.population_validation_outputs[stats_util.cur_progID][testID] = prob_utils_ForLoopIndex.submitted_vec;
     }
     stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_ForLoopIndex.testingset_pop.size();
     end_program_eval.Trigger(prog_org);
   };
+  program_stats.get_prog_behavioral_diversity = [this]() { return emp::ShannonEntropy(prob_utils_ForLoopIndex.population_validation_outputs); };
+  program_stats.get_prog_unique_behavioral_phenotypes = [this]() { return emp::UniqueCount(prob_utils_ForLoopIndex.population_validation_outputs); };
 
   // How should we screen for a solution?
   ScreenForSolution = [this](prog_org_t & prog_org) {
@@ -3250,6 +3288,7 @@ void ProgramSynthesisExperiment::SetupProblem_CompareStringLengths() {
     stats_util.current_program__validation__total_score = 0;
     stats_util.current_program__validation__total_passes = 0;
     stats_util.current_program__validation__is_solution = false;
+    prob_utils_CompareStringLengths.population_validation_outputs[stats_util.cur_progID].resize(prob_utils_CompareStringLengths.testingset_pop.size());
     // For each test in validation set, evaluate program.
     for (size_t testID = 0; testID < prob_utils_CompareStringLengths.testingset_pop.size(); ++testID) {
       stats_util.cur_testID = testID;
@@ -3260,10 +3299,13 @@ void ProgramSynthesisExperiment::SetupProblem_CompareStringLengths() {
       stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
       stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
       stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+      prob_utils_CompareStringLengths.population_validation_outputs[stats_util.cur_progID][testID] = prob_utils_CompareStringLengths.submitted_val;
     }
     stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_CompareStringLengths.testingset_pop.size();
     end_program_eval.Trigger(prog_org);
   };
+  program_stats.get_prog_behavioral_diversity = [this]() { return emp::ShannonEntropy(prob_utils_CompareStringLengths.population_validation_outputs); };
+  program_stats.get_prog_unique_behavioral_phenotypes = [this]() { return emp::UniqueCount(prob_utils_CompareStringLengths.population_validation_outputs); };
 
   // How should we screen for a solution?
   ScreenForSolution = [this](prog_org_t & prog_org) {
@@ -3554,6 +3596,7 @@ void ProgramSynthesisExperiment::SetupProblem_CollatzNumbers() {
     stats_util.current_program__validation__total_score = 0;
     stats_util.current_program__validation__total_passes = 0;
     stats_util.current_program__validation__is_solution = false;
+    prob_utils_CollatzNumbers.population_validation_outputs[stats_util.cur_progID].resize(prob_utils_CollatzNumbers.testingset_pop.size());
     // For each test in validation set, evaluate program.
     for (size_t testID = 0; testID < prob_utils_CollatzNumbers.testingset_pop.size(); ++testID) {
       stats_util.cur_testID = testID;
@@ -3564,11 +3607,14 @@ void ProgramSynthesisExperiment::SetupProblem_CollatzNumbers() {
       stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
       stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
       stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+      prob_utils_CollatzNumbers.population_validation_outputs[stats_util.cur_progID][testID] = prob_utils_CollatzNumbers.submitted_val; 
     }
     stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_CollatzNumbers.testingset_pop.size();
     end_program_eval.Trigger(prog_org);
   };
-
+  program_stats.get_prog_behavioral_diversity = [this]() { return emp::ShannonEntropy(prob_utils_CollatzNumbers.population_validation_outputs); };
+  program_stats.get_prog_unique_behavioral_phenotypes = [this]() { return emp::UniqueCount(prob_utils_CollatzNumbers.population_validation_outputs); };
+  
   // How should we screen for a solution?
   ScreenForSolution = [this](prog_org_t & prog_org) {
     begin_program_eval.Trigger(prog_org);
@@ -3872,6 +3918,7 @@ void ProgramSynthesisExperiment::SetupProblem_StringLengthsBackwards() {
     stats_util.current_program__validation__total_score = 0;
     stats_util.current_program__validation__total_passes = 0;
     stats_util.current_program__validation__is_solution = false;
+    prob_utils_StringLengthsBackwards.population_validation_outputs[stats_util.cur_progID].resize(prob_utils_StringLengthsBackwards.testingset_pop.size());
     // For each test in validation set, evaluate program.
     for (size_t testID = 0; testID < prob_utils_StringLengthsBackwards.testingset_pop.size(); ++testID) {
       stats_util.cur_testID = testID;
@@ -3882,10 +3929,13 @@ void ProgramSynthesisExperiment::SetupProblem_StringLengthsBackwards() {
       stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
       stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
       stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+      prob_utils_StringLengthsBackwards.population_validation_outputs[stats_util.cur_progID][testID] = prob_utils_StringLengthsBackwards.submitted_vec;
     }
     stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_StringLengthsBackwards.testingset_pop.size();
     end_program_eval.Trigger(prog_org);
   }; 
+  program_stats.get_prog_behavioral_diversity = [this]() { return emp::ShannonEntropy(prob_utils_StringLengthsBackwards.population_validation_outputs); };
+  program_stats.get_prog_unique_behavioral_phenotypes = [this]() { return emp::UniqueCount(prob_utils_StringLengthsBackwards.population_validation_outputs); };
 
   // How should we screen for a solution?
   ScreenForSolution = [this](prog_org_t & prog_org) {
@@ -4122,6 +4172,7 @@ void ProgramSynthesisExperiment::SetupProblem_LastIndexOfZero() {
     stats_util.current_program__validation__total_score = 0;
     stats_util.current_program__validation__total_passes = 0;
     stats_util.current_program__validation__is_solution = false;
+    prob_utils_LastIndexOfZero.population_validation_outputs[stats_util.cur_progID].resize(prob_utils_LastIndexOfZero.testingset_pop.size());
     // For each test in validation set, evaluate program.
     for (size_t testID = 0; testID < prob_utils_LastIndexOfZero.testingset_pop.size(); ++testID) {
       stats_util.cur_testID = testID;
@@ -4132,10 +4183,13 @@ void ProgramSynthesisExperiment::SetupProblem_LastIndexOfZero() {
       stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
       stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
       stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+      prob_utils_LastIndexOfZero.population_validation_outputs[stats_util.cur_progID][testID] = prob_utils_LastIndexOfZero.submitted_val;
     }
     stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_LastIndexOfZero.testingset_pop.size();
     end_program_eval.Trigger(prog_org);
   };
+  program_stats.get_prog_behavioral_diversity = [this]() { return emp::ShannonEntropy(prob_utils_LastIndexOfZero.population_validation_outputs); };
+  program_stats.get_prog_unique_behavioral_phenotypes = [this]() { return emp::UniqueCount(prob_utils_LastIndexOfZero.population_validation_outputs); };
 
   // How should we screen for a solution?
   ScreenForSolution = [this](prog_org_t & prog_org) {
@@ -4429,6 +4483,7 @@ void ProgramSynthesisExperiment::SetupProblem_VectorAverage() {
     stats_util.current_program__validation__total_score = 0;
     stats_util.current_program__validation__total_passes = 0;
     stats_util.current_program__validation__is_solution = false;
+    prob_utils_VectorAverage.population_validation_outputs[stats_util.cur_progID].resize(prob_utils_VectorAverage.testingset_pop.size());
     // For each test in validation set, evaluate program.
     for (size_t testID = 0; testID < prob_utils_VectorAverage.testingset_pop.size(); ++testID) {
       stats_util.cur_testID = testID;
@@ -4439,10 +4494,13 @@ void ProgramSynthesisExperiment::SetupProblem_VectorAverage() {
       stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
       stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
       stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+      prob_utils_VectorAverage.population_validation_outputs[stats_util.cur_progID][testID] = prob_utils_VectorAverage.submitted_val;
     }
     stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_VectorAverage.testingset_pop.size();
     end_program_eval.Trigger(prog_org);
   };
+  program_stats.get_prog_behavioral_diversity = [this]() { return emp::ShannonEntropy(prob_utils_VectorAverage.population_validation_outputs); };
+  program_stats.get_prog_unique_behavioral_phenotypes = [this]() { return emp::UniqueCount(prob_utils_VectorAverage.population_validation_outputs); };
 
   // How should we screen for a solution?
   ScreenForSolution = [this](prog_org_t & prog_org) {
@@ -4731,6 +4789,7 @@ void ProgramSynthesisExperiment::SetupProblem_CountOdds() {
     stats_util.current_program__validation__total_score = 0;
     stats_util.current_program__validation__total_passes = 0;
     stats_util.current_program__validation__is_solution = false;
+    prob_utils_CountOdds.population_validation_outputs[stats_util.cur_progID].resize(prob_utils_CountOdds.testingset_pop.size());
     // For each test in validation set, evaluate program.
     for (size_t testID = 0; testID < prob_utils_CountOdds.testingset_pop.size(); ++testID) {
       stats_util.cur_testID = testID;
@@ -4741,10 +4800,13 @@ void ProgramSynthesisExperiment::SetupProblem_CountOdds() {
       stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
       stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
       stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+      prob_utils_CountOdds.population_validation_outputs[stats_util.cur_progID][testID] = prob_utils_CountOdds.submitted_val;
     }
     stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_CountOdds.testingset_pop.size();
     end_program_eval.Trigger(prog_org);
   };
+  program_stats.get_prog_behavioral_diversity = [this]() { return emp::ShannonEntropy(prob_utils_CountOdds.population_validation_outputs); };
+  program_stats.get_prog_unique_behavioral_phenotypes = [this]() { return emp::UniqueCount(prob_utils_CountOdds.population_validation_outputs); };
 
   // How should we screen for a solution?
   ScreenForSolution = [this](prog_org_t & prog_org) {
@@ -5034,6 +5096,7 @@ void ProgramSynthesisExperiment::SetupProblem_MirrorImage() {
     stats_util.current_program__validation__total_score = 0;
     stats_util.current_program__validation__total_passes = 0;
     stats_util.current_program__validation__is_solution = false;
+    prob_utils_MirrorImage.population_validation_outputs[stats_util.cur_progID].resize(prob_utils_MirrorImage.testingset_pop.size());
     // For each test in validation set, evaluate program.
     for (size_t testID = 0; testID < prob_utils_MirrorImage.testingset_pop.size(); ++testID) {
       stats_util.cur_testID = testID;
@@ -5044,10 +5107,13 @@ void ProgramSynthesisExperiment::SetupProblem_MirrorImage() {
       stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
       stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
       stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+      prob_utils_MirrorImage.population_validation_outputs[stats_util.cur_progID][testID] = prob_utils_MirrorImage.submitted_val;
     }
     stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_MirrorImage.testingset_pop.size();
     end_program_eval.Trigger(prog_org);
   };
+  program_stats.get_prog_behavioral_diversity = [this]() { return emp::ShannonEntropy(prob_utils_MirrorImage.population_validation_outputs); };
+  program_stats.get_prog_unique_behavioral_phenotypes = [this]() { return emp::UniqueCount(prob_utils_MirrorImage.population_validation_outputs); };
 
   // How should we screen for a solution?
   ScreenForSolution = [this](prog_org_t & prog_org) {
@@ -5355,6 +5421,7 @@ void ProgramSynthesisExperiment::SetupProblem_SumOfSquares() {
     stats_util.current_program__validation__total_score = 0;
     stats_util.current_program__validation__total_passes = 0;
     stats_util.current_program__validation__is_solution = false;
+    prob_utils_SumOfSquares.population_validation_outputs[stats_util.cur_progID].resize(prob_utils_SumOfSquares.testingset_pop.size());
     // For each test in validation set, evaluate program.
     for (size_t testID = 0; testID < prob_utils_SumOfSquares.testingset_pop.size(); ++testID) {
       stats_util.cur_testID = testID;
@@ -5365,10 +5432,13 @@ void ProgramSynthesisExperiment::SetupProblem_SumOfSquares() {
       stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
       stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
       stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+      prob_utils_SumOfSquares.population_validation_outputs[stats_util.cur_progID][testID] = prob_utils_SumOfSquares.submitted_val;
     }
     stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_SumOfSquares.testingset_pop.size();
     end_program_eval.Trigger(prog_org);
   };
+  program_stats.get_prog_behavioral_diversity = [this]() { return emp::ShannonEntropy(prob_utils_SumOfSquares.population_validation_outputs); };
+  program_stats.get_prog_unique_behavioral_phenotypes = [this]() { return emp::UniqueCount(prob_utils_SumOfSquares.population_validation_outputs); };
 
   // How should we screen for a solution?
   ScreenForSolution = [this](prog_org_t & prog_org) {
@@ -5656,6 +5726,7 @@ void ProgramSynthesisExperiment::SetupProblem_VectorsSummed() {
     stats_util.current_program__validation__total_score = 0;
     stats_util.current_program__validation__total_passes = 0;
     stats_util.current_program__validation__is_solution = false;
+    prob_utils_VectorsSummed.population_validation_outputs[stats_util.cur_progID].resize(prob_utils_VectorsSummed.testingset_pop.size());
     // For each test in validation set, evaluate program.
     for (size_t testID = 0; testID < prob_utils_VectorsSummed.testingset_pop.size(); ++testID) {
       stats_util.cur_testID = testID;
@@ -5666,10 +5737,13 @@ void ProgramSynthesisExperiment::SetupProblem_VectorsSummed() {
       stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
       stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
       stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+      prob_utils_VectorsSummed.population_validation_outputs[stats_util.cur_progID][testID] = prob_utils_VectorsSummed.submitted_vec;
     }
     stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_VectorsSummed.testingset_pop.size();
     end_program_eval.Trigger(prog_org);
   };
+  program_stats.get_prog_behavioral_diversity = [this]() { return emp::ShannonEntropy(prob_utils_VectorsSummed.population_validation_outputs); };
+  program_stats.get_prog_unique_behavioral_phenotypes = [this]() { return emp::UniqueCount(prob_utils_VectorsSummed.population_validation_outputs); };
 
   // How should we screen for a solution?
   ScreenForSolution = [this](prog_org_t & prog_org) {
@@ -5998,6 +6072,7 @@ void ProgramSynthesisExperiment::SetupProblem_Median() {
     stats_util.current_program__validation__total_score = 0;
     stats_util.current_program__validation__total_passes = 0;
     stats_util.current_program__validation__is_solution = false;
+    prob_utils_Median.population_validation_outputs[stats_util.cur_progID].resize(prob_utils_Median.testingset_pop.size());
     // For each test in validation set, evaluate program.
     for (size_t testID = 0; testID < prob_utils_Median.testingset_pop.size(); ++testID) {
       stats_util.cur_testID = testID;
@@ -6008,10 +6083,13 @@ void ProgramSynthesisExperiment::SetupProblem_Median() {
       stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
       stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
       stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+      prob_utils_Median.population_validation_outputs[stats_util.cur_progID][testID] = prob_utils_Median.submitted_val;
     }
     stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_Median.testingset_pop.size();
     end_program_eval.Trigger(prog_org);
   };
+  program_stats.get_prog_behavioral_diversity = [this]() { return emp::ShannonEntropy(prob_utils_Median.population_validation_outputs); };
+  program_stats.get_prog_unique_behavioral_phenotypes = [this]() { return emp::UniqueCount(prob_utils_Median.population_validation_outputs); };
 
   // How should we screen for a solution?
   ScreenForSolution = [this](prog_org_t & prog_org) {
@@ -6298,6 +6376,7 @@ void ProgramSynthesisExperiment::SetupProblem_Smallest() {
     stats_util.current_program__validation__total_score = 0;
     stats_util.current_program__validation__total_passes = 0;
     stats_util.current_program__validation__is_solution = false;
+    prob_utils_Smallest.population_validation_outputs[stats_util.cur_progID].resize(prob_utils_Smallest.testingset_pop.size());
     // For each test in validation set, evaluate program.
     for (size_t testID = 0; testID < prob_utils_Smallest.testingset_pop.size(); ++testID) {
       stats_util.cur_testID = testID;
@@ -6308,10 +6387,13 @@ void ProgramSynthesisExperiment::SetupProblem_Smallest() {
       stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
       stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
       stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+      prob_utils_Smallest.population_validation_outputs[stats_util.cur_progID][testID] = prob_utils_Smallest.submitted_val;
     }
     stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_Smallest.testingset_pop.size();
     end_program_eval.Trigger(prog_org);
   };
+  program_stats.get_prog_behavioral_diversity = [this]() { return emp::ShannonEntropy(prob_utils_Smallest.population_validation_outputs); };
+  program_stats.get_prog_unique_behavioral_phenotypes = [this]() { return emp::UniqueCount(prob_utils_Smallest.population_validation_outputs); };
 
   // How should we screen for a solution?
   ScreenForSolution = [this](prog_org_t & prog_org) {
