@@ -158,6 +158,8 @@ public:
 
   using test_org_phen_t = TestOrg_Base::Phenotype;
 
+  using prog_taxon_t = typename emp::Systematics<prog_org_t, prog_org_gen_t>::taxon_t;
+
   // test world aliases
   using prob_NumberIO_world_t = emp::World<TestOrg_NumberIO>;
   using prob_SmallOrLarge_world_t = emp::World<TestOrg_SmallOrLarge>;
@@ -437,6 +439,8 @@ protected:
   
   emp::Ptr<prog_world_t> prog_world;
   emp::Ptr<emp::Systematics<prog_org_t, prog_org_gen_t>> prog_genotypic_systematics;
+  emp::Ptr<prog_taxon_t> mrca_taxa_ptr;
+  size_t mrca_changes;
   
   emp::vector<std::function<double(prog_org_t &)>> lexicase_prog_fit_set;
 
@@ -1122,6 +1126,8 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
   smallest_prog_sol_size = MAX_PROG_SIZE + 1;
   solution_found = false;
   update_first_solution_found = GENERATIONS + 1;
+  mrca_taxa_ptr = nullptr;
+  mrca_changes = 0;
 
   // Configure the program world.
   prog_world->SetPopStruct_Mixed(true);
@@ -2002,6 +2008,7 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
   // - GetMRCADepth
   // - CalcDiversity (entropy of taxa in population)
   // Functions to add:
+  prog_gen_sys_file.template AddFun<size_t>([this]() { return mrca_changes; }, "mrca_changes", "MRCA changes");
   prog_gen_sys_file.AddStats(*prog_genotypic_systematics->GetDataNode("evolutionary_distinctiveness") , "evolutionary_distinctiveness", "evolutionary distinctiveness for a single update", true, true);
   prog_gen_sys_file.AddStats(*prog_genotypic_systematics->GetDataNode("pairwise_distances"), "pairwise_distance", "pairwise distance for a single update", true, true);
   // - GetPhylogeneticDiversity
@@ -2022,12 +2029,20 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
   prog_gen_sys_file.PrintHeaderKeys();
 
   // Add function(s) to program systematics snapshot
-  using pg_taxon_t = typename emp::Systematics<prog_org_t, prog_org_gen_t>::taxon_t;
-  prog_genotypic_systematics->AddSnapshotFun([](const pg_taxon_t & t) {
+  prog_genotypic_systematics->AddSnapshotFun([](const prog_taxon_t & t) {
     std::ostringstream stream;
     t.GetInfo().PrintCSVEntry(stream);
     return stream.str();
   }, "program", "Program");
+
+  // Track mrca in prog gen sys
+  do_update_sig.AddAction([this]() {
+    emp::Ptr<prog_taxon_t> cur_taxa = prog_genotypic_systematics->GetMRCA();
+    if (cur_taxa != mrca_taxa_ptr) {
+      ++mrca_changes;
+      mrca_taxa_ptr = cur_taxa;
+    }
+  });
 
   // Setup prog_phen_diversity_file --> Gets updated during a snapshot, so we can assume that 
   prog_phen_diversity_file = emp::NewPtr<emp::DataFile>(DATA_DIRECTORY + "/prog_phenotype_diversity.csv");
