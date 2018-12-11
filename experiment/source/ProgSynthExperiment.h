@@ -2473,6 +2473,7 @@ void ProgramSynthesisExperiment::SetupProblem_NumberIO() {
     return CalcProgramResultOnTest(prog_org, *test_org_ptr);
   };
 
+  prob_utils_NumberIO.population_validation_outputs.resize(PROG_POP_SIZE);
   DoTestingSetValidation = [this](prog_org_t & prog_org) {
     // evaluate program on full testing set; update stats utils with results
     begin_program_eval.Trigger(prog_org);
@@ -2793,6 +2794,7 @@ void ProgramSynthesisExperiment::SetupProblem_SmallOrLarge() {
   };
 
   // How should we validate programs on testing set?
+  prob_utils_SmallOrLarge.population_validation_outputs.resize(PROG_POP_SIZE);
   DoTestingSetValidation = [this](prog_org_t & prog_org) { 
     // evaluate program on full testing set; update stats utils with results
     begin_program_eval.Trigger(prog_org);
@@ -3092,6 +3094,7 @@ void ProgramSynthesisExperiment::SetupProblem_ForLoopIndex() {
   };
 
   // How should we validate programs on testing set?
+  prob_utils_ForLoopIndex.population_validation_outputs.resize(PROG_POP_SIZE);
   DoTestingSetValidation = [this](prog_org_t & prog_org) { 
     // evaluate program on full testing set; update stats utils with results
     begin_program_eval.Trigger(prog_org);
@@ -3381,6 +3384,7 @@ void ProgramSynthesisExperiment::SetupProblem_CompareStringLengths() {
   };
 
   // How should we validate programs on testing set?
+  prob_utils_CompareStringLengths.population_validation_outputs.resize(PROG_POP_SIZE);
   DoTestingSetValidation = [this](prog_org_t & prog_org) { 
     // evaluate program on full testing set; update stats utils with results
     begin_program_eval.Trigger(prog_org);
@@ -3689,6 +3693,7 @@ void ProgramSynthesisExperiment::SetupProblem_CollatzNumbers() {
   };
 
   // How should we validate programs on testing set?
+  prob_utils_CollatzNumbers.population_validation_outputs.resize(PROG_POP_SIZE);
   DoTestingSetValidation = [this](prog_org_t & prog_org) { 
     // evaluate program on full testing set; update stats utils with results
     begin_program_eval.Trigger(prog_org);
@@ -4011,6 +4016,7 @@ void ProgramSynthesisExperiment::SetupProblem_StringLengthsBackwards() {
   };
 
   // How should we validate programs on testing set?
+  prob_utils_StringLengthsBackwards.population_validation_outputs.resize(PROG_POP_SIZE);
   DoTestingSetValidation = [this](prog_org_t & prog_org) { 
     // evaluate program on full testing set; update stats utils with results
     begin_program_eval.Trigger(prog_org);
@@ -4265,6 +4271,7 @@ void ProgramSynthesisExperiment::SetupProblem_LastIndexOfZero() {
   };
 
   // How should we validate programs on testing set?
+  prob_utils_LastIndexOfZero.population_validation_outputs.resize(PROG_POP_SIZE);
   DoTestingSetValidation = [this](prog_org_t & prog_org) { 
     // evaluate program on full testing set; update stats utils with results
     begin_program_eval.Trigger(prog_org);
@@ -4576,6 +4583,7 @@ void ProgramSynthesisExperiment::SetupProblem_VectorAverage() {
   };
 
   // How should we validate programs on testing set?
+  prob_utils_VectorAverage.population_validation_outputs.resize(PROG_POP_SIZE);
   DoTestingSetValidation = [this](prog_org_t & prog_org) { 
     // evaluate program on full testing set; update stats utils with results
     begin_program_eval.Trigger(prog_org);
@@ -4882,6 +4890,7 @@ void ProgramSynthesisExperiment::SetupProblem_CountOdds() {
   };
 
   // How should we validate programs on testing set?
+  prob_utils_CountOdds.population_validation_outputs.resize(PROG_POP_SIZE);
   DoTestingSetValidation = [this](prog_org_t & prog_org) { 
     // evaluate program on full testing set; update stats utils with results
     begin_program_eval.Trigger(prog_org);
@@ -5189,6 +5198,7 @@ void ProgramSynthesisExperiment::SetupProblem_MirrorImage() {
   };
 
   // How should we validate programs on testing set?
+  prob_utils_MirrorImage.population_validation_outputs.resize(PROG_POP_SIZE);
   DoTestingSetValidation = [this](prog_org_t & prog_org) { 
     // evaluate program on full testing set; update stats utils with results
     begin_program_eval.Trigger(prog_org);
@@ -5514,6 +5524,7 @@ void ProgramSynthesisExperiment::SetupProblem_SumOfSquares() {
   };
 
   // How should we validate programs on testing set?
+  prob_utils_SumOfSquares.population_validation_outputs.resize(PROG_POP_SIZE);
   DoTestingSetValidation = [this](prog_org_t & prog_org) { 
     // evaluate program on full testing set; update stats utils with results
     begin_program_eval.Trigger(prog_org);
@@ -5819,6 +5830,7 @@ void ProgramSynthesisExperiment::SetupProblem_VectorsSummed() {
   };
 
   // How should we validate programs on testing set?
+  prob_utils_VectorsSummed.population_validation_outputs.resize(PROG_POP_SIZE);
   DoTestingSetValidation = [this](prog_org_t & prog_org) { 
     // evaluate program on full testing set; update stats utils with results
     begin_program_eval.Trigger(prog_org);
@@ -6165,6 +6177,7 @@ void ProgramSynthesisExperiment::SetupProblem_Median() {
   };
 
   // How should we validate programs on testing set?
+  prob_utils_Median.population_validation_outputs.resize(PROG_POP_SIZE);
   DoTestingSetValidation = [this](prog_org_t & prog_org) { 
     // evaluate program on full testing set; update stats utils with results
     begin_program_eval.Trigger(prog_org);
@@ -6469,6 +6482,7 @@ void ProgramSynthesisExperiment::SetupProblem_Smallest() {
   };
 
   // How should we validate programs on testing set?
+  prob_utils_Smallest.population_validation_outputs.resize(PROG_POP_SIZE);
   DoTestingSetValidation = [this](prog_org_t & prog_org) { 
     // evaluate program on full testing set; update stats utils with results
     begin_program_eval.Trigger(prog_org);
