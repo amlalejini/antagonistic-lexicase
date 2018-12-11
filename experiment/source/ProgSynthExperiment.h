@@ -74,8 +74,8 @@ constexpr size_t MEM_SIZE = TAG_WIDTH;
 // - random - training examples randomly change over time
 // - static gen - use loaded training examples, but generate more random examples
 enum TRAINING_EXAMPLE_MODE_TYPE { COEVOLUTION=0, STATIC, RANDOM, STATIC_GEN, STATIC_COEVO };
-enum EVALUATION_TYPE { COHORT=0, FULL=1, PROG_ONLY_COHORT=2 };
-enum SELECTION_TYPE { LEXICASE=0, COHORT_LEXICASE, TOURNAMENT, DRIFT, PROG_ONLY_COHORT_LEXICASE };
+enum EVALUATION_TYPE { COHORT=0, FULL=1, PROG_ONLY_COHORT=2, TEST_DOWNSAMPLING };
+enum SELECTION_TYPE { LEXICASE=0, COHORT_LEXICASE, TOURNAMENT, DRIFT, PROG_ONLY_COHORT_LEXICASE, TEST_DOWNSAMPLING_LEXICASE };
 
 enum PROBLEM_ID { NumberIO=0,
                   SmallOrLarge,
@@ -1652,6 +1652,62 @@ void ProgramSynthesisExperiment::SetupEvaluation() {
       });
       break;
     }
+    case (size_t)EVALUATION_TYPE::TEST_DOWNSAMPLING: {
+      std::cout << "Setting up downsampled evaluation with NO program cohorts." << std::endl;
+      test_cohorts.Setup(TEST_POP_SIZE, TEST_COHORT_SIZE);
+      std::cout << "  # test cohorts = " << test_cohorts.GetCohortCnt() << std::endl;
+      NUM_COHORTS = prog_cohorts.GetCohortCnt();
+      PROGRAM_MAX_PASSES = TEST_COHORT_SIZE;  
+      
+      // Setup program world on placement signal response.
+      prog_world->OnPlacement([this](size_t pos) {
+        // Reset program phenotype on placement.
+        prog_world->GetOrg(pos).GetPhenotype().Reset(TEST_COHORT_SIZE); 
+      });
+
+      // Setup test world on placement signal response.
+      OnPlacement_ActiveTestCaseWorld([this](size_t pos) {
+        // Reset test phenotype on placement.
+        GetTestPhenotype(pos).Reset(PROG_POP_SIZE);   
+      });
+      
+
+      // What should happen on evaluation?
+      do_evaluation_sig.AddAction([this]() {
+
+        test_cohorts.Randomize(*random);
+
+        for (size_t pID = 0; pID < PROG_POP_SIZE; ++pID) {
+          emp_assert(prog_world->IsOccupied(pID));
+          prog_org_t & prog_org = prog_world->GetOrg(pID);
+          begin_program_eval.Trigger(prog_org);
+          for (size_t tID = 0; tID < TEST_COHORT_SIZE; ++tID) {
+            const size_t test_world_id = test_cohorts.GetWorldID(0, tID);
+            TestResult result = EvaluateWorldTest(prog_org, test_world_id);
+            
+            // Grab references to test and program phenotypes.
+            test_org_phen_t & test_phen = GetTestPhenotype(test_world_id);
+            prog_org_phen_t & prog_phen = prog_org.GetPhenotype();
+
+            // Test result contents:
+            // - double score;
+            // - bool pass;
+            // - bool sub;
+
+            // Update program phenotype.
+            prog_phen.RecordScore(tID, result.score);
+            prog_phen.RecordPass(tID, result.pass);
+            prog_phen.RecordSubmission(result.sub);
+            
+            // Update phenotypes.
+            test_phen.RecordScore(pID, result.score);
+            test_phen.RecordPass(pID, result.pass);
+          }
+          end_program_eval.Trigger(prog_org);
+        }
+      });
+      break;
+    }
     default: {
       std::cout << "Unknown EVALUATION_MODE (" << EVALUATION_MODE << "). Exiting." << std::endl;
       exit(-1);
@@ -1834,6 +1890,35 @@ void ProgramSynthesisExperiment::SetupProgramSelection() {
         }
       });
 
+      break;
+    }
+    case (size_t)SELECTION_TYPE::TEST_DOWNSAMPLING_LEXICASE: {
+      std::cout << "Setting up program selection - TEST_DOWNSAMPLING_LEXICASE experiment." << std::endl;
+      emp_assert(EVALUATION_MODE == (size_t)EVALUATION_TYPE::TEST_DOWNSAMPLING, "Program only Cohort lexicase selection requires program only COHORT evaluation mode.");
+
+      // Setup program fitness functions.
+      // - 1 function for every test cohort member.
+      for (size_t i = 0; i < TEST_COHORT_SIZE; ++i) {
+        lexicase_prog_fit_set.push_back([i](prog_org_t & prog_org) {
+          emp_assert(i < prog_org.GetPhenotype().test_scores.size(), i, prog_org.GetPhenotype().test_scores.size());
+          double score = prog_org.GetPhenotype().test_scores[i];
+          return score;
+        });
+      }
+      // Selection pressure for small program size.
+      lexicase_prog_fit_set.push_back([this](prog_org_t & prog_org) {
+        if (prog_org.GetPhenotype().num_passes == PROGRAM_MAX_PASSES) {
+          return (double)(MAX_PROG_SIZE - prog_org.GetGenome().GetSize());
+        } 
+        return 0.0;
+      });
+      // Add selection action
+      do_selection_sig.AddAction([this]() {
+          emp::LexicaseSelect_NAIVE(*prog_world,
+                                     lexicase_prog_fit_set,
+                                     PROG_POP_SIZE,
+                                     PROG_LEXICASE_MAX_FUNS); // TODO - track lexicase fit fun stats                          
+      });
       break;
     }
     case (size_t)SELECTION_TYPE::TOURNAMENT: {
