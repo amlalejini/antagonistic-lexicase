@@ -36,7 +36,7 @@ def main():
             if "set GENERATIONS" in line:
                 target_gen = line.split(" ")[2]
                 break
-        if target_gen = None:
+        if target_gen == None:
             print("Failed to find target generations in run log!")
             exit(-1)
         # Did this run finish?
@@ -44,13 +44,15 @@ def main():
         finished = False
         if "Update: {},".format(target_gen) in final_line:
             finished = True
+            print("  ==> Finished!")
         else:
             finished = False
+            print("  ==> Not Finished!")
             cnt+=1
         final_update = final_line.split(",")[0].split(" ")[-1]
         
         if not finished:
-            undone_content += ",".join(run_name, run_id, target_gen, final_update) + "\n"
+            undone_content += ",".join([run_name, run_id, target_gen, final_update]) + "\n"
             
         total += 1
 
