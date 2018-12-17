@@ -137,7 +137,7 @@ def main():
             if len(solutions) > 0:
                 # Find the smallest network
                 for i in range(0, len(solutions)):
-                    sol_evaluation = int(solutions[i][header_lu["evaluations"]])
+                    sol_evaluation = float(solutions[i][header_lu["evaluations"]])
                     if sol_evaluation > evaluation: continue
                     if min_network == None:
                         min_network = i
@@ -166,7 +166,7 @@ def main():
             
             #"treatment,run_id,uses_cohorts,solution_found,solution_size,update_found,evaluation_found,fitness,num_antagonists,sorts_per_antagonist,network\n"
             solutions_content += ",".join(map(str,[treatment, run_id, uses_cohorts, sol_found, network_size, update_found, evaluation_found, fitness, num_antagonists, sorts_per_antagonist, '"{}"'.format(network)])) + "\n"
-        with open(os.path.join(dump, "min_networks__eval_{}.csv".format(update)), "w") as fp:
+        with open(os.path.join(dump, "min_networks__eval_{}.csv".format(evaluation)), "w") as fp:
             fp.write(solutions_content)
 
 if __name__ == "__main__":
