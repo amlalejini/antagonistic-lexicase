@@ -108,7 +108,7 @@ def main():
     if args.evaluations != None:
         evaluation = args.evaluations
 
-        print("Looking for best solutions from evaluation {} or earlier.".format(update))
+        print("Looking for best solutions from evaluation {} or earlier.".format(evaluations))
         
         solutions_content = "treatment,run_id,uses_cohorts,solution_found,solution_size,update_found,evaluation_found,fitness,num_antagonists,sorts_per_antagonist,network\n"
         
