@@ -1146,7 +1146,7 @@ void ProgramSynthesisExperiment::Setup(const ProgramSynthesisConfig & config) {
     std::cout << "solution found? " << solution_found << "; ";
     std::cout << "smallest solution? " << smallest_prog_sol_size << std::endl;
 
-    if (update % SNAPSHOT_INTERVAL == 0 || update_first_solution_found == update) do_pop_snapshot_sig.Trigger();
+    if (update % SNAPSHOT_INTERVAL == 0 || update_first_solution_found == update || update == GENERATIONS) do_pop_snapshot_sig.Trigger();
 
     if (update_first_solution_found == update && update % SUMMARY_STATS_INTERVAL != 0) {
       prog_world->GetFile(DATA_DIRECTORY + "/prog_gen_sys.csv").Update(); // Update the program systematics files
