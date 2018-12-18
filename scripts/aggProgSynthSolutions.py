@@ -85,8 +85,8 @@ def main():
             
             if sol_found:
                 # Record timing info about first solution
-                update_first_sol = solutions[0]["update"]
-                eval_first_sol = solutions[0]["evaluations"]
+                update_first_sol = solutions[0][header_lu["update"]]
+                eval_first_sol = solutions[0][header_lu["evaluations"]]
                 # Record info about smallest solution
                 min_sol = solutions[min_program]
                 program_len = min_sol[header_lu["program_len"]]
@@ -150,8 +150,8 @@ def main():
             
             if sol_found:
                 # Record timing info about first solution
-                update_first_sol = solutions[0]["update"]
-                eval_first_sol = solutions[0]["evaluations"]
+                update_first_sol = solutions[0][header_lu["update"]]
+                eval_first_sol = solutions[0][header_lu["evaluations"]]
                 # Record info about smallest solution
                 min_sol = solutions[min_program]
                 program_len = min_sol[header_lu["program_len"]]
