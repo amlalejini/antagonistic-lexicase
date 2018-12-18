@@ -21,16 +21,23 @@ info_by_treatment = {}
 for sol in solutions:
     treatment = sol[header_lu["treatment"]]
     if not treatment in info_by_treatment:
-        info_by_treatment[treatment] = {"solutions_found":0, "total_runs":0}
+        info_by_treatment[treatment] = {"solutions_found":0, "total_runs":0, "min_solution_size":"NONE"}
     if (sol[header_lu["solution_found"]] == "True"):
         info_by_treatment[treatment]["solutions_found"] += 1
+        if info_by_treatment[treatment]["min_solution_size"] == "NONE":
+            info_by_treatment[treatment]["min_solution_size"] = sol[header_lu["solution_size"]]
+        elif info_by_treatment[treatment]["min_solution_size"] > sol[header_lu["solution_size"]]:
+            info_by_treatment[treatment]["min_solution_size"] = sol[header_lu["solution_size"]]
+
     info_by_treatment[treatment]["total_runs"] += 1
     info_by_treatment[treatment]["uses_cohorts"] = sol[header_lu["uses_cohorts"]]
+    info_by_treatment[treatment]["sorts_per_test"] = treatment.split("_")[-1]
 
-solutions_summary = "treatment,uses_cohorts,solutions_found,total_runs\n"
+
+solutions_summary = "treatment,uses_cohorts,solutions_found,total_runs,min_solution_size,sorts_per_test\n"
 for treatment in info_by_treatment:
     info = info_by_treatment[treatment]
-    solutions_summary += ",".join(map(str, [treatment, info["uses_cohorts"], info["solutions_found"], info["total_runs"]])) + "\n"
+    solutions_summary += ",".join(map(str, [treatment, info["uses_cohorts"], info["solutions_found"], info["total_runs"], info["min_solution_size"], info["sorts_per_test"]])) + "\n"
 
 new_name = fpath.split("/")[-1].strip(".csv") + "__solutions_summary.csv"
 with open(new_name, "w") as fp:

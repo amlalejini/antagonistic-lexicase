@@ -28,10 +28,12 @@ for sol in solutions:
     info_by_treatment[treatment]["uses_cohorts"] = sol[header_lu["uses_cohorts"]]
     info_by_treatment[treatment]["problem"] = sol[header_lu["problem"]]
 
-solutions_summary = "treatment,problem,uses_cohorts,solutions_found,total_runs\n"
+solutions_summary = "treatment,test_mode,problem,uses_cohorts,solutions_found,total_runs\n"
 for treatment in info_by_treatment:
     info = info_by_treatment[treatment]
-    solutions_summary += ",".join(map(str, [treatment, info["problem"], info["uses_cohorts"], info["solutions_found"], info["total_runs"]])) + "\n"
+    print(treatment)
+    test_mode = treatment.split("__")[1].replace("TESTS_", "")
+    solutions_summary += ",".join(map(str, [treatment, test_mode, info["problem"], info["uses_cohorts"], info["solutions_found"], info["total_runs"]])) + "\n"
 
 new_name = fpath.split("/")[-1].strip(".csv") + "__solutions_summary.csv"
 with open(new_name, "w") as fp:
