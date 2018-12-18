@@ -46,7 +46,7 @@ def main():
         update = args.update   
         print("Looking for best solutions from update {} or earlier.".format(update)) 
         
-        solutions_content = "treatment,run_id,problem,uses_cohorts,solution_found,solution_length,update_found,evaluation_found,program\n"
+        solutions_content = "treatment,run_id,problem,uses_cohorts,solution_found,solution_length,update_found,evaluation_found,update_first_solution_found,evaluation_first_solution_found,program\n"
         
         for run in runs:
             print("Run: {}".format(run))
@@ -84,18 +84,24 @@ def main():
                         sol_found = True
             
             if sol_found:
+                # Record timing info about first solution
+                update_first_sol = solutions[0]["update"]
+                eval_first_sol = solutions[0]["evaluations"]
+                # Record info about smallest solution
                 min_sol = solutions[min_program]
                 program_len = min_sol[header_lu["program_len"]]
                 update_found = min_sol[header_lu["update"]]
                 evaluation_found = min_sol[header_lu["evaluations"]]
                 program = min_sol[header_lu["program"]]
             else:
+                update_first_sol = "NONE"
+                eval_first_sol = "NONE"
                 program_len = "NONE"
                 update_found = "NONE"
                 evaluation_found = "NONE"
                 program = "NONE"
             # "treatment,run_id,problem,uses_cohorts,solution_found,solution_length,update_found,program\n"
-            solutions_content += ",".join(map(str,[treatment, run_id, problem, uses_cohorts, sol_found, program_len, update_found, evaluation_found, '"{}"'.format(program)])) + "\n"
+            solutions_content += ",".join(map(str,[treatment, run_id, problem, uses_cohorts, sol_found, program_len, update_found, evaluation_found, update_first_sol, eval_first_sol, '"{}"'.format(program)])) + "\n"
         with open(os.path.join(dump, "min_programs__update_{}.csv".format(update)), "w") as fp:
             fp.write(solutions_content)
 
@@ -104,7 +110,7 @@ def main():
         evaluations = args.evaluations   
         print("Looking for best solutions from evaluations {} or earlier.".format(evaluations)) 
         
-        solutions_content = "treatment,run_id,problem,uses_cohorts,solution_found,solution_length,update_found,evaluation_found,program\n"
+        solutions_content = "treatment,run_id,problem,uses_cohorts,solution_found,solution_length,update_found,evaluation_found,update_first_solution_found,evaluation_first_solution_found,program\n"
         
         for run in runs:
             print("Run: {}".format(run))
@@ -129,6 +135,7 @@ def main():
             # Add smallest solution to smallest solution doc
             min_program = None
             sol_found = False
+            
             if len(solutions) > 0:
                 # Find the smallest program
                 for i in range(0, len(solutions)):
@@ -142,18 +149,24 @@ def main():
                         sol_found = True
             
             if sol_found:
+                # Record timing info about first solution
+                update_first_sol = solutions[0]["update"]
+                eval_first_sol = solutions[0]["evaluations"]
+                # Record info about smallest solution
                 min_sol = solutions[min_program]
                 program_len = min_sol[header_lu["program_len"]]
                 update_found = min_sol[header_lu["update"]]
                 evaluation_found = min_sol[header_lu["evaluations"]]
                 program = min_sol[header_lu["program"]]
             else:
+                update_first_sol = "NONE"
+                eval_first_sol = "NONE"
                 program_len = "NONE"
                 update_found = "NONE"
                 evaluation_found = "NONE"
                 program = "NONE"
             # "treatment,run_id,problem,uses_cohorts,solution_found,solution_length,update_found,program\n"
-            solutions_content += ",".join(map(str,[treatment, run_id, problem, uses_cohorts, sol_found, program_len, update_found, evaluation_found, '"{}"'.format(program)])) + "\n"
+            solutions_content += ",".join(map(str,[treatment, run_id, problem, uses_cohorts, sol_found, program_len, update_found, evaluation_found, update_first_sol, eval_first_sol, '"{}"'.format(program)])) + "\n"
         with open(os.path.join(dump, "min_programs__eval_{}.csv".format(evaluations)), "w") as fp:
             fp.write(solutions_content)
 
