@@ -154,7 +154,7 @@ def main():
                 program = "NONE"
             # "treatment,run_id,problem,uses_cohorts,solution_found,solution_length,update_found,program\n"
             solutions_content += ",".join(map(str,[treatment, run_id, problem, uses_cohorts, sol_found, program_len, update_found, evaluation_found, '"{}"'.format(program)])) + "\n"
-        with open(os.path.join(dump, "min_programs__eval_{}.csv".format(evaluation)), "w") as fp:
+        with open(os.path.join(dump, "min_programs__eval_{}.csv".format(evaluations)), "w") as fp:
             fp.write(solutions_content)
 
 if __name__ == "__main__":
