@@ -532,7 +532,7 @@ void SortingNetworkExperiment::SetupDataCollection() {
   }, "diversity", "Shannon diversity of genotypes in population.");
   network_fit_file.PrintHeaderKeys();
 
-  auto & test_fit_file = test_world->SetupFitnessFile(DATA_DIRECTORY + "test_stats.csv");
+  auto & test_fit_file = test_world->SetupFitnessFile(DATA_DIRECTORY + "test_stats.csv", false);
   test_fit_file.SetTimingRepeat(AGGREGATE_STATS_INTERVAL);
   test_fit_file.template AddFun<double>([this]() -> double {
     std::function<test_genome_t(emp::Ptr<test_org_t>)> get_test_org_genome = [](emp::Ptr<test_org_t> org) -> test_genome_t { return org->GetGenome(); };
