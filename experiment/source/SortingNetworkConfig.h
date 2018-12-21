@@ -17,6 +17,7 @@ EMP_BUILD_CONFIG(SortingNetworkConfig,
   VALUE(LEX_MAX_FUNS, size_t, 0, "What's the maximum number of fitness functions to use in lexicase select? 0 to use all"),
   VALUE(COHORTLEX_MAX_FUNS, size_t, 0, "Max number of fitness functions to use in cohort lexicase select. 0 to use all"),
   VALUE(TOURNAMENT_SIZE, size_t, 4, "Tournament size when using lexicase selection"),
+  VALUE(DISCRIMINATORY_LEXICASE_TESTS, bool, false, "Should we use discriminatory test cases for lexicase selection?"),
 
   GROUP(SORTING_NETWORKS, "Sorting network settings"),
   VALUE(MAX_NETWORK_SIZE, size_t, 128, "Maximum size of a sorting network"),

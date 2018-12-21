@@ -290,6 +290,7 @@ protected:
   size_t TEST_COHORTLEXICASE_MAX_FUNS;
   size_t PROG_TOURNAMENT_SIZE;
   size_t TEST_TOURNAMENT_SIZE;
+  bool DISCRIMINATORY_LEXICASE_TESTS;
 
   size_t MIN_PROG_SIZE;
   size_t MAX_PROG_SIZE;
@@ -735,11 +736,27 @@ protected:
         std::cout << "  Setting up test LEXICASE selection." << std::endl;
         // Setup lexicase selection.
         // - 1 lexicase function for every program organism.
-        for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
-          lexicase_fit_set.push_back([i](WORLD_ORG_TYPE & test_org) {
-            TestOrg_Base & org = static_cast<TestOrg_Base&>(test_org);
-            return (size_t)(!org.GetPhenotype().test_passes[i]);        // NOTE - test case fitness functions do not use gradient; use pass/fail.
-          });
+        if (DISCRIMINATORY_LEXICASE_TESTS) {
+          std::cout << "    Tests configured to be DISCRIMINATORY." << std::endl;
+          for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
+            lexicase_fit_set.push_back([i](WORLD_ORG_TYPE & test_org) {
+              TestOrg_Base & org = static_cast<TestOrg_Base&>(test_org);
+              if (org.GetPhenotype().test_passes[i]) {
+                return (double)org.GetPhenotype().num_fails;
+              } else if (org.GetPhenotype().num_passes == 0) {
+                return 0.5;
+              } else {
+                return 0.0;
+              }        
+            });
+          }
+        } else {
+          for (size_t i = 0; i < PROG_POP_SIZE; ++i) {
+            lexicase_fit_set.push_back([i](WORLD_ORG_TYPE & test_org) {
+              TestOrg_Base & org = static_cast<TestOrg_Base&>(test_org);
+              return (size_t)(!org.GetPhenotype().test_passes[i]);        // NOTE - test case fitness functions do not use gradient; use pass/fail.
+            });
+          }
         }
         // Add selection action.
         do_selection_sig.AddAction([this, w, lexicase_fit_set]() mutable { // todo - check that capture is working as expected
@@ -752,11 +769,27 @@ protected:
         std::cout << "  Setting up test COHORT LEXICASE selection." << std::endl;
         // Setup cohort lexicase.
         // - 1 lexicase function for every program cohort member.
-        for (size_t i = 0; i < PROG_COHORT_SIZE; ++i) {
-          lexicase_fit_set.push_back([i](WORLD_ORG_TYPE & test_org) {
-            TestOrg_Base & org = static_cast<TestOrg_Base&>(test_org);
-            return (size_t)(!org.GetPhenotype().test_passes[i]);
-          });
+        if (DISCRIMINATORY_LEXICASE_TESTS) {
+          std::cout << "    Tests configured to be DISCRIMINATORY." << std::endl;
+          for (size_t i = 0; i < PROG_COHORT_SIZE; ++i) {
+            lexicase_fit_set.push_back([i](WORLD_ORG_TYPE & test_org) {
+              TestOrg_Base & org = static_cast<TestOrg_Base&>(test_org);
+              if (org.GetPhenotype().test_passes[i]) {
+                return (double)org.GetPhenotype().num_fails;
+              } else if (org.GetPhenotype().num_passes == 0) {
+                return 0.5;
+              } else {
+                return 0.0;
+              }
+            });
+          }
+        } else {
+          for (size_t i = 0; i < PROG_COHORT_SIZE; ++i) {
+            lexicase_fit_set.push_back([i](WORLD_ORG_TYPE & test_org) {
+              TestOrg_Base & org = static_cast<TestOrg_Base&>(test_org);
+              return (size_t)(!org.GetPhenotype().test_passes[i]);
+            });
+          }
         }
         // Add selection action.
         emp_assert(TEST_COHORT_SIZE * test_cohorts.GetCohortCnt() == TEST_POP_SIZE);
@@ -1244,6 +1277,7 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   TEST_COHORTLEXICASE_MAX_FUNS = config.TEST_COHORTLEXICASE_MAX_FUNS();
   PROG_TOURNAMENT_SIZE = config.PROG_TOURNAMENT_SIZE();
   TEST_TOURNAMENT_SIZE = config.TEST_TOURNAMENT_SIZE();
+  DISCRIMINATORY_LEXICASE_TESTS = config.DISCRIMINATORY_LEXICASE_TESTS();
 
   // -- Hardware settings --
   MIN_TAG_SPECIFICITY = config.MIN_TAG_SPECIFICITY();

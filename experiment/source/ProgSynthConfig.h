@@ -25,6 +25,7 @@ EMP_BUILD_CONFIG(ProgramSynthesisConfig,
   VALUE(TEST_COHORTLEXICASE_MAX_FUNS, size_t, 0, "Max number of functions to use for test cohort lexicase selection. (0 to use all)"),
   VALUE(PROG_TOURNAMENT_SIZE, size_t, 4, "How big should tournaments be during program tournament selection?"),
   VALUE(TEST_TOURNAMENT_SIZE, size_t, 4, "How big should tournaments be during test tournament selection?"),
+  VALUE(DISCRIMINATORY_LEXICASE_TESTS, bool, false, "Should we use discriminatory test cases for lexicase selection?"),
 
   GROUP(PROGRAM_GROUP, "General settings specific to programs."),
   VALUE(MIN_PROG_SIZE, size_t, 1, "Minimum program size"),

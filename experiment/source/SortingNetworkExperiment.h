@@ -92,6 +92,7 @@ protected:
   size_t LEX_MAX_FUNS;
   size_t COHORTLEX_MAX_FUNS;
   size_t TOURNAMENT_SIZE;
+  bool DISCRIMINATORY_LEXICASE_TESTS;
 
   size_t MAX_NETWORK_SIZE;
   size_t MIN_NETWORK_SIZE;
@@ -1020,10 +1021,25 @@ void SortingNetworkExperiment::SetupTestSelection() {
     case (size_t)SELECTION_METHODS::COHORT_LEXICASE: {
       // Setup test fit funs
       // - 1 function for every cohort member
-      for (size_t i = 0; i < COHORT_SIZE; ++i) {
-        lexicase_test_fit_set.push_back([i](test_org_t & test) {
-          return test.GetNumTests() - test.GetPhenotype().test_results[i];
-        });
+      if (DISCRIMINATORY_LEXICASE_TESTS) {
+        std::cout << "  Configuring tests to be DISCRIMINATORY" << std::endl;
+        for (size_t i = 0; i < COHORT_SIZE; ++i) {
+          lexicase_test_fit_set.push_back([i, this](test_org_t & test) {
+            if (test.GetPhenotype().test_results[i] == SORTS_PER_TEST) {
+              return (double)test.GetPhenotype().num_fails;
+            } else if (test.GetPhenotype().num_passes == 0) {
+              return 0.5;
+            } else {
+              return 0.0;
+            } 
+          });
+        }
+      } else {
+        for (size_t i = 0; i < COHORT_SIZE; ++i) {
+          lexicase_test_fit_set.push_back([i](test_org_t & test) {
+            return test.GetNumTests() - test.GetPhenotype().test_results[i];
+          });
+        }
       }
       // Add selection action.
       emp_assert(COHORT_SIZE * test_cohorts.GetNumCohorts() == TEST_POP_SIZE);
@@ -1041,11 +1057,27 @@ void SortingNetworkExperiment::SetupTestSelection() {
     }
     case (size_t)SELECTION_METHODS::LEXICASE: {
       // For lexicase selection, one function for every network organism.
-      for (size_t i = 0; i < NETWORK_POP_SIZE; ++i) {
-        lexicase_test_fit_set.push_back([i](test_org_t & test) {
-          return test.GetNumTests() - test.GetPhenotype().test_results[i]; // Incorrect!
-        });
+      if (DISCRIMINATORY_LEXICASE_TESTS) {
+        std::cout << "  Configuring tests to be DISCRIMINATORY" << std::endl;
+        for (size_t i = 0; i < NETWORK_POP_SIZE; ++i) {
+          lexicase_test_fit_set.push_back([i, this](test_org_t & test) {
+            if (test.GetPhenotype().test_results[i] == SORTS_PER_TEST) {
+              return (double)test.GetPhenotype().num_fails;
+            } else if (test.GetPhenotype().num_passes == 0) {
+              return 0.5;
+            } else {
+              return 0.0;
+            } 
+          });
+        }
+      } else {
+        for (size_t i = 0; i < NETWORK_POP_SIZE; ++i) {
+          lexicase_test_fit_set.push_back([i](test_org_t & test) {
+            return test.GetNumTests() - test.GetPhenotype().test_results[i]; // Incorrect!
+          });
+        }
       }
+
       do_selection_sig.AddAction([this]() {
         emp::LexicaseSelect_NAIVE(*test_world, lexicase_test_fit_set, TEST_POP_SIZE, LEX_MAX_FUNS);
       });
@@ -1105,6 +1137,7 @@ void SortingNetworkExperiment::InitConfigs(const SortingNetworkConfig & config) 
   LEX_MAX_FUNS = config.LEX_MAX_FUNS();
   COHORTLEX_MAX_FUNS = config.COHORTLEX_MAX_FUNS();
   TOURNAMENT_SIZE = config.TOURNAMENT_SIZE();
+  DISCRIMINATORY_LEXICASE_TESTS = config.DISCRIMINATORY_LEXICASE_TESTS();
   
   MAX_NETWORK_SIZE = config.MAX_NETWORK_SIZE();
   MIN_NETWORK_SIZE = config.MIN_NETWORK_SIZE();
