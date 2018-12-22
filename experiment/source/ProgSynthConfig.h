@@ -151,6 +151,12 @@ EMP_BUILD_CONFIG(ProgramSynthesisConfig,
   VALUE(PROB_SMALLEST__MUTATION__PER_NUM_SUB_RATE, double, 0.1, "."),
   VALUE(PROB_SMALLEST__MUTATION__PER_NUM_SWAP_RATE, double, 0.1, "."),
 
+  GROUP(PROB_GRADE_GROUP, "Settings specific to the grade problem"),
+  VALUE(PROB_GRADE__MIN_NUM, int, 0, "."),
+  VALUE(PROB_GRADE__MAX_NUM, int, 100, "."),
+  VALUE(PROB_GRADE__MUTATION__PER_NUM_RANDOMIZE_RATE, double, 0.1, "."),
+  VALUE(PROB_GRADE__MUTATION__PER_NUM_ADJUST_RATE, double, 0.1, "."),
+
   GROUP(PROB_MEDIAN_GROUP, "Settings specific to the median problem"),
   VALUE(PROB_MEDIAN__MIN_NUM, int, -100, "."),
   VALUE(PROB_MEDIAN__MAX_NUM, int, 100, "."),

@@ -141,7 +141,8 @@ std::unordered_map<std::string, ProblemInfo> problems = {
   {"sum-of-squares", {PROBLEM_ID::SumOfSquares, "training-examples-sum-of-squares.csv", "testing-examples-sum-of-squares.csv"}},
   {"vector-average", {PROBLEM_ID::VectorAverage, "training-examples-vector-average.csv", "testing-examples-vector-average.csv"}},
   {"median", {PROBLEM_ID::Median, "training-examples-median.csv", "testing-examples-median.csv"}},
-  {"smallest", {PROBLEM_ID::Smallest, "training-examples-smallest.csv", "testing-examples-smallest.csv"}}
+  {"smallest", {PROBLEM_ID::Smallest, "training-examples-smallest.csv", "testing-examples-smallest.csv"}},
+  {"grade", {PROBLEM_ID::Grade, "training-examples-grade.csv", "testing-examples-grade.csv"}}
 };
 
 class ProgramSynthesisExperiment {
@@ -406,6 +407,11 @@ protected:
   int PROB_SMALLEST__MAX_NUM;
   double PROB_SMALLEST__MUTATION__PER_NUM_SUB_RATE;
   double PROB_SMALLEST__MUTATION__PER_NUM_SWAP_RATE;
+
+  int PROB_GRADE__MIN_NUM;
+  int PROB_GRADE__MAX_NUM;
+  double PROB_GRADE__MUTATION__PER_NUM_RANDOMIZE_RATE;
+  double PROB_GRADE__MUTATION__PER_NUM_ADJUST_RATE;
 
   // - Data collection group -
   std::string DATA_DIRECTORY;
@@ -1063,6 +1069,17 @@ protected:
   void Inst_LoadNum3_Smallest(hardware_t & hw, const inst_t & inst);
   void Inst_LoadNum4_Smallest(hardware_t & hw, const inst_t & inst);
   void Inst_SubmitNum_Smallest(hardware_t & hw, const inst_t & inst);
+  // -- Grade --
+  void Inst_LoadThreshA_Grade(hardware_t & hw, const inst_t & inst);
+  void Inst_LoadThreshB_Grade(hardware_t & hw, const inst_t & inst);
+  void Inst_LoadThreshC_Grade(hardware_t & hw, const inst_t & inst);
+  void Inst_LoadThreshD_Grade(hardware_t & hw, const inst_t & inst);
+  void Inst_LoadGrade_Grade(hardware_t & hw, const inst_t & inst);
+  void Inst_SubmitA_Grade(hardware_t & hw, const inst_t & inst);
+  void Inst_SubmitB_Grade(hardware_t & hw, const inst_t & inst);
+  void Inst_SubmitC_Grade(hardware_t & hw, const inst_t & inst);
+  void Inst_SubmitD_Grade(hardware_t & hw, const inst_t & inst);
+  void Inst_SubmitF_Grade(hardware_t & hw, const inst_t & inst);
 
 public:
   ProgramSynthesisExperiment() 
@@ -1396,6 +1413,11 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   PROB_SMALLEST__MAX_NUM = config.PROB_SMALLEST__MAX_NUM();
   PROB_SMALLEST__MUTATION__PER_NUM_SUB_RATE = config.PROB_SMALLEST__MUTATION__PER_NUM_SUB_RATE();
   PROB_SMALLEST__MUTATION__PER_NUM_SWAP_RATE = config.PROB_SMALLEST__MUTATION__PER_NUM_SWAP_RATE();
+
+  PROB_GRADE__MIN_NUM = config.PROB_GRADE__MIN_NUM();
+  PROB_GRADE__MAX_NUM = config.PROB_GRADE__MAX_NUM();
+  PROB_GRADE__MUTATION__PER_NUM_RANDOMIZE_RATE = config.PROB_GRADE__MUTATION__PER_NUM_RANDOMIZE_RATE();
+  PROB_GRADE__MUTATION__PER_NUM_ADJUST_RATE = config.PROB_GRADE__MUTATION__PER_NUM_ADJUST_RATE();
 
   DATA_DIRECTORY = config.DATA_DIRECTORY();
   SUMMARY_STATS_INTERVAL = config.SUMMARY_STATS_INTERVAL();
@@ -2247,7 +2269,7 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
     // else if (prob_ScrabbleScore_world != nullptr) { SetupTestSystematics(prob_ScrabbleScore_world); }
     // else if (prob_Checksum_world != nullptr) { SetupTestSystematics(prob_Checksum_world); }
     // else if (prob_Digits_world != nullptr) { SetupTestSystematics(prob_Digits_world); }
-    // else if (prob_Grade_world != nullptr) { SetupTestSystematics(prob_Grade_world); }
+    else if (prob_Grade_world != nullptr) { SetupTestSystematics(prob_Grade_world, [this](std::ostream & out, const prob_Grade_world_t::genome_t & genome) { prob_utils_Grade.PrintTestCSV(out, genome); } ); }
     else if (prob_Median_world != nullptr) { SetupTestSystematics(prob_Median_world, [this](std::ostream & out, const prob_Median_world_t::genome_t & genome) { prob_utils_Median.PrintTestCSV(out, genome); } ); }
     else if (prob_Smallest_world != nullptr) { SetupTestSystematics(prob_Smallest_world, [this](std::ostream & out, const prob_Smallest_world_t::genome_t & genome) { prob_utils_Smallest.PrintTestCSV(out, genome); } ); }
     // else if (prob_Syllables_world != nullptr) { SetupTestSystematics(prob_Syllables_world); }
@@ -2373,17 +2395,38 @@ void ProgramSynthesisExperiment::InitProgPop_Random() {
   // emp::vector<emp::BitSet<TAG_WIDTH>> matrix = GenHadamardMatrix<TAG_WIDTH>();
   // hardware_t::Program sol(inst_lib);
 
-  // sol.PushInst("LoadNum",    {matrix[0], matrix[8], matrix[8]});
-  // sol.PushInst("Set-2",      {matrix[1], matrix[8], matrix[8]});
-  // sol.PushInst("Set-6",      {matrix[2], matrix[8], matrix[8]});
-  // sol.PushInst("CopyMem",    {matrix[0], matrix[3], matrix[8]});
-  // sol.PushInst("Inc",        {matrix[3], matrix[8], matrix[8]});
-  // sol.PushInst("Mult",       {matrix[0], matrix[3], matrix[4]});
-  // sol.PushInst("Mult",       {matrix[0], matrix[1], matrix[5]});
-  // sol.PushInst("Inc",        {matrix[5], matrix[8], matrix[8]});
-  // sol.PushInst("Mult",       {matrix[4], matrix[5], matrix[6]});
-  // sol.PushInst("Div",        {matrix[6], matrix[2], matrix[7]});
-  // sol.PushInst("SubmitNum",  {matrix[7], matrix[8], matrix[8]});
+  // sol.PushInst("LoadThreshA",        {matrix[0], matrix[8], matrix[8]});
+  // sol.PushInst("LoadThreshB",        {matrix[1], matrix[8], matrix[8]});
+  // sol.PushInst("LoadThreshC",        {matrix[2], matrix[8], matrix[8]});
+  // sol.PushInst("LoadThreshD",        {matrix[3], matrix[8], matrix[8]});
+  // sol.PushInst("LoadGrade",          {matrix[4], matrix[8], matrix[8]});
+
+  // sol.PushInst("TestNumGreaterTEqu", {matrix[4], matrix[0], matrix[5]});
+  // sol.PushInst("If",                 {matrix[5], matrix[8], matrix[8]});
+  //   sol.PushInst("SubmitA",          {matrix[8], matrix[8], matrix[8]});
+  //   sol.PushInst("Return",           {matrix[8], matrix[8], matrix[8]});
+  // sol.PushInst("Close",              {matrix[8], matrix[8], matrix[8]});
+
+  // sol.PushInst("TestNumGreaterTEqu", {matrix[4], matrix[1], matrix[5]});
+  // sol.PushInst("If",                 {matrix[5], matrix[8], matrix[8]});
+  //   sol.PushInst("SubmitB",          {matrix[8], matrix[8], matrix[8]});
+  //   sol.PushInst("Return",           {matrix[8], matrix[8], matrix[8]});
+  // sol.PushInst("Close",              {matrix[8], matrix[8], matrix[8]});
+
+  // sol.PushInst("TestNumGreaterTEqu", {matrix[4], matrix[2], matrix[5]});
+  // sol.PushInst("If",                 {matrix[5], matrix[8], matrix[8]});
+  //   sol.PushInst("SubmitC",          {matrix[8], matrix[8], matrix[8]});
+  //   sol.PushInst("Return",           {matrix[8], matrix[8], matrix[8]});
+  // sol.PushInst("Close",              {matrix[8], matrix[8], matrix[8]});
+
+  // sol.PushInst("TestNumGreaterTEqu", {matrix[4], matrix[3], matrix[5]});
+  // sol.PushInst("If",                 {matrix[5], matrix[8], matrix[8]});
+  //   sol.PushInst("SubmitD",          {matrix[8], matrix[8], matrix[8]});
+  //   sol.PushInst("Return",           {matrix[8], matrix[8], matrix[8]});
+  // sol.PushInst("Close",              {matrix[8], matrix[8], matrix[8]});
+
+  // sol.PushInst("SubmitF",            {matrix[8], matrix[8], matrix[8]});
+  
   // prog_world->Inject(sol, PROG_POP_SIZE);
 }
 
@@ -6145,8 +6188,334 @@ void ProgramSynthesisExperiment::SetupProblem_Digits() {
 }
 
 void ProgramSynthesisExperiment::SetupProblem_Grade() { 
-  std::cout << "Problem setup not yet implemented... Exiting." << std::endl;
-  exit(-1); 
+  std::cout << "Setting up problem - Grade" << std::endl;
+
+  // A few useful aliases.
+  using test_org_t = TestOrg_Grade;
+
+  // Load benchmark data for problem.
+  if (BENCHMARK_DATA_DIR.back() != '/') BENCHMARK_DATA_DIR += '/';
+  std::string training_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTrainingSetFilename();  
+  std::string testing_examples_fpath = BENCHMARK_DATA_DIR + problems.at(PROBLEM).GetTestingSetFilename();  
+  std::cout << "Loading training examples." << std::endl;
+  prob_utils_Grade.GetTrainingSet().LoadTestCasesWithCSVReader(training_examples_fpath);
+  std::cout << "Loading testing examples." << std::endl;
+  prob_utils_Grade.GetTestingSet().LoadTestCasesWithCSVReader(testing_examples_fpath);
+  std::cout << "Generating testing set population." << std::endl;
+  prob_utils_Grade.GenerateTestingSetPop();
+  std::cout << "Loaded training example set size = " << prob_utils_Grade.GetTrainingSet().GetSize() << std::endl;
+  std::cout << "Loaded testing example set size = " << prob_utils_Grade.GetTestingSet().GetSize() << std::endl;
+  std::cout << "Testing set (non-training examples used to evaluate program accuracy) size = " << prob_utils_Grade.testingset_pop.size() << std::endl;
+
+  // Setup the world
+  NewTestCaseWorld(prob_Grade_world, *random, "Grade world");
+
+  // Configure how the population should be initialized
+  SetupTestCasePop_Init(prob_Grade_world,
+                        prob_utils_Grade.training_set,
+                        [this]() { return GenRandomTestInput_Grade(*random, 
+                                                                   {PROB_GRADE__MIN_NUM, PROB_GRADE__MAX_NUM}); 
+                                  }
+                        );
+  end_setup_sig.AddAction([this]() { std::cout << "TestCase world size= " << prob_Grade_world->GetSize() << std::endl; });
+
+  // Tell the world to calculate the correct test output (given input) on placement.
+  prob_Grade_world->OnPlacement([this](size_t pos) { prob_Grade_world->GetOrg(pos).CalcOut(); });
+
+  // How are program results calculated on a test?
+  CalcProgramResultOnTest = [this](prog_org_t & prog_org, TestOrg_Base & test_org_base) {
+    test_org_t & test_org = static_cast<test_org_t&>(test_org_base);
+    TestResult result;
+    if (!prob_utils_Grade.submitted) {
+      result.score = 0;
+      result.pass = false;
+      result.sub = false;
+    } else {
+      std::pair<double, bool> r(prob_utils_Grade.CalcScorePassFail(test_org.GetCorrectOut(), prob_utils_Grade.submitted_str));
+      result.score = r.first;
+      result.pass = r.second;
+      result.sub = true;
+    }
+    return result;
+  };
+
+  // Setup how evaluation on world test should work.
+  EvaluateWorldTest = [this](prog_org_t & prog_org, size_t testID) {
+    emp::Ptr<test_org_t> test_org_ptr = prob_Grade_world->GetOrgPtr(testID);
+    begin_program_test.Trigger(prog_org, test_org_ptr);
+    do_program_test.Trigger(prog_org, test_org_ptr);
+    end_program_test.Trigger(prog_org, test_org_ptr);
+    return CalcProgramResultOnTest(prog_org, *test_org_ptr);
+  };
+
+  // How should we validate programs on testing set?
+  prob_utils_Grade.population_validation_outputs.resize(PROG_POP_SIZE);
+  DoTestingSetValidation = [this](prog_org_t & prog_org) { 
+    // evaluate program on full testing set; update stats utils with results
+    begin_program_eval.Trigger(prog_org);
+    stats_util.current_program__validation__test_results.resize(prob_utils_Grade.testingset_pop.size());
+    stats_util.current_program__validation__total_score = 0;
+    stats_util.current_program__validation__total_passes = 0;
+    stats_util.current_program__validation__is_solution = false;
+    prob_utils_Grade.population_validation_outputs[stats_util.cur_progID].resize(prob_utils_Grade.testingset_pop.size());
+    // For each test in validation set, evaluate program.
+    for (size_t testID = 0; testID < prob_utils_Grade.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_Grade.testingset_pop[testID];
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      stats_util.current_program__validation__test_results[testID] = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      stats_util.current_program__validation__total_score += stats_util.current_program__validation__test_results[testID].score;
+      stats_util.current_program__validation__total_passes += (size_t)stats_util.current_program__validation__test_results[testID].pass;
+      prob_utils_Grade.population_validation_outputs[stats_util.cur_progID][testID] = prob_utils_Grade.submitted_str;
+    }
+    stats_util.current_program__validation__is_solution = stats_util.current_program__validation__total_passes == prob_utils_Grade.testingset_pop.size();
+    end_program_eval.Trigger(prog_org);
+  };
+  program_stats.get_prog_behavioral_diversity = [this]() { return emp::ShannonEntropy(prob_utils_Grade.population_validation_outputs); };
+  program_stats.get_prog_unique_behavioral_phenotypes = [this]() { return emp::UniqueCount(prob_utils_Grade.population_validation_outputs); };
+
+  // How should we screen for a solution?
+  ScreenForSolution = [this](prog_org_t & prog_org) {
+    begin_program_eval.Trigger(prog_org);
+    for (size_t testID = 0; testID < prob_utils_Grade.testingset_pop.size(); ++testID) {
+      stats_util.cur_testID = testID;
+      emp::Ptr<test_org_t> test_org_ptr = prob_utils_Grade.testingset_pop[testID];
+
+      begin_program_test.Trigger(prog_org, test_org_ptr);
+      do_program_test.Trigger(prog_org, test_org_ptr);
+      end_program_test.Trigger(prog_org, test_org_ptr);
+      
+      TestResult result = CalcProgramResultOnTest(prog_org, *test_org_ptr);
+      if (!result.pass) {
+        end_program_eval.Trigger(prog_org);
+        return false;
+      }
+    }
+    end_program_eval.Trigger(prog_org);
+    return true;
+  };
+
+  // Tell the experiment how to get test phenotypes.
+  GetTestPhenotype = [this](size_t testID) -> test_org_phen_t & {
+    emp_assert(prob_Grade_world->IsOccupied(testID));
+    return prob_Grade_world->GetOrg(testID).GetPhenotype();
+  };
+
+  // Setup how test world updates.
+  SetupTestCaseWorldUpdate(prob_Grade_world);
+
+  // todo - test that RANDOM is actually making random things every update..
+
+  // Setup how test cases mutate.
+  if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::RANDOM) {
+    std::cout << "RANDOM training mode detected, configuring mutation function to RANDOMIZE organisms." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Randomize organism genome on mutate.
+      prob_Grade_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        test_org.GetGenome() = GenRandomTestInput_Grade(*random, {PROB_GRADE__MIN_NUM, PROB_GRADE__MAX_NUM}); 
+        return 1;
+      });
+    };
+  } else {
+    std::cout << "Non-RANDOM training mode detected, configuring mutation function normally." << std::endl;
+    SetupTestMutation = [this]() {
+      // (1) Configure mutator.
+      prob_utils_Grade.MIN_NUM = PROB_GRADE__MIN_NUM;
+      prob_utils_Grade.MAX_NUM = PROB_GRADE__MAX_NUM;
+      prob_utils_Grade.PER_NUM_ADJUST_RATE = PROB_GRADE__MUTATION__PER_NUM_ADJUST_RATE;
+      prob_utils_Grade.PER_NUM_RANDOMIZE_RATE = PROB_GRADE__MUTATION__PER_NUM_RANDOMIZE_RATE;
+      // (2) Hook mutator up to world.
+      prob_Grade_world->SetMutFun([this](test_org_t & test_org, emp::Random & rnd) {
+        return prob_utils_Grade.Mutate(rnd, test_org.GetGenome());
+      });
+    };
+  }
+
+  // Setup test case fitness function.
+  SetupTestFitFun = [this]() {
+    prob_Grade_world->SetFitFun([](test_org_t & test_org) {
+      return (double)test_org.GetPhenotype().num_fails;
+    });
+  }; 
+
+  // Tell experiment how to configure hardware inputs when running program against a test.
+  begin_program_test.AddAction([this](prog_org_t & prog_org, emp::Ptr<TestOrg_Base> test_org_base_ptr) {
+    // Reset eval stuff
+    // Set current test org.
+    prob_utils_Grade.cur_eval_test_org = test_org_base_ptr.Cast<test_org_t>(); // currently only place need testID for this?
+    prob_utils_Grade.ResetTestEval();
+    emp_assert(eval_hardware->GetMemSize() >= 4);
+    // Configure inputs.
+    if (eval_hardware->GetCallStackSize()) {
+      // Grab some useful references.
+      Problem_Grade_input_t & input = prob_utils_Grade.cur_eval_test_org->GetGenome(); 
+      hardware_t::CallState & state = eval_hardware->GetCurCallState();
+      hardware_t::Memory & wmem = state.GetWorkingMem();
+      // std::cout << "Begin program test!" << std::endl;
+      // std::cout << "  A thresh: " << input[0] << std::endl;
+      // std::cout << "  B thresh: " << input[1] << std::endl;
+      // std::cout << "  C thresh: " << input[2] << std::endl;
+      // std::cout << "  D thresh: " << input[3] << std::endl;
+      // std::cout << "  Grade: " << input[4] << std::endl;
+      // Set hardware input.
+      wmem.Set(0, input[0]);
+      wmem.Set(1, input[1]);
+      wmem.Set(2, input[2]);
+      wmem.Set(3, input[3]);
+      wmem.Set(4, input[4]);
+    }
+  });
+
+  // Tell experiment how to snapshot test population.
+  SnapshotTests = [this]() {
+    std::string snapshot_dir = DATA_DIRECTORY + "pop_" + emp::to_string(prog_world->GetUpdate());
+    mkdir(snapshot_dir.c_str(), ACCESSPERMS);
+    
+    emp::DataFile file(snapshot_dir + "/test_pop_" + emp::to_string((int)prog_world->GetUpdate()) + ".csv");
+    // Test file contents:
+    // - test id
+    std::function<size_t(void)> get_test_id = [this]() { return stats_util.cur_testID; };
+    file.AddFun(get_test_id, "test_id");
+
+    // - test fitness
+    std::function<double(void)> get_test_fitness = [this]() { return prob_Grade_world->CalcFitnessID(stats_util.cur_testID); };
+    file.AddFun(get_test_fitness, "fitness");
+
+    // - num passes
+    std::function<size_t(void)> get_test_num_passes = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_passes; };
+    file.AddFun(get_test_num_passes, "num_passes");
+
+    // - num fails
+    std::function<size_t(void)> get_test_num_fails = [this]() { return GetTestPhenotype(stats_util.cur_testID).num_fails; };
+    file.AddFun(get_test_num_fails, "num_fails");
+
+    std::function<size_t(void)> get_num_tested = [this]() { return GetTestPhenotype(stats_util.cur_testID).test_passes.size(); };
+    file.AddFun(get_num_tested, "num_programs_tested_against");
+
+    // - test scores by program
+    std::function<std::string(void)> get_passes_by_program = [this]() {
+      std::string scores = "\"[";
+      test_org_phen_t & phen = GetTestPhenotype(stats_util.cur_testID);
+      for (size_t i = 0; i < phen.test_passes.size(); ++i) {
+        if (i) scores += ",";
+        scores += emp::to_string(phen.test_passes[i]);
+      }
+      scores += "]\"";
+      return scores;
+    };
+    file.AddFun(get_passes_by_program, "passes_by_program");
+
+    // - test
+    std::function<std::string(void)> get_test = [this]() {
+      std::ostringstream stream;
+      stream << "\"";
+      prob_Grade_world->GetOrg(stats_util.cur_testID).Print(stream);
+      stream << "\"";
+      return stream.str();
+    };
+    file.AddFun(get_test, "test", "");
+
+    file.PrintHeaderKeys();
+
+    // Loop over tests, snapshotting each.
+    for (stats_util.cur_testID = 0; stats_util.cur_testID < prob_Grade_world->GetSize(); ++stats_util.cur_testID) {
+      if (!prob_Grade_world->IsOccupied(stats_util.cur_testID)) continue;
+      file.Update();
+    }
+  };
+
+  // Add default instructions to instruction set.
+  AddDefaultInstructions({"Add",
+                          "Sub",
+                          "Mult",
+                          "Div",
+                          "Mod",
+                          "TestNumEqu",
+                          "TestNumNEqu",
+                          "TestNumLess",
+                          "TestNumLessTEqu",
+                          "TestNumGreater",
+                          "TestNumGreaterTEqu",
+                          "Floor",
+                          "Not",
+                          "Inc",
+                          "Dec",
+                          "CopyMem",
+                          "SwapMem",
+                          "Input",
+                          "Output",
+                          "CommitGlobal",
+                          "PullGlobal",
+                          "TestMemEqu",
+                          "TestMemNEqu",
+                          "If",
+                          "IfNot",
+                          "While",
+                          "Countdown",
+                          "Foreach",
+                          "Close",
+                          "Break",
+                          "Call",
+                          "Routine",
+                          "Return",
+                          "ModuleDef",
+                          "MakeVector",
+                          "VecGet",
+                          "VecSet",
+                          "VecLen",
+                          "VecAppend",
+                          "VecPop",
+                          "VecRemove",
+                          "VecReplaceAll",
+                          "VecIndexOf",
+                          "VecOccurrencesOf",
+                          "VecReverse",
+                          "VecSwapIfLess",
+                          "VecGetFront",
+                          "VecGetBack",
+                          "IsNum",
+                          "IsVec"
+  });
+
+  // -- Custom Instructions --
+  inst_lib->AddInst("LoadThreshA", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadThreshA_Grade(hw, inst);
+    // this->Inst_LoadNum1_Grade(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("LoadThreshB", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadThreshB_Grade(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("LoadThreshC", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadThreshC_Grade(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("LoadThreshD", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadThreshD_Grade(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("LoadGrade", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_LoadGrade_Grade(hw, inst);
+  }, 1);
+
+  inst_lib->AddInst("SubmitA", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_SubmitA_Grade(hw, inst);
+  }, 1);
+  inst_lib->AddInst("SubmitB", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_SubmitB_Grade(hw, inst);
+  }, 1);
+  inst_lib->AddInst("SubmitC", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_SubmitC_Grade(hw, inst);
+  }, 1);
+  inst_lib->AddInst("SubmitD", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_SubmitD_Grade(hw, inst);
+  }, 1);
+  inst_lib->AddInst("SubmitF", [this](hardware_t & hw, const inst_t & inst) {
+    this->Inst_SubmitF_Grade(hw, inst);
+  }, 1);
 }
 
 void ProgramSynthesisExperiment::SetupProblem_Median() { 
@@ -7288,28 +7657,88 @@ void ProgramSynthesisExperiment::Inst_SubmitNum_Smallest(hardware_t & hw, const 
   prob_utils_Smallest.Submit((int)wmem.AccessVal(posA).GetNum());
 }
 
+// --- Grade ---
+void ProgramSynthesisExperiment::Inst_LoadThreshA_Grade(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_Grade.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_Grade.cur_eval_test_org->GetGenome()[0]);
+}
+
+void ProgramSynthesisExperiment::Inst_LoadThreshB_Grade(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_Grade.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_Grade.cur_eval_test_org->GetGenome()[1]);
+}
+
+void ProgramSynthesisExperiment::Inst_LoadThreshC_Grade(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_Grade.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_Grade.cur_eval_test_org->GetGenome()[2]);
+}
+
+void ProgramSynthesisExperiment::Inst_LoadThreshD_Grade(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_Grade.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_Grade.cur_eval_test_org->GetGenome()[3]);
+}
+
+void ProgramSynthesisExperiment::Inst_LoadGrade_Grade(hardware_t & hw, const inst_t & inst) {
+  hardware_t::CallState & state = hw.GetCurCallState();
+  hardware_t::Memory & wmem = state.GetWorkingMem();
+
+  // Find arguments
+  size_t posA = hw.FindBestMemoryMatch(wmem, inst.arg_tags[0], hw.GetMinTagSpecificity());
+  if (!hw.IsValidMemPos(posA)) return;
+
+  emp_assert(prob_utils_Grade.cur_eval_test_org != nullptr);
+  wmem.Set(posA, prob_utils_Grade.cur_eval_test_org->GetGenome()[4]);
+}
+
+void ProgramSynthesisExperiment::Inst_SubmitA_Grade(hardware_t & hw, const inst_t & inst) {
+  prob_utils_Grade.Submit("A");
+}
+
+void ProgramSynthesisExperiment::Inst_SubmitB_Grade(hardware_t & hw, const inst_t & inst) {
+  prob_utils_Grade.Submit("B");
+}
+
+void ProgramSynthesisExperiment::Inst_SubmitC_Grade(hardware_t & hw, const inst_t & inst) {
+  prob_utils_Grade.Submit("C");
+}
+
+void ProgramSynthesisExperiment::Inst_SubmitD_Grade(hardware_t & hw, const inst_t & inst) {
+  prob_utils_Grade.Submit("D");
+}
+
+void ProgramSynthesisExperiment::Inst_SubmitF_Grade(hardware_t & hw, const inst_t & inst) {
+  prob_utils_Grade.Submit("F");
+}
 
 // ------------------------
 
-
-
-/*
-scratch:
- // if (TRAINING_EXAMPLE_MODE == (size_t)TRAINING_EXAMPLE_MODE_TYPE::STATIC) {
-  //   TEST_POP_SIZE = prob_utils_NumberIO.GetTrainingSet().GetSize();
-  //   std::cout << "In static training example mode, adjusting TEST_POP_SIZE to: " << TEST_POP_SIZE << std::endl;
-  //   end_setup_sig.AddAction([this]() {
-  //     InitTestCasePop_TrainingSet(prob_NumberIO_world, prob_utils_NumberIO.GetTrainingSet());
-  //   });
-  // } else {
-  //   end_setup_sig.AddAction([this]() {
-  //     InitTestCasePop_Random(prob_NumberIO_world, 
-  //       [this]() { 
-  //         return GenRandomTestInput_NumberIO(*random, {PROB_NUMBER_IO__INT_MIN, PROB_NUMBER_IO__INT_MAX}, {PROB_NUMBER_IO__DOUBLE_MIN, PROB_NUMBER_IO__DOUBLE_MAX});
-  //       });
-  //   });
-  // }
-
-*/
 
 #endif

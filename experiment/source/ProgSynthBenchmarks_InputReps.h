@@ -15,6 +15,7 @@
 #include "tools/Random.h"
 #include "tools/random_utils.h"
 #include "tools/math.h"
+#include "tools/vector_utils.h"
 #include "tools/sequence_utils.h"
 #include "tools/string_utils.h"
 #include "tools/stats.h"
@@ -79,6 +80,12 @@ constexpr int SmallOrLarge__LARGE_THRESH = 2000;
 const std::string SmallOrLarge__SMALL_STR = "small";
 const std::string SmallOrLarge__LARGE_STR = "large";
 const std::string SmallOrLarge__NONE_STR = "";
+
+const std::string Grade__A_STR = "A";
+const std::string Grade__B_STR = "B";
+const std::string Grade__C_STR = "C";
+const std::string Grade__D_STR = "D";
+const std::string Grade__F_STR = "F";
 
 // ================== Problem I/O Type Aliases ==================
 using Problem_NumberIO_input_t = std::pair<int, double>;
@@ -3262,6 +3269,62 @@ class TestOrg_Digits : public TestOrg_Base {
 struct ProblemUtilities_Digits { emp::vector<std::function<double(TestOrg_Digits &)>> lexicase_fit_set; };
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Problem: Grade
+// - Input: Array<Integer, 5>
+// - Output: String
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Generate random test input
+Problem_Grade_input_t GenRandomTestInput_Grade(emp::Random & rand, const std::pair<int, int> & num_range) {
+  emp_assert(num_range.first < num_range.second);
+  emp_assert(num_range.first > -1);
+  Problem_Grade_input_t input;
+  input[0] = -1;
+  input[1] = -1;
+  input[2] = -1;
+  input[3] = -1;
+  input[4] = -1;
+
+  for (size_t i = 0; i < 4; ++i) {
+    int val = rand.GetInt(num_range.first+1, num_range.second);
+    // while (emp::Has(input, val)) val = rand.GetInt(num_range.first+1, num_range.second);
+    while (input[0] == val || input[1] == val || input[2] == val || input[3] == val) val = rand.GetInt(num_range.first+1, num_range.second);
+    input[i] = val;
+  }
+  // Sort input
+  std::sort(input.begin(), input.end());
+  std::reverse(std::begin(input), std::end(input));
+  input[4] = rand.GetInt(num_range.first, num_range.second+1); // Grade?
+
+  // Test!
+  // std::cout << "A thresh: " << input[0] << std::endl;
+  // std::cout << "B thresh: " << input[1] << std::endl;
+  // std::cout << "C thresh: " << input[2] << std::endl;
+  // std::cout << "D thresh: " << input[3] << std::endl;
+  // std::cout << "Grade: " << input[4] << std::endl;
+  emp_assert(100 >= input[0], input[0], num_range.second);
+  emp_assert(num_range.second >= input[0]);
+  emp_assert(input[0] > input[1]);
+  emp_assert(input[1] > input[2]);
+  emp_assert(input[2] > input[3]);
+  emp_assert(input[3] >= num_range.first);
+  emp_assert(input[3] >= 0);
+  return input;
+}
+
+// Generate correct output for a given test
+Problem_Grade_output_t GenCorrectOut_Grade(const Problem_Grade_input_t & input) {
+  if (input[4] >= input[0]) { return Grade__A_STR; }
+  else if (input[4] >= input[1]) { return Grade__B_STR; }
+  else if (input[4] >= input[2]) { return Grade__C_STR; }
+  else if (input[4] >= input[3]) { return Grade__D_STR; }
+  else { return Grade__F_STR; }
+}
 
 /// Grade: Array<Integer, 5>
 class TestOrg_Grade : public TestOrg_Base {
@@ -3269,20 +3332,242 @@ class TestOrg_Grade : public TestOrg_Base {
     using parent_t = TestOrg_Base;
     using parent_t::phenotype;
 
-    using genome_t = std::array<int, 5>;
+    using genome_t = Problem_Grade_input_t;
+    using out_t = Problem_Grade_output_t;
+
   protected:
     genome_t genome;
+    out_t out;
 
   public:
-    TestOrg_Grade(const genome_t & _g) : genome(_g) { ; }
+    TestOrg_Grade(const genome_t & _g) : genome(_g), out() { ; }
     
     genome_t & GetGenome() { return genome; }
     const genome_t & GetGenome() const { return genome; }
 
-    void CalcOut() { ; }
-};
+    out_t & GetCorrectOut() { return out; }
+    const out_t & GetCorrectOut() const { return out; }
 
-struct ProblemUtilities_Grade { emp::vector<std::function<double(TestOrg_Grade &)>> lexicase_fit_set; };
+    void CalcOut() { out = GenCorrectOut_Grade(genome); }    
+
+    void Print(std::ostream & os=std::cout) {
+      for (size_t i = 0; i < genome.size(); ++i) {
+        if (i) os << ",";
+        os << genome[i];
+      }
+    }
+  };
+
+struct ProblemUtilities_Grade { 
+  using this_t = ProblemUtilities_Grade;
+  using problem_org_t = TestOrg_Grade;
+  using input_t = Problem_Grade_input_t;
+  using output_t = Problem_Grade_output_t;
+  
+  using testcase_set_t = TestCaseSet<input_t, output_t>;
+  
+  testcase_set_t testing_set;
+  testcase_set_t training_set;
+
+  emp::vector<emp::Ptr<problem_org_t>> testingset_pop;
+  emp::vector<emp::vector<output_t>> population_validation_outputs;
+
+  // // --- Useful during a test evaluation ---
+  emp::Ptr<problem_org_t> cur_eval_test_org;
+  bool submitted;
+  std::string submitted_str;
+
+  // // Mutation - Handle here...
+  int MIN_NUM;
+  int MAX_NUM;
+  double PER_NUM_ADJUST_RATE;
+  double PER_NUM_RANDOMIZE_RATE;
+  
+  size_t Mutate(emp::Random & rnd, input_t & mut_input) {
+    // std::cout << "Mutate!" << std::endl;
+    // std::cout << "A thresh: " << mut_input[0] << std::endl;
+    // std::cout << "B thresh: " << mut_input[1] << std::endl;
+    // std::cout << "C thresh: " << mut_input[2] << std::endl;
+    // std::cout << "D thresh: " << mut_input[3] << std::endl;
+    // std::cout << "Grade: " << mut_input[4] << std::endl;
+    // Are grade thresholds valid?
+    emp_assert(MAX_NUM  >= mut_input[0], MAX_NUM, mut_input[0]);
+    emp_assert(mut_input[0] > mut_input[1]);
+    emp_assert(mut_input[1] > mut_input[2]);
+    emp_assert(mut_input[2] > mut_input[3]);
+    emp_assert(mut_input[3] >= MIN_NUM);
+    // Is grade valid?
+    emp_assert(mut_input[4] >= MIN_NUM);
+    emp_assert(mut_input[4] <= MAX_NUM);
+
+    size_t muts = 0;
+    const size_t grade_id = 4;
+
+    // Adjust mutations
+    for (size_t i = 0; i < grade_id; ++i) {
+      int upper_cap = MAX_NUM;
+      if (i) upper_cap = mut_input[i-1];
+
+      int lower_cap = MIN_NUM;
+      if (i < 3) lower_cap = mut_input[i+1]+1;
+      
+      if (rnd.P(PER_NUM_ADJUST_RATE)) { 
+        mut_input[i] = rnd.GetInt(lower_cap, upper_cap);
+        ++muts;
+      }
+    }
+
+    int orig_grade = mut_input[grade_id];
+    mut_input[grade_id] = -1;
+
+    // Randomize mutations
+    for (size_t i = 0; i < grade_id; ++i) {
+      if (rnd.P(PER_NUM_RANDOMIZE_RATE)) {
+        mut_input[i] = -1;
+        int val = rnd.GetInt(MIN_NUM+1, MAX_NUM);
+        while (mut_input[0] == val || mut_input[1] == val || mut_input[2] == val || mut_input[3] == val) val = rnd.GetInt(MIN_NUM+1, MAX_NUM);
+        mut_input[i] = val;
+        ++muts;
+      }
+    }
+
+    // Guarantee distinctness
+    for (size_t i = 0; i < grade_id; ++i) {
+      int val = mut_input[i];
+      mut_input[i] = -1;
+      while (mut_input[0] == val || mut_input[1] == val || mut_input[2] == val || mut_input[3] == val) val = rnd.GetInt(MIN_NUM+1, MAX_NUM);
+      mut_input[i] = val;
+    }
+
+    // Repair ordering
+    std::sort(mut_input.begin(), mut_input.end());
+    std::reverse(std::begin(mut_input), std::end(mut_input));
+    
+    // Randomize grade?
+    if (rnd.P(PER_NUM_RANDOMIZE_RATE)) {
+      mut_input[4] = rnd.GetInt(MIN_NUM, MAX_NUM+1); 
+      ++muts;
+    } else {
+      mut_input[4] = orig_grade;
+    }
+
+    // if (!(mut_input[2] > mut_input[3])) {
+    //   std::cout << "vvvv" << std::endl;
+    //   std::cout << "A thresh: " << mut_input[0] << std::endl;
+    //   std::cout << "B thresh: " << mut_input[1] << std::endl;
+    //   std::cout << "C thresh: " << mut_input[2] << std::endl;
+    //   std::cout << "D thresh: " << mut_input[3] << std::endl;
+    //   std::cout << "Grade: " << mut_input[4] << std::endl;
+    // }
+    // std::cout << "---------------" << std::endl;
+
+    
+    
+    // Are grade thresholds valid?
+    emp_assert(MAX_NUM  >= mut_input[0], MAX_NUM, mut_input[0]);
+    emp_assert(mut_input[0] > mut_input[1], mut_input[0], mut_input[1]);
+    emp_assert(mut_input[1] > mut_input[2], mut_input[1], mut_input[2]);
+    emp_assert(mut_input[2] > mut_input[3], mut_input[2], mut_input[3]);
+    emp_assert(mut_input[3] >= MIN_NUM, mut_input[3], MIN_NUM);
+    // Is grade valid?
+    emp_assert(mut_input[4] >= MIN_NUM, mut_input[4], MIN_NUM);
+    emp_assert(mut_input[4] <= MAX_NUM, mut_input[4], MAX_NUM);
+
+    return muts;
+  }
+
+  // Selection
+  emp::vector<std::function<double(problem_org_t &)>> lexicase_fit_set;
+
+  ProblemUtilities_Grade()
+    : testing_set(this_t::LoadTestCaseFromLine),
+      training_set(this_t::LoadTestCaseFromLine),
+      submitted(false), submitted_str("")
+  { ; }
+
+  ~ProblemUtilities_Grade() {
+    for (size_t i = 0; i < testingset_pop.size(); ++i) testingset_pop[i].Delete();
+  }
+
+  testcase_set_t & GetTestingSet() { return testing_set; }
+  testcase_set_t & GetTrainingSet() { return training_set; }
+
+  void ResetTestEval() {
+    submitted = false;
+    submitted_str = "";
+  }
+
+  void Submit(const std::string & val) {
+    submitted = true;
+    submitted_str = val;
+  }
+
+  static std::pair<input_t, output_t> LoadTestCaseFromLine(const emp::vector<std::string> & line) {
+    input_t input;
+    output_t output;
+
+    // Load input
+    input[0] = std::atof(line[0].c_str());
+    input[1] = std::atof(line[1].c_str());
+    input[2] = std::atof(line[2].c_str());
+    input[3] = std::atof(line[3].c_str());
+    input[4] = std::atof(line[4].c_str());
+
+    // std::cout << "A thresh: " << input[0] << std::endl;
+    // std::cout << "B thresh: " << input[1] << std::endl;
+    // std::cout << "C thresh: " << input[2] << std::endl;
+    // std::cout << "D thresh: " << input[3] << std::endl;
+    // std::cout << "Grade: " << input[4] << std::endl;
+
+    if (line[5] == "Student has a A grade.") {
+      output = Grade__A_STR;
+    } else if (line[5] == "Student has a B grade.") {
+      output = Grade__B_STR;
+    } else if (line[5] == "Student has a C grade.") {
+      output = Grade__C_STR;
+    } else if (line[5] == "Student has a D grade.") {
+      output = Grade__D_STR;
+    } else if (line[5] == "Student has a F grade.") {
+      output = Grade__F_STR;
+    } else {
+      std::cout << "ERROR ERROR! OH NO! INVALID OUTPUT FROM GRADE EXAMPLES!" << std::endl;
+      exit(-1);
+    }
+
+    output_t gen_out = GenCorrectOut_Grade(input);
+    emp_assert(gen_out == output);
+
+    emp_assert(100 >= input[0]);
+    emp_assert(input[0] > input[1]);
+    emp_assert(input[1] > input[2]);
+    emp_assert(input[2] > input[3]);
+    emp_assert(input[3] >= 0);
+
+    return {input, output};
+
+  }
+
+  void GenerateTestingSetPop() {
+    for (size_t i = 0; i < testing_set.GetSize(); ++i) {
+      testingset_pop.emplace_back(emp::NewPtr<problem_org_t>(testing_set.GetInput(i)));
+      testingset_pop[i]->CalcOut();
+    }
+  }
+
+  std::pair<double, bool> CalcScorePassFail(const output_t & correct_test_output, const output_t & sub) {
+    const bool pass = (sub == correct_test_output);
+    return {(double)pass, pass};
+  }
+
+  void PrintTestCSV(std::ostream & os, const input_t & in) const {
+    os << "\"";
+    for (size_t i = 0; i < in.size(); ++i) {
+      if (i) os << ",";
+      os << in[i];
+    }
+    os << "\"";
+  }
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
