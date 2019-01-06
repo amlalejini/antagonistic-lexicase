@@ -42,7 +42,7 @@ def main():
         # Did this run finish?
         final_line = run_log[-1]
         finished = False
-        if "Update: {},".format(target_gen) in final_line:
+        if "Update: {};".format(target_gen) in final_line:
             finished = True
             print("  ==> Finished!")
         else:
