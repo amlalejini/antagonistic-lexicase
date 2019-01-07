@@ -544,7 +544,7 @@ namespace TagLGP {
         return arg_tags[i];
       }
 
-      void Set(size_t _id, const emp::vector<tag_t> _args) {
+      void Set(size_t _id, const emp::vector<tag_t> & _args) {
         id = _id;
         arg_tags = _args;
       }
