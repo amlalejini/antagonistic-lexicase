@@ -7,7 +7,7 @@
   - [x] Full lexicase runs
 - Problem: Grade
   - [submitted] Cohort runs
-  - [ ] Full lexicase runs
+  - [submitted] Full lexicase runs
 - Problem: Median
   - [ ] Cohort runs
   - [ ] Full lexicase runs
