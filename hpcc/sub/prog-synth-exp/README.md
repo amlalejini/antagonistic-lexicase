@@ -6,11 +6,11 @@
   - [x] Cohort runs
   - [x] Full lexicase runs
 - Problem: Grade
+  - [x] Cohort runs
+  - [x] Full lexicase runs
+- Problem: Median
   - [submitted] Cohort runs
   - [submitted] Full lexicase runs
-- Problem: Median
-  - [ ] Cohort runs
-  - [ ] Full lexicase runs
 - Problem: Smallest
   - [ ] Cohort runs
   - [ ] Full lexicase runs
@@ -29,3 +29,5 @@
 - Problem: Vectors Summed
   - [ ] Cohort runs
   - [ ] Full lexicase runs
+
+- TODO: check for holes
