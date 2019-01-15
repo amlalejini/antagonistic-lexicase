@@ -31,6 +31,8 @@ def main():
     runs = [d for d in os.listdir(data_directory) if d.strip("PROBLEM_").split("__")[0] == "for-loop-index"]
     runs.sort()
 
+    out_content = "treatment,run_id,solution_found,test_out_len_1,total_tests\n"
+
     for run in runs:
         print("Run: {}".format(run))
         run_dir = os.path.join(data_directory, run)
@@ -49,8 +51,43 @@ def main():
             csvreader = csv.reader(fp, delimiter=',', quotechar='"')
             next(csvreader, None)
             tests = [list(map(int,row[-1].split(","))) for row in csvreader]
-        print(str(tests))
-        exit()
+        
+        # Categorize test type distribution
+        test_type__out_len_1 = 0
+        total_tests = len(tests)
+
+        for test in tests:
+            start = test[0]
+            end = test[1]
+            step = test[2]
+            if ((start + step) >= end): test_type__out_len_1 += 1
+
+        # Figure out if this run produced a solution
+        file_content = None
+        run_sols = os.path.join(run_dir, "output", "solutions.csv")
+        with open(run_sols, "r") as fp:
+            file_content = fp.read().strip().split("\n")
+
+        header = file_content[0].split(",")
+        header_lu = {header[i].strip():i for i in range(0, len(header))}
+        file_content = file_content[1:]    
+        solutions = [l for l in csv.reader(file_content, quotechar='"', delimiter=',', quoting=csv.QUOTE_ALL, skipinitialspace=True)]
+        
+        sol_found = "1" if len(solution) > 0 else "0"
+
+        #out_content = "treatment,run_id,solution,test_out_len_1,total_tests\n"
+        out_content = ",".join(treatment, run_id, sol_found, test_type__out_len_1, total_tests) + "\n"
+    with open(os.path.join(dump, "for-loop-index_test_distribution__update_{}.csv".format(args.update)), "w") as fp:
+        fp.write(out_content)
+
+
+
+
+
+        
+
+        
+            
 
 if __name__ == "__main__":
     main()
