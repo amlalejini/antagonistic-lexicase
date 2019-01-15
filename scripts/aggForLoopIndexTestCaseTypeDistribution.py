@@ -73,7 +73,7 @@ def main():
         file_content = file_content[1:]    
         solutions = [l for l in csv.reader(file_content, quotechar='"', delimiter=',', quoting=csv.QUOTE_ALL, skipinitialspace=True)]
         
-        sol_found = "1" if len(solution) > 0 else "0"
+        sol_found = "1" if len(solutions) > 0 else "0"
 
         #out_content = "treatment,run_id,solution,test_out_len_1,total_tests\n"
         out_content = ",".join(treatment, run_id, sol_found, test_type__out_len_1, total_tests) + "\n"
