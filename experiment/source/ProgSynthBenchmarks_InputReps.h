@@ -569,7 +569,8 @@ struct ProblemUtilities_SmallOrLarge {
 /// Generate random test input
 Problem_ForLoopIndex_input_t GenRandomTestInput_ForLoopIndex(emp::Random & rand,
                                                          const std::pair<int,int> & start_end_range,
-                                                         const std::pair<int,int> & step_range) {
+                                                         const std::pair<int,int> & step_range,
+                                                         bool promise_multistep=false) {
   // Guarantee that start comes before end.
   int start, end, step;
   start = rand.GetInt(start_end_range.first, start_end_range.second+1);
@@ -579,13 +580,24 @@ Problem_ForLoopIndex_input_t GenRandomTestInput_ForLoopIndex(emp::Random & rand,
   // Need to follow the following rules:
   // (1) start < end               // -> Start should come before end
   // (2) start + (20xstep)+1 > end // -> Enumeration should take no more than 20 steps
-  while (true) {
-    if (end < start) std::swap(end, start);
-    if (start + (20*step) + 1 > end) break;
-    start = rand.GetInt(start_end_range.first, start_end_range.second+1);
-    end = rand.GetInt(start_end_range.first, start_end_range.second+1);
-    step = rand.GetInt(step_range.first, step_range.second+1);
+  if (promise_multistep) {
+    while (true) {
+      if (end < start) std::swap(end, start);
+      if ( ( start + (20*step) + 1 > end ) && ( (start + step) < end ) ) break; // Guarantee that output will at minimum be [start, start+step, ...]
+      start = rand.GetInt(start_end_range.first, start_end_range.second+1);
+      end = rand.GetInt(start_end_range.first, start_end_range.second+1);
+      step = rand.GetInt(step_range.first, step_range.second+1);
+    }
+  } else {
+    while (true) {
+      if (end < start) std::swap(end, start);
+      if ( (start + (20*step) + 1 > end) ) break;
+      start = rand.GetInt(start_end_range.first, start_end_range.second+1);
+      end = rand.GetInt(start_end_range.first, start_end_range.second+1);
+      step = rand.GetInt(step_range.first, step_range.second+1);
+    }
   }
+
   return {start, end, step};
 }
 

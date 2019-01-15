@@ -62,6 +62,7 @@ EMP_BUILD_CONFIG(ProgramSynthesisConfig,
   VALUE(PROB_FOR_LOOP_INDEX__STEP_MIN, int, 1, ". value for ."),
   VALUE(PROB_FOR_LOOP_INDEX__STEP_MAX, int, 10, ". value for ."),
   VALUE(PROB_FOR_LOOP_INDEX__MUTATION__MUT_RATE, double, 0.1, "Per-integer mutation rate."),
+  VALUE(PROB_FOR_LOOP_INDEX__PROMISE_MULTISTEP_TESTCASES, bool, false, "When randomly generating test cases, do we promise to generate test cases whose output is a sequence with length > 1?"),
 
   GROUP(PROB_COMPARE_STRING_LENGTHS_GROUP, "Settings specific to the compare string lengths problem."),
   VALUE(PROB_COMPARE_STRING_LENGTHS__MIN_STR_LEN, size_t, 0, "."),

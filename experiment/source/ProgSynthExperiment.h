@@ -323,6 +323,7 @@ protected:
   int PROB_FOR_LOOP_INDEX__STEP_MIN;
   int PROB_FOR_LOOP_INDEX__STEP_MAX;
   double PROB_FOR_LOOP_INDEX__MUTATION__MUT_RATE;
+  bool PROB_FOR_LOOP_INDEX__PROMISE_MULTISTEP_TESTCASES;
 
   size_t PROB_COMPARE_STRING_LENGTHS__MIN_STR_LEN;
   size_t PROB_COMPARE_STRING_LENGTHS__MAX_STR_LEN;
@@ -1329,6 +1330,7 @@ void ProgramSynthesisExperiment::InitConfigs(const ProgramSynthesisConfig & conf
   PROB_FOR_LOOP_INDEX__STEP_MIN = config.PROB_FOR_LOOP_INDEX__STEP_MIN();
   PROB_FOR_LOOP_INDEX__STEP_MAX = config.PROB_FOR_LOOP_INDEX__STEP_MAX();
   PROB_FOR_LOOP_INDEX__MUTATION__MUT_RATE = config.PROB_FOR_LOOP_INDEX__MUTATION__MUT_RATE();
+  PROB_FOR_LOOP_INDEX__PROMISE_MULTISTEP_TESTCASES = config.PROB_FOR_LOOP_INDEX__PROMISE_MULTISTEP_TESTCASES();
 
   PROB_COMPARE_STRING_LENGTHS__MIN_STR_LEN = config.PROB_COMPARE_STRING_LENGTHS__MIN_STR_LEN();
   PROB_COMPARE_STRING_LENGTHS__MAX_STR_LEN = config.PROB_COMPARE_STRING_LENGTHS__MAX_STR_LEN();
@@ -3135,7 +3137,8 @@ void ProgramSynthesisExperiment::SetupProblem_ForLoopIndex() {
                         prob_utils_ForLoopIndex.training_set,
                         [this]() { return GenRandomTestInput_ForLoopIndex(*random, 
                                                                           {PROB_FOR_LOOP_INDEX__START_END_MIN, PROB_FOR_LOOP_INDEX__START_END_MAX},
-                                                                          {PROB_FOR_LOOP_INDEX__STEP_MIN, PROB_FOR_LOOP_INDEX__STEP_MAX}
+                                                                          {PROB_FOR_LOOP_INDEX__STEP_MIN, PROB_FOR_LOOP_INDEX__STEP_MAX},
+                                                                          PROB_FOR_LOOP_INDEX__PROMISE_MULTISTEP_TESTCASES
                                                                          ); 
                                   }
                         );
