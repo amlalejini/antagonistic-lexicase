@@ -47,7 +47,7 @@ def main():
         file_content = None
         with open(pop_fpath, "r") as fp:
             csvreader = csv.reader(fp, delimiter=',', quotechar='"')
-        tests = [map(int,row[-1].split(",")) for row in csvreader]
+        tests = [map(int,row[-1].split(",")) for row in csvreader[1:]]
         print(str(tests))
         exit()
 
