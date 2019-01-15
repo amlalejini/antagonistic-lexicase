@@ -12,14 +12,14 @@
   - [x] Cohort runs
   - [x] Full lexicase runs
 - Problem: Smallest
-  - [submitted] Cohort runs
-  - [submitted] Full lexicase runs
-- Problem: For loop index
-  - [ ] Cohort runs
-  - [ ] Full lexicase runs
+  - [x] Cohort runs
+  - [x] Full lexicase runs
 - Problem: Compare String Lengths
   - [ ] Cohort runs
   - [ ] Full lexicase runs
+- Problem: For loop index
+  - [submitted] Cohort runs
+  - [submitted] Full lexicase runs
 - Problem: Mirror Image
   - [ ] Cohort runs
   - [ ] Full lexicase runs
