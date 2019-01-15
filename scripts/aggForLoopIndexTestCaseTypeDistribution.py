@@ -76,7 +76,8 @@ def main():
         sol_found = "1" if len(solutions) > 0 else "0"
 
         #out_content = "treatment,run_id,solution,test_out_len_1,total_tests\n"
-        out_content = ",".join(list(map(str, [treatment, run_id, sol_found, test_type__out_len_1, total_tests]))) + "\n"
+        out_content += ",".join(list(map(str, [treatment, run_id, sol_found, test_type__out_len_1, total_tests]))) + "\n"
+    
     with open(os.path.join(dump, "for-loop-index_test_distribution__update_{}.csv".format(args.update)), "w") as fp:
         fp.write(out_content)
 
