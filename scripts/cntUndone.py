@@ -52,7 +52,7 @@ def main():
             finished = False
             print("  ==> Not Finished!")
             cnt+=1
-        final_update = final_line.split(",")[0].split(" ")[-1]
+        final_update = final_line.split(";")[0].split(" ")[-1]
         
         if not finished:
             undone_content += ",".join([run_name, run_id, target_gen, final_update]) + "\n"
