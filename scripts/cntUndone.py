@@ -11,7 +11,7 @@ import argparse, os, copy, errno, csv
 def main():
     parser = argparse.ArgumentParser(description="Data aggregation script.")
     parser.add_argument("data_directory", type=str, help="Target experiment directory.")
-    parser.add_argument("-r", "replicates", type=int, help="Expected number of replicates.")
+    parser.add_argument("-r", "--replicates", type=int, help="Expected number of replicates.")
 
     args = parser.parse_args()
 
