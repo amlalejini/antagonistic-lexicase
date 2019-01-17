@@ -58,7 +58,7 @@ def main():
             undone_content += ",".join([run_name, run_id, target_gen, final_update]) + "\n"
 
         if not (run_name in run_ids_by_treatment): run_ids_by_treatment[run_name] = []
-        run_ids_by_treatment.append(int(run_id))
+        run_ids_by_treatment[run_name].append(int(run_id))
             
         total += 1
 
