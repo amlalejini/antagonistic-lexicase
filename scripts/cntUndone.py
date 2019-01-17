@@ -67,7 +67,7 @@ def main():
     print ("Runs not done: " + str(cnt))
 
     # Try to figure out if there are any jobs that failed to get submitted.
-    if args.replicate != None:
+    if args.replicates != None:
 
         treatments_with_missing_runs = []
         for treatment in run_ids_by_treatment:
