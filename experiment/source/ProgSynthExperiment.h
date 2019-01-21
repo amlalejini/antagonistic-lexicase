@@ -2136,6 +2136,7 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
   };
 
   // Setup program systematics
+  /*
   prog_genotypic_systematics = emp::NewPtr<emp::Systematics<prog_org_t, prog_org_gen_t>>([](const prog_org_t & o) { return o.GetGenome(); });
   prog_genotypic_systematics->AddEvolutionaryDistinctivenessDataNode();
   prog_genotypic_systematics->AddPairwiseDistanceDataNode();
@@ -2143,6 +2144,8 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
   prog_world->AddSystematics(prog_genotypic_systematics, "prog_genotype");
   auto & prog_gen_sys_file = prog_world->SetupSystematicsFile("prog_genotype", DATA_DIRECTORY + "/prog_gen_sys.csv", false);
   prog_gen_sys_file.SetTimingRepeat(SUMMARY_STATS_INTERVAL);
+  */
+
   // Default systematics functions:
   // - GetNumActive (taxa)
   // - GetTotalOrgs (total orgs tracked)
@@ -2151,6 +2154,7 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
   // - GetMRCADepth
   // - CalcDiversity (entropy of taxa in population)
   // Functions to add:
+  /*
   prog_gen_sys_file.template AddFun<size_t>([this]() { return mrca_changes; }, "mrca_changes", "MRCA changes");
   prog_gen_sys_file.AddStats(*prog_genotypic_systematics->GetDataNode("evolutionary_distinctiveness") , "evolutionary_distinctiveness", "evolutionary distinctiveness for a single update", true, true);
   prog_gen_sys_file.AddStats(*prog_genotypic_systematics->GetDataNode("pairwise_distances"), "pairwise_distance", "pairwise distance for a single update", true, true);
@@ -2186,6 +2190,7 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
       mrca_taxa_ptr = cur_taxa;
     }
   });
+  */
 
   // Setup prog_phen_diversity_file --> Gets updated during a snapshot, so we can assume that 
   prog_phen_diversity_file = emp::NewPtr<emp::DataFile>(DATA_DIRECTORY + "/prog_phenotype_diversity.csv");
@@ -2271,7 +2276,7 @@ void ProgramSynthesisExperiment::SetupDataCollection() {
     // else if (prob_ScrabbleScore_world != nullptr) { SetupTestSystematics(prob_ScrabbleScore_world); }
     // else if (prob_Checksum_world != nullptr) { SetupTestSystematics(prob_Checksum_world); }
     // else if (prob_Digits_world != nullptr) { SetupTestSystematics(prob_Digits_world); }
-    else if (prob_Grade_world != nullptr) { SetupTestSystematics(prob_Grade_world, [this](std::ostream & out, const prob_Grade_world_t::genome_t & genome) { prob_utils_Grade.PrintTestCSV(out, genome); } ); }
+    else if (prob_Grade_world != nullptr) { /*SetupTestSystematics(prob_Grade_world, [this](std::ostream & out, const prob_Grade_world_t::genome_t & genome) { prob_utils_Grade.PrintTestCSV(out, genome); } ); */ }
     else if (prob_Median_world != nullptr) { SetupTestSystematics(prob_Median_world, [this](std::ostream & out, const prob_Median_world_t::genome_t & genome) { prob_utils_Median.PrintTestCSV(out, genome); } ); }
     else if (prob_Smallest_world != nullptr) { SetupTestSystematics(prob_Smallest_world, [this](std::ostream & out, const prob_Smallest_world_t::genome_t & genome) { prob_utils_Smallest.PrintTestCSV(out, genome); } ); }
     // else if (prob_Syllables_world != nullptr) { SetupTestSystematics(prob_Syllables_world); }
@@ -2385,7 +2390,7 @@ void ProgramSynthesisExperiment::SnapshotPrograms() {
   // Take diversity snapshot
   prog_phen_diversity_file->Update();
   // Snapshot phylogeny
-  prog_genotypic_systematics->Snapshot(snapshot_dir + "/program_phylogeny_" + emp::to_string((int)prog_world->GetUpdate()) + ".csv");
+  // prog_genotypic_systematics->Snapshot(snapshot_dir + "/program_phylogeny_" + emp::to_string((int)prog_world->GetUpdate()) + ".csv");
 }
 
 // ================= PROGRAM-RELATED FUNCTIONS ===========
