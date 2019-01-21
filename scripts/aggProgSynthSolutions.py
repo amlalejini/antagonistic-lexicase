@@ -56,7 +56,7 @@ def main():
             treatment = run
             run_sols = os.path.join(run_dir, "output", "solutions.csv")
 
-            uses_cohorts = "1" if not "SEL_LEX" in run else "0"
+            uses_cohorts = "1" if not "SEL_LEX" in treatment else "0"
             problem = run.strip("PROBLEM_").split("__")[0]
             
             file_content = None
@@ -120,7 +120,7 @@ def main():
             treatment = run
             run_sols = os.path.join(run_dir, "output", "solutions.csv")
 
-            uses_cohorts = "1" if not "TESTS_STATIC_FULL" in run else "0"
+            uses_cohorts = "1" if not "SEL_LEX" in treatment else "0"
             problem = run.strip("PROBLEM_").split("__")[0]
             
             file_content = None
