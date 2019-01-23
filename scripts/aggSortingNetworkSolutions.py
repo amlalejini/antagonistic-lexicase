@@ -52,7 +52,7 @@ def main():
             print("Run: {}".format(run))
             run_dir = os.path.join(data_directory, run)
             run_id = run.split("__")[-1]
-            run = "__".join(run.split("__")[:-2])
+            run = "__".join(run.split("__")[:-1])
             treatment = run
             run_sols = os.path.join(run_dir, "output", "small_solutions.csv")
 
